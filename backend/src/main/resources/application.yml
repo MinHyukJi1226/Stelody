@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: stelody
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: app
+        jdbc.time_zone: UTC
+  flyway:
+    default-schema: app
+    schemas: app,session
+    user: ${DB_MIGRATION_USERNAME}
+    password: ${DB_MIGRATION_PASSWORD}
+  session:
+    timeout: 30m
+    jdbc:
+      initialize-schema: never
+      table-name: session.SPRING_SESSION
+server:
+  forward-headers-strategy: none
+  servlet:
+    session:
+      cookie:
+        name: SESSION
+        http-only: true
+        secure: true
+        same-site: lax
+        path: /
+  error:
+    include-message: never
+    include-stacktrace: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

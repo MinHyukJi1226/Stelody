@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/stelody}
+    username: ${DB_USERNAME:stelody}
+    password: ${DB_PASSWORD:local-only-password}
+  flyway:
+    user: ${DB_MIGRATION_USERNAME:${DB_USERNAME:stelody}}
+    password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD:local-only-password}}
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
