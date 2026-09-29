@@ -36,7 +36,7 @@ class RuntimeGrantMigrationIntegrationTest {
       assertThatThrownBy(() -> statement.executeQuery("select * from session.spring_session"))
           .isInstanceOfSatisfying(
               SQLException.class, ex -> assertThat(ex.getSQLState()).isEqualTo("42501"));
-      assertThat(configuration.target("latest").load().migrate().migrationsExecuted).isEqualTo(1);
+      assertThat(configuration.target("2").load().migrate().migrationsExecuted).isEqualTo(1);
       try (var rows = statement.executeQuery("select * from session.spring_session")) {
         assertThat(rows.next()).isFalse();
       }

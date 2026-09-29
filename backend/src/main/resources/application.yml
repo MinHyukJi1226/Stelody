@@ -49,3 +49,8 @@ management:
   endpoint:
     health:
       show-details: never
+
+stelody:
+  auth:
+    google:
+      redirect-uri: ${GOOGLE_REDIRECT_URI:}
