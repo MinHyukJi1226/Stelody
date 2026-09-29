@@ -21,6 +21,8 @@ spring:
     schemas: app,session
     user: ${DB_MIGRATION_USERNAME}
     password: ${DB_MIGRATION_PASSWORD}
+    placeholders:
+      runtimeRole: ${DB_RUNTIME_ROLE:${spring.datasource.username}}
   session:
     timeout: 30m
     jdbc:
