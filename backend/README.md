@@ -15,8 +15,8 @@ docker compose -f ../infra/compose.yml up -d
 
 - 서버: http://localhost:8080
 - 상태 확인: http://localhost:8080/actuator/health
-- 로컬 메일함: http://localhost:8025 (메일 발송 연동은 인증 기능에서 추가)
-- 현재 health 외 경로는 차단되어 있습니다. 업무 API는 아직 구현하지 않았습니다.
+- 로컬 메일함: http://localhost:8025 (Google 로그인에는 사용하지 않음)
+- Google 가입·로그인, CSRF 토큰, 내 정보 조회, 로그아웃을 제공합니다. 곡·개인 목록 API는 후속 작업입니다.
 
 로컬 PostgreSQL의 기본 계정은 `stelody`, 비밀번호는 `local-only-password`입니다. 로컬 포트는 루프백에만 바인딩합니다. 운영에서는 [환경변수 예시](../.env.example)의 환경변수를 별도 주입하세요. Spring Boot는 루트 `.env`를 자동으로 읽지 않습니다. 운영 DB URL은 TLS 인증서 검증을 사용하고 실행 계정과 마이그레이션 계정을 분리해야 합니다.
 
@@ -38,4 +38,66 @@ Flyway V2가 실행 역할에 `app`·`session`의 `USAGE`와 세션 테이블 �
 
 `integrationTest`와 `check`는 실행 중인 Docker가 필요합니다. Docker가 없으면 실패하며 통합 검증을 조용히 건너뛰지 않습니다. H2를 사용하지 않습니다. Flyway가 app/session 스키마와 세션 테이블을 생성하며 JPA는 스키마를 변경하지 않습니다.
 
-현재 작업은 백엔드 기반 구성입니다. 인증과 곡·검색·개인 목록·수집 기능은 기능별로 구현하고 검증 결과를 공유합니다. 최근 요구사항 합의는 [백엔드 구현 기준 보완](../docs/backend-decisions.md)에 기록했습니다.
+Google 로그인 구현은 아래 안내를 따릅니다. 곡·검색·개인 목록·수집 기능은 기능별로 구현하고 검증 결과를 공유합니다. 최근 요구사항 합의는 [백엔드 구현 기준 보완](../docs/backend-decisions.md)에 기록했습니다.
+
+
+## Google 가입·로그인
+
+Google 최초 로그인 성공 시 회원을 생성하고 이후에는 같은 Google `sub`로 기존 회원을 조회합니다. 이메일은 변경 가능한 연락 정보이며 같은 이메일을 가진 계정을 자동 병합하지 않습니다. 자체 비밀번호·인증 메일·비밀번호 재설정은 제공하지 않습니다.
+
+### Google Cloud에서 한 번 준비할 설정
+
+1. [Google Cloud Console](https://console.cloud.google.com/)에서 프로젝트를 생성하거나 선택합니다.
+2. Google Auth Platform의 Branding에서 앱 이름·지원 이메일을 입력합니다.
+3. Audience를 External로 설정하고 개발 중에는 Testing 상태에서 본인의 계정을 Test users에 추가합니다.
+4. Clients에서 OAuth 클라이언트를 **Web application** 유형으로 생성합니다.
+5. Authorized redirect URIs에 `http://localhost:8080/api/v1/auth/callback/google`을 정확히 등록합니다. 운영 시에는 실제 HTTPS 도메인의 동일 경로를 추가합니다.
+6. 발급된 Client ID와 Client secret을 IntelliJ Run Configuration의 환경변수에 입력합니다. 비밀값을 소스·채팅·스크린샷에 넣지 않습니다.
+
+서버 리다이렉트 방식이라 이번 구현에는 JavaScript origin 등록이나 YouTube 권한/API 활성화가 필요하지 않습니다. 로그인 범위는 `openid email`입니다. YouTube 권한은 내보내기 기능에서 추가 동의를 요청합니다.
+
+IntelliJ 환경변수와 프로필:
+
+```text
+GOOGLE_CLIENT_ID=<발급받은 값>
+GOOGLE_CLIENT_SECRET=<발급받은 값>
+SPRING_PROFILES_ACTIVE=local,google
+```
+
+터미널에서 환경변수를 별도로 설정했다면:
+
+```sh
+./gradlew bootRun --args='--spring.profiles.active=local,google'
+```
+
+`local`에서는 콜백 주소를 위 localhost 주소로 기본 설정합니다. 운영은 `prod,google` 프로필과 `GOOGLE_REDIRECT_URI`를 명시합니다. `.env.example`은 참고용이며 자동으로 로드되지 않습니다. `google` 프로필 없이도 서버·DB 테스트는 실행되지만 로그인 시작 API는 503 `GOOGLE_LOGIN_UNAVAILABLE`을 반환합니다.
+
+### API 계약과 브라우저 확인
+
+| 메서드·경로 | 동작 |
+|---|---|
+| GET `/api/v1/auth/google` | Google 로그인 시작; 브라우저 페이지 이동으로 호출 |
+| GET `/api/v1/auth/authorize/google` | Spring Security의 OAuth 인증 요청 생성 |
+| GET `/api/v1/auth/callback/google` | Google 콜백; 클라이언트가 직접 만들지 않음 |
+| GET `/api/v1/auth/csrf` | `{headerName, token}` 반환 |
+| GET `/api/v1/me` | `{id, email, role, status}` 반환; 비로그인 401 |
+| POST `/api/v1/auth/logout` | CSRF 검증 후 세션·쿠키 제거, 204 |
+
+브라우저에서 `http://localhost:8080/api/v1/auth/google`을 열면 로그인 후 `/api/v1/me`로 이동합니다. 아직 프론트 로그인 화면이 없어 JSON으로 결과를 확인합니다. 임의 returnTo/redirect 주소는 받지 않습니다. 원래 화면 복귀와 저장 의도 복원은 프론트 연동 때 추가합니다.
+
+로그인 전과 로그인·로그아웃 후에는 CSRF 토큰을 새로 받습니다. 변경 요청에 `X-CSRF-TOKEN` 헤더를 넣고, 로그아웃 성공 시 프론트의 개인 Query 캐시도 제거해야 합니다. 로그아웃은 Stelody 세션만 종료하며 Google 계정을 로그아웃하거나 동의를 철회하지 않습니다.
+
+### 보안·검증 범위
+
+Spring Security의 authorization code + PKCE, state·nonce와 ID 토큰 서명/발급자/대상/만료 검증을 사용합니다. 이메일 검증 여부가 확인된 Google 계정만 가입합니다. DB 역할은 기본 USER이며 Google의 임의 역할 claim으로 관리자 권한을 부여하지 않습니다. 세션 ID는 인증 성공 시 교체되고 JDBC 세션에는 내부 회원 ID와 로그인 시각을 저장합니다. Google access/refresh/ID 토큰을 세션에 보관하지 않습니다.
+
+idle 30분과 로그인 후 절대 12시간 만료를 적용하고, 인증 요청마다 DB 상태·역할을 확인합니다. 정지·삭제된 계정의 접근을 발견하면 해당 계정의 모든 JDBC 세션을 무효화합니다. 관리자 지정 명령·정지/탈퇴 API는 아직 제공하지 않습니다.
+
+```sh
+./gradlew integrationTest --tests '*GoogleLoginIntegrationTest' --no-daemon
+./gradlew check bootJar --no-daemon
+```
+
+Google 통합 테스트는 WireMock의 모의 OAuth 서버와 서명된 ID 토큰, 실제 HTTP 쿠키, 역할이 분리된 PostgreSQL을 사용합니다. 실제 Google 클라이언트 없이 실행되며 테스트 데이터는 `.invalid` 이메일만 사용합니다. 실제 Google 동의 화면·클라이언트 설정은 발급 후 브라우저에서 별도 확인해야 합니다.
+
+공식 참고: [Google OIDC](https://developers.google.com/identity/openid-connect/openid-connect), [Spring Security OAuth 로그인](https://docs.spring.io/spring-security/reference/servlet/oauth2/login/advanced.html)
