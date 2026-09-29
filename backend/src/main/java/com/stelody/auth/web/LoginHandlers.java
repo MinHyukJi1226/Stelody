@@ -39,7 +39,8 @@ public class LoginHandlers {
   public void failure(
       HttpServletRequest request, HttpServletResponse response, AuthenticationException exception)
       throws IOException {
-    if (request.getSession(false) != null) request.getSession(false).invalidate();
+    // A public callback failure must not destroy an existing authenticated session.
+    // Spring removes the matching pending authorization request during callback processing.
     SecurityContextHolder.clearContext();
     problems.write(request, response, 401, "GOOGLE_LOGIN_FAILED", "Google 로그인을 완료하지 못했습니다");
   }

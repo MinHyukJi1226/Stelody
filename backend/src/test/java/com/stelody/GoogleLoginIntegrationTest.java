@@ -226,6 +226,31 @@ class GoogleLoginIntegrationTest {
     return browser.get("/api/v1/auth/callback/google?code=test-code&state=" + auth.state());
   }
 
+  @Test
+  void failedCallbacksPreserveExistingLogin() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "preserved@example.invalid");
+    google.resetRequests();
+    var original = browser.get("/api/v1/me").body();
+    var cookie = browser.cookie();
+    assertThat(browser.get("/api/v1/auth/callback/google?error=access_denied").statusCode())
+        .isEqualTo(401);
+    assertThat(browser.get("/api/v1/me").body()).isEqualTo(original);
+    var auth = authorize(browser);
+    assertThat(browser.get("/api/v1/auth/callback/google?code=test-code&state=wrong").statusCode())
+        .isEqualTo(401);
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+    assertThat(
+            browser
+                .get("/api/v1/auth/callback/google?error=access_denied&state=" + auth.state())
+                .statusCode())
+        .isEqualTo(401);
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+    assertThat(browser.get("/api/v1/me").body()).isEqualTo(original);
+    assertThat(browser.cookie()).isEqualTo(cookie);
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
   Browser login(String subject, String email) throws Exception {
     var browser = new Browser();
     var auth = authorize(browser);
