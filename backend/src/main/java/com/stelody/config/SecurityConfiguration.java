@@ -54,7 +54,12 @@ public class SecurityConfiguration {
                         "/api/v1/auth/csrf",
                         "/api/v1/auth/google",
                         "/api/v1/auth/authorize/google",
-                        "/api/v1/auth/callback/google")
+                        "/api/v1/auth/callback/google",
+                        "/api/v1/songs",
+                        "/api/v1/songs/{id}",
+                        "/api/v1/members",
+                        "/api/v1/members/{id}",
+                        "/api/v1/members/{id}/songs")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/me")
                     .authenticated()

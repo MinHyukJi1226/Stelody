@@ -101,3 +101,15 @@ idle 30분과 로그인 후 절대 12시간 만료를 적용하고, 인증 요�
 Google 통합 테스트는 WireMock의 모의 OAuth 서버와 서명된 ID 토큰, 실제 HTTP 쿠키, 역할이 분리된 PostgreSQL을 사용합니다. 실제 Google 클라이언트 없이 실행되며 테스트 데이터는 `.invalid` 이메일만 사용합니다. 실제 Google 동의 화면·클라이언트 설정은 발급 후 브라우저에서 별도 확인해야 합니다.
 
 공식 참고: [Google OIDC](https://developers.google.com/identity/openid-connect/openid-connect), [Spring Security OAuth 로그인](https://docs.spring.io/spring-security/reference/servlet/oauth2/login/advanced.html)
+
+## 공개 곡·멤버 조회
+
+GET `/api/v1/songs`, `/api/v1/songs/{id}`, `/api/v1/members`, `/api/v1/members/{id}`, `/api/v1/members/{id}/songs`는 로그인 없이 조회할 수 있습니다. 검색·필터·커서 및 응답 필드는 [공개 API 계약](../docs/public-catalog-api.md)을 참고하세요.
+
+Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계 조회용 스키마를 구성합니다. V5는 pg_trgm 검색 인덱스를 생성합니다. 기존 Google 회원과 세션 데이터는 유지합니다. 운영 확장 설치 권한은 배포 전에 확인해야 합니다.
+
+테스트 자료는 Testcontainers에만 등록합니다. 실제 곡 자료가 아직 없으면 로컬 목록 API는 빈 items를 반환하며, 초기 콘텐츠 입력은 관리자·자료 등록 단계에서 진행합니다. 노래방·음원 링크·조회수 차트와 수집은 다음 기능에서 추가합니다.
+
+```sh
+./gradlew integrationTest --tests '*PublicCatalogIntegrationTest' --tests '*CatalogMigrationIntegrationTest' --no-daemon
+```
