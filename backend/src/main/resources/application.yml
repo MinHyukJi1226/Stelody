@@ -51,6 +51,9 @@ management:
       show-details: never
 
 stelody:
+  playlists:
+    limit: ${PLAYLIST_LIMIT:50}
+    item-limit: ${PLAYLIST_ITEM_LIMIT:500}
   favorites:
     limit: ${FAVORITE_LIMIT:5000}
   auth:

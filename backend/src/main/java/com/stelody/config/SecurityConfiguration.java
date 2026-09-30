@@ -71,6 +71,24 @@ public class SecurityConfiguration {
                     .authenticated()
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/me/favorites/{songId}")
                     .authenticated()
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/me/playlists",
+                        "/api/v1/me/playlists/{id}",
+                        "/api/v1/me/playlists/{id}/items")
+                    .authenticated()
+                    .requestMatchers(
+                        HttpMethod.POST, "/api/v1/me/playlists", "/api/v1/me/playlists/{id}/items")
+                    .authenticated()
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/me/playlists/{id}")
+                    .authenticated()
+                    .requestMatchers(
+                        HttpMethod.DELETE,
+                        "/api/v1/me/playlists/{id}",
+                        "/api/v1/me/playlists/{id}/items/{itemId}")
+                    .authenticated()
+                    .requestMatchers(HttpMethod.PUT, "/api/v1/me/playlists/{id}/order")
+                    .authenticated()
                     .anyRequest()
                     .denyAll())
         .formLogin(AbstractHttpConfigurer::disable)
