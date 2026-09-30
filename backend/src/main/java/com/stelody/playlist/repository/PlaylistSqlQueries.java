@@ -24,6 +24,13 @@ final class PlaylistSqlQueries {
       "SELECT status FROM app.app_user WHERE id = :userId FOR UPDATE";
   static final String PUBLIC_SONG =
       PublicCatalogSql.SONGS + " SELECT EXISTS (SELECT 1 FROM public_songs WHERE id = :songId)";
+  static final String ORDER =
+      """
+      UPDATE app.playlist_item i SET position = requested.ordinality - 1
+        FROM unnest(CAST(:itemIds AS uuid[])) WITH ORDINALITY AS requested(id, ordinality)
+      WHERE i.id = requested.id AND i.playlist_id = :playlistId
+        AND EXISTS (SELECT 1 FROM app.playlist p WHERE p.id = i.playlist_id AND p.user_id = :userId)
+      """;
   static final String CLOSE_GAP =
       """
       UPDATE app.playlist_item i SET position = position - 1

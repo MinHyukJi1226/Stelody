@@ -272,6 +272,17 @@ class PlaylistIntegrationTest {
         201);
   }
 
+  JsonNode reorder(Browser browser, UUID id, long version, List<UUID> ids) throws Exception {
+    return response(orderRequest(browser, id, version, ids), 200);
+  }
+
+  MockHttpServletRequestBuilder orderRequest(
+      Browser browser, UUID id, long version, List<UUID> ids) {
+    return authenticated(put(ROOT + "/" + id + "/order"), browser)
+        .contentType("application/json")
+        .content(mapper.writeValueAsString(java.util.Map.of("version", version, "itemIds", ids)));
+  }
+
   JsonNode response(MockHttpServletRequestBuilder request, int expectedStatus) throws Exception {
     return json(
         mvc.perform(request)
@@ -367,7 +378,12 @@ class PlaylistIntegrationTest {
             delete(ROOT + "/" + id + "?version=0"),
             post(ROOT + "/" + id + "/items")
                 .content(mapper.writeValueAsString(java.util.Map.of("songId", S1, "version", 0))),
-            delete(ROOT + "/" + id + "/items/" + id(999) + "?version=0"))) {
+            delete(ROOT + "/" + id + "/items/" + id(999) + "?version=0"),
+            put(ROOT + "/" + id + "/order")
+                .content(
+                    """
+{"itemIds":[],"version":0}
+"""))) {
       mvc.perform(request.contentType("application/json").cookie(first.cookie()))
           .andExpect(status().isForbidden());
     }
@@ -413,7 +429,11 @@ class PlaylistIntegrationTest {
             delete(ROOT + "/" + id + "?version=1"),
             post(ROOT + "/" + id + "/items")
                 .content(mapper.writeValueAsString(java.util.Map.of("songId", S2, "version", 1))),
-            delete(ROOT + "/" + id + "/items/" + item + "?version=1"))) {
+            delete(ROOT + "/" + id + "/items/" + item + "?version=1"),
+            put(ROOT + "/" + id + "/order")
+                .content(
+                    mapper.writeValueAsString(
+                        java.util.Map.of("itemIds", List.of(item), "version", 1))))) {
       mvc.perform(authenticated(request.contentType("application/json"), second))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.code").value("PLAYLIST_NOT_FOUND"));
@@ -490,23 +510,26 @@ class PlaylistIntegrationTest {
   }
 
   @Test
-  void itemAddsAndRemovalUpdateTheParentAndPreserveRemainingPositions() throws Exception {
+  void itemAddsRemovalAndReorderUpdateTheParentAndPreserveRemainingPositions() throws Exception {
     UUID id = uuid(create(first, "곡 관리"), "id");
     UUID one = uuid(add(first, id, 0, S1), "itemId");
     UUID two = uuid(add(first, id, 1, S2), "itemId");
     UUID three = uuid(add(first, id, 2, S3), "itemId");
     assertThat(itemIds(entries(first, id, ""))).containsExactly(one, two, three);
+    var reordered = reorder(first, id, 3, List.of(three, one, two));
+    assertThat(reordered.get("version").asLong()).isEqualTo(4);
+    assertThat(itemIds(entries(first, id, ""))).containsExactly(three, one, two);
     var deleted =
         response(
-            authenticated(delete(ROOT + "/" + id + "/items/" + two + "?version=3"), first), 200);
-    assertThat(deleted.get("version").asLong()).isEqualTo(4);
+            authenticated(delete(ROOT + "/" + id + "/items/" + one + "?version=4"), first), 200);
+    assertThat(deleted.get("version").asLong()).isEqualTo(5);
     var page = entries(first, id, "");
-    assertThat(itemIds(page)).containsExactly(one, three);
+    assertThat(itemIds(page)).containsExactly(three, two);
     assertThat(page.get("items").get(0).get("position").asInt()).isZero();
     assertThat(page.get("items").get(1).get("position").asInt()).isEqualTo(1);
-    UUID newTwo = uuid(add(first, id, 4, S2), "itemId");
-    assertThat(itemIds(entries(first, id, ""))).containsExactly(one, three, newTwo);
-    assertThat(detail(first, id).get("version").asLong()).isEqualTo(5);
+    UUID newOne = uuid(add(first, id, 5, S1), "itemId");
+    assertThat(itemIds(entries(first, id, ""))).containsExactly(three, two, newOne);
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(6);
   }
 
   List<UUID> itemIds(JsonNode page) {
@@ -581,13 +604,56 @@ class PlaylistIntegrationTest {
     assertThat(page.get("availableCount").asLong()).isEqualTo(1);
     assertThat(detail(first, id).get("availableCount").asLong()).isEqualTo(1);
     assertThat(list(first, "").get("items").get(0).get("availableCount").asLong()).isEqualTo(1);
-    response(authenticated(delete(ROOT + "/" + id + "/items/" + item + "?version=2"), first), 200);
+    reorder(first, id, 2, List.of(other, item));
+    response(authenticated(delete(ROOT + "/" + id + "/items/" + item + "?version=3"), first), 200);
     mvc.perform(
             authenticated(post(ROOT + "/" + id + "/items"), first)
                 .contentType("application/json")
-                .content(mapper.writeValueAsString(java.util.Map.of("version", 3, "songId", S1))))
+                .content(mapper.writeValueAsString(java.util.Map.of("version", 4, "songId", S1))))
         .andExpect(status().isNotFound());
-    assertThat(detail(first, id).get("version").asLong()).isEqualTo(3);
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(4);
+  }
+
+  @Test
+  void invalidPermutationsIncludingForeignItemsRollbackVersionAndEveryPosition() throws Exception {
+    UUID id = uuid(create(first, "순서 검증"), "id");
+    UUID one = uuid(add(first, id, 0, S1), "itemId");
+    UUID two = uuid(add(first, id, 1, S2), "itemId");
+    UUID otherList = uuid(create(first, "다른 목록"), "id");
+    UUID foreign = uuid(add(first, otherList, 0, S3), "itemId");
+    var before = detail(first, id);
+    for (List<UUID> order :
+        List.of(
+            List.<UUID>of(),
+            List.of(one),
+            List.of(one, one),
+            List.of(one, id(999)),
+            List.of(one, foreign),
+            List.of(one, two, id(999)))) {
+      mvc.perform(orderRequest(first, id, 2, order)).andExpect(status().isBadRequest());
+      assertThat(detail(first, id)).isEqualTo(before);
+      assertThat(itemIds(entries(first, id, ""))).containsExactly(one, two);
+    }
+    for (String body :
+        List.of(
+            "{\"version\":2}",
+            "{\"version\":2,\"itemIds\":null}",
+            "{\"version\":2,\"itemIds\":[null]}")) {
+      mvc.perform(
+              authenticated(put(ROOT + "/" + id + "/order"), first)
+                  .contentType("application/json")
+                  .content(body))
+          .andExpect(status().isBadRequest());
+    }
+    assertThat(detail(first, id)).isEqualTo(before);
+  }
+
+  @Test
+  void emptyAndUnchangedPermutationsStillAdvanceVersionOnce() throws Exception {
+    UUID id = uuid(create(first, "빈 목록"), "id");
+    assertThat(reorder(first, id, 0, List.of()).get("version").asLong()).isEqualTo(1);
+    UUID one = uuid(add(first, id, 1, S1), "itemId");
+    assertThat(reorder(first, id, 2, List.of(one)).get("version").asLong()).isEqualTo(3);
   }
 
   @Test
@@ -612,11 +678,7 @@ class PlaylistIntegrationTest {
                 mapper.writeValueAsBytes(new PlaylistCursor.ItemPosition(1, U2, id, 3L, 0)));
     mvc.perform(authenticated(get(ROOT + "/" + id + "/items").param("cursor", crossed), first))
         .andExpect(status().isBadRequest());
-    response(
-        authenticated(patch(ROOT + "/" + id), first)
-            .contentType("application/json")
-            .content("{\"name\":\"changed\",\"version\":3}"),
-        200);
+    reorder(first, id, 3, List.of(three, two, one));
     mvc.perform(authenticated(get(ROOT + "/" + id + "/items").param("cursor", cursor), first))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("PLAYLIST_CHANGED"));
@@ -632,7 +694,11 @@ class PlaylistIntegrationTest {
             post(ROOT + "/" + id + "/items")
                 .content(mapper.writeValueAsString(java.util.Map.of("version", 0, "songId", S2))),
             delete(ROOT + "/" + id + "/items/" + one + "?version=0"),
-            delete(ROOT + "/" + id + "?version=0"))) {
+            delete(ROOT + "/" + id + "?version=0"),
+            put(ROOT + "/" + id + "/order")
+                .content(
+                    mapper.writeValueAsString(
+                        java.util.Map.of("version", 0, "itemIds", List.of(one)))))) {
       mvc.perform(authenticated(request.contentType("application/json"), first))
           .andExpect(status().isConflict())
           .andExpect(jsonPath("$.code").value("PLAYLIST_CHANGED"));
@@ -833,6 +899,32 @@ class PlaylistIntegrationTest {
   }
 
   @Test
+  void fullFiveHundredItemPermutationSucceedsWithoutTemporaryPositionConflicts() throws Exception {
+    UUID id = uuid(create(first, "전체 정렬"), "id");
+    seedItems(id, 500, "reorder", false);
+    var before =
+        writer.query(
+            "SELECT id FROM app.playlist_item WHERE playlist_id = ? ORDER BY position",
+            (rs, n) -> rs.getObject(1, UUID.class),
+            id);
+    var order = new ArrayList<>(before);
+    java.util.Collections.reverse(order);
+    assertThat(reorder(first, id, 0, order).get("version").asLong()).isEqualTo(1);
+    assertThat(
+            writer.query(
+                "SELECT id FROM app.playlist_item WHERE playlist_id = ? ORDER BY position",
+                (rs, n) -> rs.getObject(1, UUID.class),
+                id))
+        .containsExactlyElementsOf(order);
+    assertThat(
+            writer.queryForObject(
+                "SELECT max(position) FROM app.playlist_item WHERE playlist_id = ?",
+                Integer.class,
+                id))
+        .isEqualTo(499);
+  }
+
+  @Test
   void twentyAndFiftyItemPagesUseOneRelationshipHydrationQuery() throws Exception {
     UUID id = uuid(create(first, "일괄 조회"), "id");
     seedItems(id, 50, "pages", true);
@@ -884,6 +976,29 @@ class PlaylistIntegrationTest {
     assertThat(
             runtime.queryForObject("SELECT version FROM app.playlist WHERE id = ?", Long.class, id))
         .isZero();
+  }
+
+  @Test
+  void concurrentRemovalAndReorderingCannotPartiallyCombineChanges() throws Exception {
+    UUID id = uuid(create(first, "수정 경합"), "id");
+    UUID one = uuid(add(first, id, 0, S1), "itemId"), two = uuid(add(first, id, 1, S2), "itemId");
+    assertThat(
+            concurrent(
+                List.of(
+                    () -> {
+                      playlistItems.remove(U1, id, 2, one);
+                      return 200;
+                    },
+                    () -> {
+                      playlistItems.reorder(U1, id, 2, List.of(two, one));
+                      return 200;
+                    })))
+        .containsExactlyInAnyOrder(200, 409);
+    var page = entries(first, id, "");
+    assertThat(page.get("version").asLong()).isEqualTo(3);
+    if (page.get("items").size() == 1) assertThat(itemIds(page)).containsExactly(two);
+    else assertThat(itemIds(page)).containsExactly(two, one);
+    assertThat(page.get("items").get(0).get("position").asInt()).isZero();
   }
 
   @ParameterizedTest

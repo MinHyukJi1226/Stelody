@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -94,5 +95,13 @@ public class PlaylistController {
       @PathVariable UUID itemId,
       @RequestParam long version) {
     return items.remove(user.id(), id, version, itemId);
+  }
+
+  @PutMapping("/api/v1/me/playlists/{id}/order")
+  public PlaylistDtos.Summary reorder(
+      @AuthenticationPrincipal SessionUser user,
+      @PathVariable UUID id,
+      @Valid @RequestBody PlaylistDtos.Order body) {
+    return items.reorder(user.id(), id, body.version(), body.itemIds());
   }
 }

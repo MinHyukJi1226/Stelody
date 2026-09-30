@@ -8,6 +8,9 @@ import com.stelody.playlist.repository.PlaylistQueries;
 import com.stelody.playlist.web.PlaylistException;
 import com.stelody.song.dto.SongDtos;
 import com.stelody.song.repository.SongRepository;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -101,6 +104,19 @@ public class PlaylistItemService {
     items.delete(item);
     items.flush();
     queries.closeGap(userId, playlistId, item.position());
+    return queries.summary(userId, playlistId);
+  }
+
+  @Transactional(isolation = Isolation.READ_COMMITTED)
+  public PlaylistDtos.Summary reorder(
+      UUID userId, UUID playlistId, long version, List<UUID> itemIds) {
+    if (itemIds == null || itemIds.stream().anyMatch(Objects::isNull))
+      throw PlaylistException.invalid();
+    access.claim(userId, playlistId, version);
+    var current = queries.itemIds(userId, playlistId);
+    if (itemIds.size() != current.size() || !new HashSet<>(itemIds).equals(new HashSet<>(current)))
+      throw PlaylistException.invalid();
+    queries.reorder(userId, playlistId, itemIds);
     return queries.summary(userId, playlistId);
   }
 }

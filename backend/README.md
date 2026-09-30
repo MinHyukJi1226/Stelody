@@ -122,4 +122,10 @@ Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계
 
 ## 개인 플레이리스트
 
-`/api/v1/me/playlists`에서 목록 생성·조회·이름 수정·삭제와 곡 추가·제거·조회를 제공합니다. 기본 계정당 50개 목록·목록당 500곡이며 `PLAYLIST_LIMIT`, `PLAYLIST_ITEM_LIMIT`로 조정합니다. 이용 불가 곡도 저장 관계와 위치를 유지합니다. 전체 순서 변경은 후속 단계입니다. 세션의 회원을 소유자로 사용하며 다른 회원의 목록은 404입니다. 변경 요청에는 CSRF와 현재 `version`이 필요합니다. 충돌 시 409 `PLAYLIST_CHANGED`를 반환합니다. [플레이리스트 API 문서](../docs/playlists-api.md)를 참고하세요.
+`/api/v1/me/playlists`에서 목록을 생성·조회하고 목록별 이름 수정·삭제·곡 추가·제거·순서 변경을 제공합니다. 세션의 회원을 소유자로 사용하며 다른 회원의 목록은 404로 처리합니다. 변경 요청에는 CSRF 토큰과 현재 목록 `version`이 필요합니다. 충돌하면 409 `PLAYLIST_CHANGED`를 반환하므로 최신 목록을 다시 조회하세요.
+
+사용자당 기본 50개 목록, 목록당 500곡이며 `PLAYLIST_LIMIT`, `PLAYLIST_ITEM_LIMIT`로 조정합니다. 이용 불가 곡도 저장과 위치를 유지합니다. Flyway V7가 목록·항목 스키마와 실행 역할 권한을 추가합니다. [플레이리스트 API 문서](../docs/playlists-api.md)에 응답·커서·전체 순서 교체 계약을 기록했습니다.
+
+```sh
+./gradlew integrationTest --tests '*PlaylistIntegrationTest' --tests '*PlaylistMigrationIntegrationTest' --no-daemon
+```

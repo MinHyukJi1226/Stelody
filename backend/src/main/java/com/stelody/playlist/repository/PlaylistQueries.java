@@ -10,6 +10,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -82,6 +83,25 @@ public class PlaylistQueries {
                     rs.getInt("position"),
                     rs.getTimestamp("added_at").toInstant()))
         .list();
+  }
+
+  public List<UUID> itemIds(UUID userId, UUID playlistId) {
+    return jdbc.sql(PlaylistSqlQueries.ITEMS + " ORDER BY i.position")
+        .param("userId", userId)
+        .param("playlistId", playlistId)
+        .query((rs, n) -> rs.getObject("id", UUID.class))
+        .list();
+  }
+
+  public void reorder(UUID userId, UUID playlistId, List<UUID> itemIds) {
+    String array = itemIds.stream().map(UUID::toString).collect(Collectors.joining(",", "{", "}"));
+    int changed =
+        jdbc.sql(PlaylistSqlQueries.ORDER)
+            .param("userId", userId)
+            .param("playlistId", playlistId)
+            .param("itemIds", array)
+            .update();
+    if (changed != itemIds.size()) throw PlaylistException.changed();
   }
 
   public void closeGap(UUID userId, UUID playlistId, int position) {

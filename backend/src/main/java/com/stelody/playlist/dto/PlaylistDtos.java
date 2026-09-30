@@ -17,6 +17,8 @@ public final class PlaylistDtos {
 
   public record Add(@NotNull UUID songId, @NotNull @Min(0) Long version) {}
 
+  public record Order(@NotNull List<@NotNull UUID> itemIds, @NotNull @Min(0) Long version) {}
+
   public record Summary(
       UUID id,
       String name,

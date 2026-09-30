@@ -87,6 +87,8 @@ public class SecurityConfiguration {
                         "/api/v1/me/playlists/{id}",
                         "/api/v1/me/playlists/{id}/items/{itemId}")
                     .authenticated()
+                    .requestMatchers(HttpMethod.PUT, "/api/v1/me/playlists/{id}/order")
+                    .authenticated()
                     .anyRequest()
                     .denyAll())
         .formLogin(AbstractHttpConfigurer::disable)
