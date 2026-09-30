@@ -1,4 +1,8 @@
 spring:
+  session:
+    jdbc:
+      # Cleanup is exercised explicitly; cached contexts can outlive their test containers.
+      cleanup-cron: "-"
   datasource:
     hikari:
       maximum-pool-size: 2
