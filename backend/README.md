@@ -16,7 +16,7 @@ docker compose -f ../infra/compose.yml up -d
 - 서버: http://localhost:8080
 - 상태 확인: http://localhost:8080/actuator/health
 - 로컬 메일함: http://localhost:8025 (Google 로그인에는 사용하지 않음)
-- Google 가입·로그인, CSRF 토큰, 내 정보 조회, 로그아웃을 제공합니다. 곡·개인 목록 API는 후속 작업입니다.
+- Google 가입·로그인, CSRF 토큰, 내 정보 조회, 로그아웃, 공개 곡·멤버 조회, 즐겨찾기를 제공합니다.
 
 로컬 PostgreSQL의 기본 계정은 `stelody`, 비밀번호는 `local-only-password`입니다. 로컬 포트는 루프백에만 바인딩합니다. 운영에서는 [환경변수 예시](../.env.example)의 환경변수를 별도 주입하세요. Spring Boot는 루트 `.env`를 자동으로 읽지 않습니다. 운영 DB URL은 TLS 인증서 검증을 사용하고 실행 계정과 마이그레이션 계정을 분리해야 합니다.
 
@@ -113,3 +113,9 @@ Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계
 ```sh
 ./gradlew integrationTest --tests '*PublicCatalogIntegrationTest' --tests '*CatalogMigrationIntegrationTest' --no-daemon
 ```
+
+## 내 즐겨찾기 저장·해제
+
+로그인한 회원은 PUT·DELETE `/api/v1/me/favorites/{songId}`로 저장·해제합니다. GET `/api/v1/me/favorites/{songId}`는 내 저장 여부를 반환합니다. 변경 요청에는 세션 쿠키와 CSRF 토큰을 함께 보냅니다.
+
+사용자당 기본 5,000곡이며 `FAVORITE_LIMIT`로 조정할 수 있습니다. 이용 불가 곡의 기존 저장 기록은 유지하며 해제할 수 있습니다. 계약·오류·검증 명령은 [즐겨찾기 API 문서](../docs/favorites-api.md)를 참고하세요. Flyway V6가 저장 관계와 실행 역할의 SELECT·INSERT·DELETE 권한을 추가합니다. 내 목록 조회는 다음 작업에서 추가합니다.
