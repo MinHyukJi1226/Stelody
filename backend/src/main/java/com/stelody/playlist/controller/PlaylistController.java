@@ -2,6 +2,7 @@ package com.stelody.playlist.controller;
 
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.playlist.dto.PlaylistDtos;
+import com.stelody.playlist.service.PlaylistItemService;
 import com.stelody.playlist.service.PlaylistService;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -22,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class PlaylistController {
   private final PlaylistService playlists;
+  private final PlaylistItemService items;
 
-  public PlaylistController(PlaylistService playlists) {
+  public PlaylistController(PlaylistService playlists, PlaylistItemService items) {
     this.playlists = playlists;
+    this.items = items;
   }
 
   @PostMapping("/api/v1/me/playlists")
@@ -64,5 +67,32 @@ public class PlaylistController {
       @PathVariable UUID id,
       @RequestParam long version) {
     playlists.delete(user.id(), id, version);
+  }
+
+  @GetMapping("/api/v1/me/playlists/{id}/items")
+  public PlaylistDtos.Items items(
+      @AuthenticationPrincipal SessionUser user,
+      @PathVariable UUID id,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(required = false) String cursor) {
+    return items.list(user.id(), id, size, cursor);
+  }
+
+  @PostMapping("/api/v1/me/playlists/{id}/items")
+  @ResponseStatus(HttpStatus.CREATED)
+  public PlaylistDtos.Added add(
+      @AuthenticationPrincipal SessionUser user,
+      @PathVariable UUID id,
+      @Valid @RequestBody PlaylistDtos.Add body) {
+    return items.add(user.id(), id, body.version(), body.songId());
+  }
+
+  @DeleteMapping("/api/v1/me/playlists/{id}/items/{itemId}")
+  public PlaylistDtos.Summary remove(
+      @AuthenticationPrincipal SessionUser user,
+      @PathVariable UUID id,
+      @PathVariable UUID itemId,
+      @RequestParam long version) {
+    return items.remove(user.id(), id, version, itemId);
   }
 }

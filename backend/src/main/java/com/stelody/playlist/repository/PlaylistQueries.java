@@ -1,11 +1,13 @@
 package com.stelody.playlist.repository;
 
+import com.stelody.playlist.domain.PlaylistCursor.ItemPosition;
 import com.stelody.playlist.domain.PlaylistCursor.ListPosition;
 import com.stelody.playlist.dto.PlaylistDtos;
 import com.stelody.playlist.web.PlaylistException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class PlaylistQueries {
+  public record ItemRow(UUID id, UUID songId, int position, Instant addedAt) {}
 
   private final JdbcClient jdbc;
 
@@ -28,6 +31,13 @@ public class PlaylistQueries {
             .optional();
     if (active.isEmpty() || !active.get().equals("ACTIVE"))
       throw new PlaylistException(401, "SESSION_EXPIRED", "다시 로그인해 주세요");
+  }
+
+  public boolean publiclyAvailable(UUID songId) {
+    return jdbc.sql(PlaylistSqlQueries.PUBLIC_SONG)
+        .param("songId", songId)
+        .query(Boolean.class)
+        .single();
   }
 
   public PlaylistDtos.Summary summary(UUID userId, UUID id) {
@@ -51,6 +61,35 @@ public class PlaylistQueries {
     if (cursor != null)
       statement.param("createdAt", Timestamp.from(cursor.createdAt())).param("id", cursor.id());
     return statement.query(this::summary).list();
+  }
+
+  public List<ItemRow> items(UUID userId, UUID playlistId, int size, ItemPosition cursor) {
+    var statement =
+        jdbc.sql(
+                PlaylistSqlQueries.ITEMS
+                    + (cursor == null ? "" : " AND i.position > :position")
+                    + " ORDER BY i.position LIMIT :limit")
+            .param("userId", userId)
+            .param("playlistId", playlistId)
+            .param("limit", size + 1);
+    if (cursor != null) statement.param("position", cursor.position());
+    return statement
+        .query(
+            (rs, n) ->
+                new ItemRow(
+                    rs.getObject("id", UUID.class),
+                    rs.getObject("song_id", UUID.class),
+                    rs.getInt("position"),
+                    rs.getTimestamp("added_at").toInstant()))
+        .list();
+  }
+
+  public void closeGap(UUID userId, UUID playlistId, int position) {
+    jdbc.sql(PlaylistSqlQueries.CLOSE_GAP)
+        .param("userId", userId)
+        .param("playlistId", playlistId)
+        .param("position", position)
+        .update();
   }
 
   private PlaylistDtos.Summary summary(ResultSet rs, int row) throws SQLException {

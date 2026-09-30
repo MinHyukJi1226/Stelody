@@ -72,13 +72,20 @@ public class SecurityConfiguration {
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/me/favorites/{songId}")
                     .authenticated()
                     .requestMatchers(
-                        HttpMethod.GET, "/api/v1/me/playlists", "/api/v1/me/playlists/{id}")
+                        HttpMethod.GET,
+                        "/api/v1/me/playlists",
+                        "/api/v1/me/playlists/{id}",
+                        "/api/v1/me/playlists/{id}/items")
                     .authenticated()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/me/playlists")
+                    .requestMatchers(
+                        HttpMethod.POST, "/api/v1/me/playlists", "/api/v1/me/playlists/{id}/items")
                     .authenticated()
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/me/playlists/{id}")
                     .authenticated()
-                    .requestMatchers(HttpMethod.DELETE, "/api/v1/me/playlists/{id}")
+                    .requestMatchers(
+                        HttpMethod.DELETE,
+                        "/api/v1/me/playlists/{id}",
+                        "/api/v1/me/playlists/{id}/items/{itemId}")
                     .authenticated()
                     .anyRequest()
                     .denyAll())

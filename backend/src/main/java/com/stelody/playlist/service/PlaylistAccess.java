@@ -24,4 +24,13 @@ public class PlaylistAccess {
     if (playlist.version() != version) throw PlaylistException.changed();
     return playlist;
   }
+
+  public Playlist claim(UUID userId, UUID playlistId, long version) {
+    var playlist = owned(userId, playlistId, version);
+    playlist.touch();
+    // The @Version-guarded UPDATE wins or fails before any child write. Its row lock lasts to
+    // commit.
+    playlists.flush();
+    return playlist;
+  }
 }

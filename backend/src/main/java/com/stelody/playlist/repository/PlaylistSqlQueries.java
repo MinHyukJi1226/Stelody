@@ -14,6 +14,20 @@ final class PlaylistSqlQueries {
         LEFT JOIN public_songs s ON s.id = i.song_id
       WHERE p.user_id = :userId
       """;
+  static final String ITEMS =
+      """
+      SELECT i.id, i.song_id, i.position, i.added_at FROM app.playlist_item i
+        JOIN app.playlist p ON p.id = i.playlist_id
+      WHERE p.user_id = :userId AND p.id = :playlistId
+      """;
   static final String LOCK_ACCOUNT =
       "SELECT status FROM app.app_user WHERE id = :userId FOR UPDATE";
+  static final String PUBLIC_SONG =
+      PublicCatalogSql.SONGS + " SELECT EXISTS (SELECT 1 FROM public_songs WHERE id = :songId)";
+  static final String CLOSE_GAP =
+      """
+      UPDATE app.playlist_item i SET position = position - 1
+      WHERE i.playlist_id = :playlistId AND i.position > :position
+        AND EXISTS (SELECT 1 FROM app.playlist p WHERE p.id = i.playlist_id AND p.user_id = :userId)
+      """;
 }

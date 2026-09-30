@@ -11,6 +11,9 @@ import tools.jackson.databind.ObjectMapper;
 public class PlaylistCursor {
   public record ListPosition(int format, UUID userId, Instant createdAt, UUID id) {}
 
+  public record ItemPosition(
+      int format, UUID userId, UUID playlistId, Long version, Integer position) {}
+
   private final ObjectMapper mapper;
 
   public PlaylistCursor(ObjectMapper mapper) {
@@ -29,8 +32,26 @@ public class PlaylistCursor {
     return p;
   }
 
+  public ItemPosition items(String cursor, UUID userId, UUID playlistId, long version) {
+    if (cursor == null) return null;
+    var p = decode(cursor, ItemPosition.class);
+    if (p.format() != 1
+        || !userId.equals(p.userId())
+        || !playlistId.equals(p.playlistId())
+        || p.version() == null
+        || p.position() == null
+        || p.version() < 0
+        || p.position() < 0) throw PlaylistException.invalid();
+    if (p.version() != version) throw PlaylistException.changed();
+    return p;
+  }
+
   public String lists(UUID userId, Instant createdAt, UUID id) {
     return encode(new ListPosition(1, userId, createdAt, id));
+  }
+
+  public String items(UUID userId, UUID playlistId, long version, int position) {
+    return encode(new ItemPosition(1, userId, playlistId, version, position));
   }
 
   private <T> T decode(String cursor, Class<T> type) {

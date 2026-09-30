@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.playlist.domain.PlaylistCursor;
 import com.stelody.playlist.repository.PlaylistRepository;
+import com.stelody.playlist.service.PlaylistItemService;
 import com.stelody.playlist.service.PlaylistService;
 import com.stelody.playlist.web.PlaylistException;
 import jakarta.servlet.http.Cookie;
@@ -141,6 +142,7 @@ class PlaylistIntegrationTest {
   @Autowired JdbcTemplate runtime;
   @Autowired FindByIndexNameSessionRepository<?> sessions;
   @Autowired PlaylistService playlists;
+  @Autowired PlaylistItemService playlistItems;
   @Autowired PlaylistRepository playlistRepository;
   @Autowired PlatformTransactionManager transactions;
   JdbcTemplate writer;
@@ -257,6 +259,19 @@ class PlaylistIntegrationTest {
     return response(authenticated(get(ROOT + "/" + id), browser), 200);
   }
 
+  JsonNode entries(Browser browser, UUID id, String query) throws Exception {
+    return response(authenticated(get(ROOT + "/" + id + "/items" + query), browser), 200);
+  }
+
+  JsonNode add(Browser browser, UUID id, long version, UUID song) throws Exception {
+    return response(
+        authenticated(post(ROOT + "/" + id + "/items"), browser)
+            .contentType("application/json")
+            .content(
+                mapper.writeValueAsString(java.util.Map.of("version", version, "songId", song))),
+        201);
+  }
+
   JsonNode response(MockHttpServletRequestBuilder request, int expectedStatus) throws Exception {
     return json(
         mvc.perform(request)
@@ -335,13 +350,24 @@ class PlaylistIntegrationTest {
   @Test
   void everyPrivateRouteChecksAuthenticationAndMutationsRequireCsrf() throws Exception {
     UUID id = uuid(create(first, "보안 확인"), "id");
-    for (String route : List.of(ROOT, ROOT + "/" + id))
+    for (String route : List.of(ROOT, ROOT + "/" + id, ROOT + "/" + id + "/items"))
       mvc.perform(get(route)).andExpect(status().isUnauthorized());
     for (var request :
         List.of(
-            post(ROOT).content("{\"name\":\"new\"}"),
-            patch(ROOT + "/" + id).content("{\"name\":\"rename\",\"version\":0}"),
-            delete(ROOT + "/" + id + "?version=0"))) {
+            post(ROOT)
+                .content(
+                    """
+{"name":"새 목록"}
+"""),
+            patch(ROOT + "/" + id)
+                .content(
+                    """
+{"name":"변경","version":0}
+"""),
+            delete(ROOT + "/" + id + "?version=0"),
+            post(ROOT + "/" + id + "/items")
+                .content(mapper.writeValueAsString(java.util.Map.of("songId", S1, "version", 0))),
+            delete(ROOT + "/" + id + "/items/" + id(999) + "?version=0"))) {
       mvc.perform(request.contentType("application/json").cookie(first.cookie()))
           .andExpect(status().isForbidden());
     }
@@ -350,7 +376,10 @@ class PlaylistIntegrationTest {
                 .cookie(first.cookie())
                 .header(first.csrfHeader(), second.csrf())
                 .contentType("application/json")
-                .content("{\"name\":\"wrong token\"}"))
+                .content(
+                    """
+{"name":"wrong token"}
+"""))
         .andExpect(status().isForbidden());
     var csrfResponse = mvc.perform(get("/api/v1/auth/csrf")).andReturn().getResponse();
     var csrf = json(csrfResponse.getContentAsString());
@@ -359,7 +388,10 @@ class PlaylistIntegrationTest {
                 .cookie(csrfResponse.getCookies())
                 .header(csrf.get("headerName").asText(), csrf.get("token").asText())
                 .contentType("application/json")
-                .content("{\"name\":\"anonymous\"}"))
+                .content(
+                    """
+{"name":"anonymous"}
+"""))
         .andExpect(status().isUnauthorized());
     mvc.perform(authenticated(put(ROOT + "/" + id), first)).andExpect(status().isForbidden());
     assertThat(detail(first, id).get("version").asLong()).isZero();
@@ -368,16 +400,25 @@ class PlaylistIntegrationTest {
   @Test
   void othersPlaylistsAndItemsAlwaysReturnNotFoundWithValidInputs() throws Exception {
     UUID id = uuid(create(first, "Private"), "id");
+    UUID item = uuid(add(first, id, 0, S1), "itemId");
     for (var request :
         List.of(
             get(ROOT + "/" + id),
-            patch(ROOT + "/" + id).content("{\"name\":\"hijack\",\"version\":0}"),
-            delete(ROOT + "/" + id + "?version=0"))) {
+            get(ROOT + "/" + id + "/items"),
+            patch(ROOT + "/" + id)
+                .content(
+                    """
+{"name":"hijack","version":1}
+"""),
+            delete(ROOT + "/" + id + "?version=1"),
+            post(ROOT + "/" + id + "/items")
+                .content(mapper.writeValueAsString(java.util.Map.of("songId", S2, "version", 1))),
+            delete(ROOT + "/" + id + "/items/" + item + "?version=1"))) {
       mvc.perform(authenticated(request.contentType("application/json"), second))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.code").value("PLAYLIST_NOT_FOUND"));
     }
-    assertThat(detail(first, id).get("version").asLong()).isZero();
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(1);
   }
 
   @Test
@@ -437,7 +478,178 @@ class PlaylistIntegrationTest {
     mvc.perform(authenticated(delete(ROOT + "/" + id), first)).andExpect(status().isBadRequest());
     mvc.perform(authenticated(delete(ROOT + "/" + id + "?version=-1"), first))
         .andExpect(status().isBadRequest());
+    mvc.perform(
+            authenticated(post(ROOT + "/" + id + "/items"), first)
+                .contentType("application/json")
+                .content(
+                    """
+{"songId":"bad-id","version":0}
+"""))
+        .andExpect(status().isBadRequest());
     assertThat(detail(first, id).get("version").asLong()).isZero();
+  }
+
+  @Test
+  void itemAddsAndRemovalUpdateTheParentAndPreserveRemainingPositions() throws Exception {
+    UUID id = uuid(create(first, "곡 관리"), "id");
+    UUID one = uuid(add(first, id, 0, S1), "itemId");
+    UUID two = uuid(add(first, id, 1, S2), "itemId");
+    UUID three = uuid(add(first, id, 2, S3), "itemId");
+    assertThat(itemIds(entries(first, id, ""))).containsExactly(one, two, three);
+    var deleted =
+        response(
+            authenticated(delete(ROOT + "/" + id + "/items/" + two + "?version=3"), first), 200);
+    assertThat(deleted.get("version").asLong()).isEqualTo(4);
+    var page = entries(first, id, "");
+    assertThat(itemIds(page)).containsExactly(one, three);
+    assertThat(page.get("items").get(0).get("position").asInt()).isZero();
+    assertThat(page.get("items").get(1).get("position").asInt()).isEqualTo(1);
+    UUID newTwo = uuid(add(first, id, 4, S2), "itemId");
+    assertThat(itemIds(entries(first, id, ""))).containsExactly(one, three, newTwo);
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(5);
+  }
+
+  List<UUID> itemIds(JsonNode page) {
+    var ids = new ArrayList<UUID>();
+    page.get("items").forEach(item -> ids.add(uuid(item, "id")));
+    return ids;
+  }
+
+  @Test
+  void duplicateAndMissingSongsFailWithoutUpdatingTheParent() throws Exception {
+    UUID id = uuid(create(first, "곡 검증"), "id");
+    UUID item = uuid(add(first, id, 0, S1), "itemId");
+    mvc.perform(
+            authenticated(post(ROOT + "/" + id + "/items"), first)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(java.util.Map.of("version", 1, "songId", S1))))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PLAYLIST_SONG_ALREADY_EXISTS"));
+    mvc.perform(
+            authenticated(post(ROOT + "/" + id + "/items"), first)
+                .contentType("application/json")
+                .content(
+                    mapper.writeValueAsString(java.util.Map.of("version", 1, "songId", id(999)))))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("CATALOG_NOT_FOUND"));
+    mvc.perform(authenticated(delete(ROOT + "/" + id + "/items/" + id(999) + "?version=1"), first))
+        .andExpect(status().isNotFound());
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(1);
+    assertThat(itemIds(entries(first, id, ""))).containsExactly(item);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "HIDDEN",
+        "DRAFT",
+        "PRIVATE",
+        "DELETED",
+        "UNAVAILABLE",
+        "UNLISTED",
+        "NO_VIDEO",
+        "UNCONFIRMED",
+        "NO_DATE"
+      })
+  void unavailableSongsKeepTheirPositionAndPlaceholderButCannotBeAdded(String condition)
+      throws Exception {
+    UUID id = uuid(create(first, "노출 검증"), "id");
+    UUID item = uuid(add(first, id, 0, S1), "itemId");
+    UUID other = uuid(add(first, id, 1, S2), "itemId");
+    switch (condition) {
+      case "HIDDEN", "DRAFT" ->
+          writer.update("UPDATE app.song_entry SET visibility = ? WHERE id = ?", condition, S1);
+      case "NO_VIDEO" ->
+          writer.update(
+              "UPDATE app.song_entry SET representative_video_id = NULL WHERE id = ?", S1);
+      case "UNCONFIRMED" ->
+          writer.update("UPDATE app.song_member SET confirmed = false WHERE song_id = ?", S1);
+      case "NO_DATE" ->
+          writer.update("UPDATE app.video SET published_at = NULL WHERE song_id = ?", S1);
+      default ->
+          writer.update("UPDATE app.video SET availability = ? WHERE song_id = ?", condition, S1);
+    }
+    var page = entries(first, id, "");
+    assertThat(itemIds(page)).containsExactly(item, other);
+    var unavailable = page.get("items").get(0);
+    assertThat(unavailable.get("available").asBoolean()).isFalse();
+    assertThat(unavailable.get("song").isNull()).isTrue();
+    assertThat(unavailable.get("unavailableMessage").asText()).isEqualTo("현재 이용할 수 없는 곡");
+    assertThat(unavailable.toString())
+        .doesNotContain("Test song", "thumbnail", "youtube", "Private source");
+    assertThat(page.get("totalCount").asLong()).isEqualTo(2);
+    assertThat(page.get("availableCount").asLong()).isEqualTo(1);
+    assertThat(detail(first, id).get("availableCount").asLong()).isEqualTo(1);
+    assertThat(list(first, "").get("items").get(0).get("availableCount").asLong()).isEqualTo(1);
+    response(authenticated(delete(ROOT + "/" + id + "/items/" + item + "?version=2"), first), 200);
+    mvc.perform(
+            authenticated(post(ROOT + "/" + id + "/items"), first)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(java.util.Map.of("version", 3, "songId", S1))))
+        .andExpect(status().isNotFound());
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(3);
+  }
+
+  @Test
+  void itemCursorsAreBoundToOwnerPlaylistAndVersion() throws Exception {
+    UUID id = uuid(create(first, "커서"), "id");
+    UUID one = uuid(add(first, id, 0, S1), "itemId");
+    UUID two = uuid(add(first, id, 1, S2), "itemId");
+    UUID three = uuid(add(first, id, 2, S3), "itemId");
+    var page = entries(first, id, "?size=1");
+    assertThat(itemIds(page)).containsExactly(one);
+    String cursor = page.get("nextCursor").asText();
+    page = entries(first, id, "?size=50&cursor=" + cursor);
+    assertThat(itemIds(page)).containsExactly(two, three);
+    assertThat(page.get("hasNext").asBoolean()).isFalse();
+    UUID other = uuid(create(first, "다른 커서"), "id");
+    mvc.perform(authenticated(get(ROOT + "/" + other + "/items").param("cursor", cursor), first))
+        .andExpect(status().isBadRequest());
+    String crossed =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                mapper.writeValueAsBytes(new PlaylistCursor.ItemPosition(1, U2, id, 3L, 0)));
+    mvc.perform(authenticated(get(ROOT + "/" + id + "/items").param("cursor", crossed), first))
+        .andExpect(status().isBadRequest());
+    response(
+        authenticated(patch(ROOT + "/" + id), first)
+            .contentType("application/json")
+            .content("{\"name\":\"changed\",\"version\":3}"),
+        200);
+    mvc.perform(authenticated(get(ROOT + "/" + id + "/items").param("cursor", cursor), first))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PLAYLIST_CHANGED"));
+  }
+
+  @Test
+  void staleWritesCannotOverwriteNewNamesItemsOrOrder() throws Exception {
+    UUID id = uuid(create(first, "stale"), "id");
+    UUID one = uuid(add(first, id, 0, S1), "itemId");
+    for (var request :
+        List.of(
+            patch(ROOT + "/" + id).content("{\"name\":\"overwrite\",\"version\":0}"),
+            post(ROOT + "/" + id + "/items")
+                .content(mapper.writeValueAsString(java.util.Map.of("version", 0, "songId", S2))),
+            delete(ROOT + "/" + id + "/items/" + one + "?version=0"),
+            delete(ROOT + "/" + id + "?version=0"))) {
+      mvc.perform(authenticated(request.contentType("application/json"), first))
+          .andExpect(status().isConflict())
+          .andExpect(jsonPath("$.code").value("PLAYLIST_CHANGED"));
+    }
+    assertThat(detail(first, id).get("name").asText()).isEqualTo("stale");
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(1);
+    assertThat(itemIds(entries(first, id, ""))).containsExactly(one);
+  }
+
+  @Test
+  void anItemFromAnotherPlaylistCannotBeRemoved() throws Exception {
+    UUID own = uuid(create(first, "하나"), "id"), other = uuid(create(first, "둘"), "id");
+    UUID item = uuid(add(first, other, 0, S1), "itemId");
+    mvc.perform(authenticated(delete(ROOT + "/" + own + "/items/" + item + "?version=0"), first))
+        .andExpect(status().isNotFound());
+    assertThat(detail(first, own).get("version").asLong()).isZero();
+    assertThat(itemIds(entries(first, other, ""))).containsExactly(item);
   }
 
   List<Integer> concurrent(List<Callable<Integer>> tasks) throws Exception {
@@ -496,6 +708,106 @@ class PlaylistIntegrationTest {
     create(second, "다른 회원");
   }
 
+  void seedItems(UUID playlistId, int count, String prefix, boolean published) {
+    writer.update(
+        """
+        INSERT INTO app.song_entry(id, title, search_title, song_type, visibility)
+        SELECT md5(? || '-song-' || n)::uuid, 'Bulk Song', 'bulk song', 'COVER', ?
+        FROM generate_series(1, ?) n
+        """,
+        prefix,
+        published ? "PUBLISHED" : "DRAFT",
+        count);
+    if (published) {
+      writer.update(
+          """
+          INSERT INTO app.video(id, song_id, youtube_id, video_kind, availability, source_title, published_at)
+          SELECT md5(? || '-video-' || n)::uuid, md5(? || '-song-' || n)::uuid,
+            lpad((10000 + n)::text, 11, '0'), 'OFFICIAL_COVER', 'PUBLIC', 'Bulk source', '2026-01-01T00:00:00Z'::timestamptz
+          FROM generate_series(1, ?) n
+          """,
+          prefix,
+          prefix,
+          count);
+      writer.update(
+          """
+          UPDATE app.song_entry s SET representative_video_id = v.id FROM app.video v
+          WHERE s.id = v.song_id AND s.id IN (SELECT md5(? || '-song-' || n)::uuid FROM generate_series(1, ?) n)
+          """,
+          prefix,
+          count);
+      writer.update(
+          """
+          INSERT INTO app.song_member(song_id, member_id, position)
+          SELECT md5(? || '-song-' || n)::uuid, ?, 0 FROM generate_series(1, ?) n
+          """,
+          prefix,
+          M1,
+          count);
+    }
+    writer.update(
+        """
+        INSERT INTO app.playlist_item(id, playlist_id, song_id, position, added_at)
+        SELECT md5(? || '-item-' || n)::uuid, ?, md5(? || '-song-' || n)::uuid, n - 1, now()
+        FROM generate_series(1, ?) n
+        """,
+        prefix,
+        playlistId,
+        prefix,
+        count);
+  }
+
+  @Test
+  void concurrentAddsAtFiveHundredItemsCannotExceedCapacityAndRemovalFreesOne() throws Exception {
+    UUID id = uuid(create(first, "한도"), "id");
+    seedItems(id, 499, "capacity", false);
+    assertThat(
+            concurrent(
+                List.of(
+                    () -> {
+                      playlistItems.add(U1, id, 0, S1);
+                      return 201;
+                    },
+                    () -> {
+                      playlistItems.add(U1, id, 0, S2);
+                      return 201;
+                    })))
+        .containsExactlyInAnyOrder(201, 409);
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(1);
+    assertThat(detail(first, id).get("totalCount").asLong()).isEqualTo(500);
+    mvc.perform(
+            authenticated(post(ROOT + "/" + id + "/items"), first)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(java.util.Map.of("version", 1, "songId", S3))))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PLAYLIST_ITEM_LIMIT_REACHED"));
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(1);
+    UUID item = itemIds(entries(first, id, "?size=1")).getFirst();
+    response(authenticated(delete(ROOT + "/" + id + "/items/" + item + "?version=1"), first), 200);
+    add(first, id, 2, S3);
+    assertThat(detail(first, id).get("totalCount").asLong()).isEqualTo(500);
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(3);
+  }
+
+  @Test
+  void concurrentDuplicateAddsKeepOneItem() throws Exception {
+    UUID id = uuid(create(first, "동시 중복"), "id");
+    assertThat(
+            concurrent(
+                List.of(
+                    () -> {
+                      playlistItems.add(U1, id, 0, S1);
+                      return 201;
+                    },
+                    () -> {
+                      playlistItems.add(U1, id, 0, S1);
+                      return 201;
+                    })))
+        .containsExactlyInAnyOrder(201, 409);
+    assertThat(detail(first, id).get("totalCount").asLong()).isEqualTo(1);
+    assertThat(detail(first, id).get("version").asLong()).isEqualTo(1);
+  }
+
   @Test
   void actualVersionGuardRejectsOneOfTwoTransactionsThatLoadedTheSameVersion() throws Exception {
     UUID id = uuid(create(first, "낙관적 잠금"), "id");
@@ -518,6 +830,43 @@ class PlaylistIntegrationTest {
                     });
     assertThat(concurrent(List.of(rename, rename))).containsExactlyInAnyOrder(200, 409);
     assertThat(detail(first, id).get("version").asLong()).isEqualTo(1);
+  }
+
+  @Test
+  void twentyAndFiftyItemPagesUseOneRelationshipHydrationQuery() throws Exception {
+    UUID id = uuid(create(first, "일괄 조회"), "id");
+    seedItems(id, 50, "pages", true);
+    for (int size : List.of(20, 50)) {
+      RELATION_QUERIES.set(0);
+      assertThat(entries(first, id, "?size=" + size).get("items").size()).isEqualTo(size);
+      assertThat(RELATION_QUERIES.get()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  void playlistAndAccountDeletionCascadeItemsAndRetainOtherAccountsFavorites() throws Exception {
+    UUID firstId = uuid(create(first, "삭제"), "id"), secondId = uuid(create(second, "유지"), "id");
+    add(first, firstId, 0, S1);
+    add(second, secondId, 0, S1);
+    writer.update("INSERT INTO app.favorite(user_id, song_id) VALUES (?, ?)", U2, S1);
+    mvc.perform(authenticated(delete(ROOT + "/" + firstId + "?version=1"), first))
+        .andExpect(status().isNoContent());
+    assertThat(
+            runtime.queryForObject(
+                "SELECT count(*) FROM app.playlist_item WHERE playlist_id = ?",
+                Long.class,
+                firstId))
+        .isZero();
+    assertThat(entries(second, secondId, "").get("items").size()).isEqualTo(1);
+    assertThat(
+            runtime.queryForObject(
+                "SELECT count(*) FROM app.favorite WHERE user_id = ?", Long.class, U2))
+        .isEqualTo(1);
+    writer.update("DELETE FROM app.app_user WHERE id = ?", U2);
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.playlist_item", Long.class))
+        .isZero();
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.playlist", Long.class)).isZero();
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.favorite", Long.class)).isZero();
   }
 
   @Test
@@ -553,6 +902,37 @@ class PlaylistIntegrationTest {
                     new PlaylistCursor.ListPosition(1, U1, Instant.parse(date), id(999))));
     mvc.perform(authenticated(get(ROOT).param("cursor", cursor), first))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void itemCursorMustContainVersionAndPositionAndCannotUseListCursor() throws Exception {
+    UUID id = uuid(create(first, "입력 커서"), "id");
+    for (Object payload :
+        List.of(
+            java.util.Map.of("format", 1, "userId", U1, "playlistId", id, "position", 0),
+            java.util.Map.of("format", 1, "userId", U1, "playlistId", id, "version", 0),
+            new PlaylistCursor.ListPosition(1, U1, Instant.parse("2026-01-01T00:00:00Z"), id))) {
+      String cursor =
+          Base64.getUrlEncoder().withoutPadding().encodeToString(mapper.writeValueAsBytes(payload));
+      mvc.perform(authenticated(get(ROOT + "/" + id + "/items").param("cursor", cursor), first))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_PLAYLIST_REQUEST"));
+    }
+  }
+
+  @Test
+  void returningToPublicAvailabilityRestoresSavedItemWithoutChangingPlaylistVersion()
+      throws Exception {
+    UUID id = uuid(create(first, "복구"), "id");
+    UUID item = uuid(add(first, id, 0, S1), "itemId");
+    writer.update("UPDATE app.video SET availability = 'PRIVATE' WHERE song_id = ?", S1);
+    assertThat(entries(first, id, "").get("availableCount").asLong()).isZero();
+    writer.update("UPDATE app.video SET availability = 'PUBLIC' WHERE song_id = ?", S1);
+    var page = entries(first, id, "");
+    assertThat(itemIds(page)).containsExactly(item);
+    assertThat(page.get("items").get(0).get("song").get("id").asText()).isEqualTo(S1.toString());
+    assertThat(page.get("availableCount").asLong()).isEqualTo(1);
+    assertThat(page.get("version").asLong()).isEqualTo(1);
   }
 
   <S extends Session> void expire(FindByIndexNameSessionRepository<S> repository, UUID userId) {
