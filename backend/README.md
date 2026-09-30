@@ -114,8 +114,8 @@ Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계
 ./gradlew integrationTest --tests '*PublicCatalogIntegrationTest' --tests '*CatalogMigrationIntegrationTest' --no-daemon
 ```
 
-## 내 즐겨찾기 저장·해제
+## 내 즐겨찾기
 
-로그인한 회원은 PUT·DELETE `/api/v1/me/favorites/{songId}`로 저장·해제합니다. GET `/api/v1/me/favorites/{songId}`는 내 저장 여부를 반환합니다. 변경 요청에는 세션 쿠키와 CSRF 토큰을 함께 보냅니다.
+로그인한 회원은 PUT·DELETE `/api/v1/me/favorites/{songId}`로 저장·해제하고 GET `/api/v1/me/favorites`로 최신 저장 순 목록을 조회합니다. GET `/api/v1/me/favorites/{songId}`는 내 저장 여부를 반환합니다. 변경 요청에는 세션 쿠키와 CSRF 토큰을 함께 보냅니다.
 
-사용자당 기본 5,000곡이며 `FAVORITE_LIMIT`로 조정할 수 있습니다. 이용 불가 곡의 기존 저장 기록은 유지하며 해제할 수 있습니다. 계약·오류·검증 명령은 [즐겨찾기 API 문서](../docs/favorites-api.md)를 참고하세요. Flyway V6가 저장 관계와 실행 역할의 SELECT·INSERT·DELETE 권한을 추가합니다. 내 목록 조회는 다음 작업에서 추가합니다.
+사용자당 기본 5,000곡이며 `FAVORITE_LIMIT`로 조정할 수 있습니다. 공개 상태가 바뀐 곡의 저장 기록은 유지하고 내 목록에 자리표시자를 표시합니다. 상세 계약·오류·검증 명령은 [즐겨찾기 API 문서](../docs/favorites-api.md)를 참고하세요. Flyway V6가 저장 관계와 실행 역할의 SELECT·INSERT·DELETE 권한을 추가합니다.

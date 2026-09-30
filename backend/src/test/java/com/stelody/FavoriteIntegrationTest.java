@@ -6,14 +6,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.stelody.auth.domain.SessionUser;
+import com.stelody.favorite.domain.FavoriteCursor;
 import com.stelody.favorite.service.FavoriteService;
 import com.stelody.favorite.web.FavoriteException;
 import jakarta.servlet.http.Cookie;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -22,16 +27,22 @@ import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DelegatingDataSource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -58,6 +69,55 @@ import tools.jackson.databind.ObjectMapper;
 class FavoriteIntegrationTest {
   static final UUID U1 = id(1), U2 = id(2), M1 = id(10), S1 = id(101), S2 = id(102), S3 = id(103);
   static final String ROOT = "/api/v1/me/favorites";
+  static final AtomicInteger RELATION_QUERIES = new AtomicInteger();
+
+  // Count only relationship hydration, excluding session and account SQL.
+  @TestConfiguration
+  static class QueryCounting {
+    @Bean
+    static BeanPostProcessor countRelations() {
+      return new BeanPostProcessor() {
+        @Override
+        public Object postProcessAfterInitialization(Object bean, String name) {
+          return name.equals("dataSource") && bean instanceof DataSource source
+              ? new CountingDataSource(source)
+              : bean;
+        }
+      };
+    }
+  }
+
+  static class CountingDataSource extends DelegatingDataSource implements AutoCloseable {
+    CountingDataSource(DataSource source) {
+      super(source);
+    }
+
+    @Override
+    public Connection getConnection() throws java.sql.SQLException {
+      var connection = super.getConnection();
+      return (Connection)
+          Proxy.newProxyInstance(
+              Connection.class.getClassLoader(),
+              new Class<?>[] {Connection.class},
+              (proxy, method, args) -> {
+                if (method.getName().equals("prepareStatement")
+                    && args[0] instanceof String sql
+                    && (sql.stripLeading().startsWith("SELECT sm.song_id")
+                        || sql.stripLeading().startsWith("SELECT w.id")))
+                  RELATION_QUERIES.incrementAndGet();
+                try {
+                  return method.invoke(connection, args);
+                } catch (InvocationTargetException exception) {
+                  throw exception.getCause();
+                }
+              });
+    }
+
+    @Override
+    public void close() throws Exception {
+      if (getTargetDataSource() instanceof AutoCloseable closeable) closeable.close();
+    }
+  }
 
   @Container
   static final PostgreSQLContainer postgres =
@@ -164,9 +224,15 @@ class FavoriteIntegrationTest {
     return mapper.readTree(value);
   }
 
-  long count(UUID userId) {
-    return runtime.queryForObject(
-        "SELECT count(*) FROM app.favorite WHERE user_id = ?", Long.class, userId);
+  JsonNode list(Browser browser, String query) throws Exception {
+    return json(
+        mvc.perform(authenticated(get(ROOT + query), browser))
+            .andExpect(status().isOk())
+            .andExpect(
+                header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   void save(Browser browser, UUID song) throws Exception {
@@ -182,22 +248,16 @@ class FavoriteIntegrationTest {
   }
 
   @Test
-  void idempotentSaveAndDeletePreserveTimestamp() throws Exception {
-    assertThat(count(U1)).isZero();
+  void idempotentSaveAndDeletePreserveTimestampAndOrder() throws Exception {
+    assertThat(list(first, "").get("totalCount").asLong()).isZero();
     stored(U1, S1, "2026-01-01T00:00:00Z");
     stored(U1, S2, "2026-01-02T00:00:00Z");
     save(first, S1);
     save(first, S1);
-    assertThat(count(U1)).isEqualTo(2);
-    assertThat(
-            runtime
-                .queryForObject(
-                    "SELECT created_at FROM app.favorite WHERE user_id = ? AND song_id = ?",
-                    java.sql.Timestamp.class,
-                    U1,
-                    S1)
-                .toInstant())
-        .isEqualTo(Instant.parse("2026-01-01T00:00:00Z"));
+    var page = list(first, "");
+    assertThat(page.get("totalCount").asLong()).isEqualTo(2);
+    assertThat(page.get("items").get(0).get("songId").asText()).isEqualTo(S2.toString());
+    assertThat(page.get("items").get(1).get("savedAt").asText()).isEqualTo("2026-01-01T00:00:00Z");
     for (int i = 0; i < 2; i++)
       mvc.perform(authenticated(delete(ROOT + "/" + S1), first)).andExpect(status().isNoContent());
     mvc.perform(authenticated(delete(ROOT + "/" + id(999)), first))
@@ -210,8 +270,8 @@ class FavoriteIntegrationTest {
   void newSaveUsesSessionOwnerAndSeparateAccountsCannotReadOrDeleteIt() throws Exception {
     mvc.perform(authenticated(put(ROOT + "/" + S1).param("ownerId", U2.toString()), first))
         .andExpect(status().isNoContent());
-    assertThat(count(U1)).isEqualTo(1);
-    assertThat(count(U2)).isZero();
+    assertThat(list(first, "").get("items").size()).isEqualTo(1);
+    assertThat(list(second, "?ownerId=" + U1).get("items").size()).isZero();
     mvc.perform(authenticated(get(ROOT + "/" + S1), second))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.favorited").value(false));
@@ -226,6 +286,7 @@ class FavoriteIntegrationTest {
 
   @Test
   void privateRoutesNeedAuthenticationAndMutationsNeedTheSessionCsrfToken() throws Exception {
+    mvc.perform(get(ROOT)).andExpect(status().isUnauthorized());
     mvc.perform(get(ROOT + "/" + S1)).andExpect(status().isUnauthorized());
     var anonymousCsrf = mvc.perform(get("/api/v1/auth/csrf")).andReturn().getResponse();
     var token = json(anonymousCsrf.getContentAsString());
@@ -242,7 +303,7 @@ class FavoriteIntegrationTest {
             put(ROOT + "/" + S1).cookie(first.cookie()).header(first.csrfHeader(), second.csrf()))
         .andExpect(status().isForbidden());
     mvc.perform(authenticated(post(ROOT), first)).andExpect(status().isForbidden());
-    assertThat(count(U1)).isZero();
+    assertThat(list(first, "").get("totalCount").asLong()).isZero();
   }
 
   @ParameterizedTest
@@ -258,7 +319,8 @@ class FavoriteIntegrationTest {
         "UNCONFIRMED",
         "NO_DATE"
       })
-  void unavailableSavedSongsKeepTheirSaveAndCanBeRemoved(String condition) throws Exception {
+  void unavailableSavedSongsKeepOnlyThePlaceholderAndCanBeRemoved(String condition)
+      throws Exception {
     save(first, S1);
     save(first, S2);
     switch (condition) {
@@ -275,10 +337,21 @@ class FavoriteIntegrationTest {
           writer.update("UPDATE app.video SET availability = ? WHERE song_id = ?", condition, S1);
     }
     save(first, S1); // A retry of an existing save remains successful after availability changes.
-    assertThat(count(U1)).isEqualTo(2);
+    var page = list(first, "");
+    assertThat(page.get("totalCount").asLong()).isEqualTo(2);
+    assertThat(page.get("availableCount").asLong()).isEqualTo(1);
+    JsonNode placeholder = null;
+    for (var item : page.get("items"))
+      if (item.get("songId").asText().equals(S1.toString())) placeholder = item;
+    assertThat(placeholder.get("available").asBoolean()).isFalse();
+    assertThat(placeholder.get("song").isNull()).isTrue();
+    assertThat(placeholder.get("unavailableMessage").asText()).isEqualTo("현재 이용할 수 없는 곡");
+    assertThat(page.toString())
+        .doesNotContain(
+            "Test song " + S1, "Private source title", String.format("%011d", S1.hashCode()));
     mvc.perform(authenticated(put(ROOT + "/" + S1), second)).andExpect(status().isNotFound());
     mvc.perform(authenticated(delete(ROOT + "/" + S1), first)).andExpect(status().isNoContent());
-    assertThat(count(U1)).isEqualTo(1);
+    assertThat(list(first, "").get("totalCount").asLong()).isEqualTo(1);
   }
 
   @Test
@@ -286,7 +359,54 @@ class FavoriteIntegrationTest {
     mvc.perform(authenticated(put(ROOT + "/" + id(999)), first))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("CATALOG_NOT_FOUND"));
-    assertThat(count(U1)).isZero();
+    assertThat(list(first, "").get("items").size()).isZero();
+  }
+
+  @Test
+  void savedDateAndIdCursorsHaveNoTieDuplicatesAndCannotCrossAccounts() throws Exception {
+    for (var song : List.of(S1, S2, S3)) stored(U1, song, "2026-01-01T00:00:00.123456Z");
+    var page = list(first, "?size=1");
+    assertThat(page.get("items").get(0).get("songId").asText()).isEqualTo(S3.toString());
+    String cursor = page.get("nextCursor").asText();
+    mvc.perform(authenticated(get(ROOT).param("cursor", cursor), second))
+        .andExpect(status().isBadRequest());
+    mvc.perform(authenticated(delete(ROOT + "/" + S3), first)).andExpect(status().isNoContent());
+    save(first, S3); // A later insert above the cursor is seen when refreshing the first page.
+    page = list(first, "?size=50&cursor=" + cursor);
+    assertThat(page.get("items").size()).isEqualTo(2);
+    assertThat(page.get("items").get(0).get("songId").asText()).isEqualTo(S2.toString());
+    assertThat(page.get("items").get(1).get("songId").asText()).isEqualTo(S1.toString());
+    assertThat(page.get("hasNext").asBoolean()).isFalse();
+    assertThat(page.get("nextCursor").isNull()).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {"?size=0", "?size=51", "?size=x", "?cursor=", "?cursor=bad", "/not-a-uuid"})
+  void invalidQueriesHaveSafeProblemResponses(String suffix) throws Exception {
+    mvc.perform(authenticated(get(ROOT + suffix), first))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_FAVORITE_QUERY"))
+        .andExpect(jsonPath("$.traceId").isNotEmpty());
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "2026-01-01T00:00:00.123456789Z",
+        "+999999999-01-01T00:00:00Z",
+        "0000-01-01T00:00:00Z"
+      })
+  void fabricatedCursorDatesAreRejectedBeforeJdbcConversion(String date) throws Exception {
+    var cursor =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                mapper.writeValueAsBytes(
+                    new FavoriteCursor.Position(1, U1, Instant.parse(date), S1)));
+    mvc.perform(authenticated(get(ROOT).param("cursor", cursor), first))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_FAVORITE_QUERY"));
   }
 
   @Test
@@ -298,7 +418,7 @@ class FavoriteIntegrationTest {
     mvc.perform(authenticated(put(ROOT + "/" + S1), first)).andExpect(status().isUnauthorized());
     assertThat(sessions.findByPrincipalName(U1.toString())).isEmpty();
     expire(sessions, U2);
-    mvc.perform(authenticated(get(ROOT + "/" + S1), second)).andExpect(status().isUnauthorized());
+    mvc.perform(authenticated(get(ROOT), second)).andExpect(status().isUnauthorized());
     assertThat(runtime.queryForObject("SELECT count(*) FROM app.favorite", Long.class)).isZero();
   }
 
@@ -341,7 +461,7 @@ class FavoriteIntegrationTest {
   @Test
   void concurrentDuplicateSavesProduceOneRowAndAllSucceed() throws Exception {
     assertThat(concurrent(List.of(S1, S1, S1, S1))).containsOnly(204);
-    assertThat(count(U1)).isEqualTo(1);
+    assertThat(list(first, "").get("totalCount").asLong()).isEqualTo(1);
   }
 
   @Test
@@ -357,7 +477,8 @@ class FavoriteIntegrationTest {
         "INSERT INTO app.favorite(user_id, song_id) SELECT ?, id FROM app.song_entry WHERE search_title = 'limit song'",
         U1);
     assertThat(concurrent(List.of(S1, S2))).containsExactlyInAnyOrder(204, 409);
-    assertThat(count(U1)).isEqualTo(5000);
+    var page = list(first, "");
+    assertThat(page.get("totalCount").asLong()).isEqualTo(5000);
     UUID saved =
         runtime.queryForObject(
             "SELECT song_id FROM app.favorite WHERE user_id = ? AND song_id IN (?, ?)",
@@ -372,7 +493,37 @@ class FavoriteIntegrationTest {
     save(second, S3); // Other accounts retain their own capacity.
     mvc.perform(authenticated(delete(ROOT + "/" + saved), first)).andExpect(status().isNoContent());
     save(first, S3);
-    assertThat(count(U1)).isEqualTo(5000);
+    assertThat(list(first, "").get("totalCount").asLong()).isEqualTo(5000);
+  }
+
+  @Test
+  void twentyAndFiftyItemsUseOneRelationshipHydrationQuery() throws Exception {
+    writer.execute(
+        """
+        INSERT INTO app.song_entry(id, title, search_title, song_type, visibility)
+          SELECT md5('page-song-' || n)::uuid, 'Page Song', 'page song', 'COVER', 'PUBLISHED'
+          FROM generate_series(1, 50) n
+        """);
+    writer.execute(
+        """
+        INSERT INTO app.video(id, song_id, youtube_id, video_kind, availability, source_title, published_at)
+          SELECT md5('page-video-' || n)::uuid, md5('page-song-' || n)::uuid, lpad((10000 + n)::text, 11, '0'),
+            'OFFICIAL_COVER', 'PUBLIC', 'Page source', '2026-01-01T00:00:00Z'::timestamptz
+          FROM generate_series(1, 50) n
+        """);
+    writer.execute(
+        "UPDATE app.song_entry s SET representative_video_id = v.id FROM app.video v WHERE s.id = v.song_id AND s.search_title = 'page song'");
+    writer.update(
+        "INSERT INTO app.song_member(song_id, member_id, position) SELECT id, ?, 0 FROM app.song_entry WHERE search_title = 'page song'",
+        M1);
+    writer.update(
+        "INSERT INTO app.favorite(user_id, song_id) SELECT ?, id FROM app.song_entry WHERE search_title = 'page song'",
+        U1);
+    for (int size : List.of(20, 50)) {
+      RELATION_QUERIES.set(0);
+      assertThat(list(first, "?size=" + size).get("items").size()).isEqualTo(size);
+      assertThat(RELATION_QUERIES.get()).isEqualTo(1);
+    }
   }
 
   @Test

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,6 +20,14 @@ public class FavoriteController {
 
   public FavoriteController(FavoriteService favorites) {
     this.favorites = favorites;
+  }
+
+  @GetMapping("/api/v1/me/favorites")
+  public FavoriteDtos.Page list(
+      @AuthenticationPrincipal SessionUser user,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(required = false) String cursor) {
+    return favorites.list(user.id(), size, cursor);
   }
 
   @GetMapping("/api/v1/me/favorites/{songId}")

@@ -6,6 +6,7 @@ import com.stelody.song.domain.SongCursor.Position;
 import com.stelody.song.domain.SongQuery;
 import java.sql.Timestamp;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -92,6 +93,12 @@ final class SongSqlQueries {
     var params = baseParameters("", publication);
     params.put("id", id);
     return new Statement(RANKED_SONGS + " AND s.id = :id", params);
+  }
+
+  static Statement findAll(List<UUID> ids, UUID publication) {
+    var params = baseParameters("", publication);
+    params.put("ids", ids);
+    return new Statement(RANKED_SONGS + " AND s.id IN (:ids)", params);
   }
 
   static Statement related(UUID id, UUID work, UUID publication) {

@@ -63,6 +63,12 @@ public class SongRepository {
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).optional();
   }
 
+  public List<Row> findAll(List<UUID> ids, UUID publication) {
+    if (ids.isEmpty()) return List.of();
+    var statement = SongSqlQueries.findAll(ids, publication);
+    return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).list();
+  }
+
   public List<Row> related(Row song, UUID publication) {
     var statement = SongSqlQueries.related(song.id(), song.workId(), publication);
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).list();

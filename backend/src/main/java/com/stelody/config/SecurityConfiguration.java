@@ -61,7 +61,11 @@ public class SecurityConfiguration {
                         "/api/v1/members/{id}",
                         "/api/v1/members/{id}/songs")
                     .permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/v1/me", "/api/v1/me/favorites/{songId}")
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/me",
+                        "/api/v1/me/favorites",
+                        "/api/v1/me/favorites/{songId}")
                     .authenticated()
                     .requestMatchers(HttpMethod.PUT, "/api/v1/me/favorites/{songId}")
                     .authenticated()
