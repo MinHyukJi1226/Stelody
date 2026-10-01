@@ -43,7 +43,8 @@ public class ReviewService {
 
   @Transactional
   public ReviewDtos.Item change(UUID id, UUID actor, ReviewDtos.Change change) {
-    if (change.version() < 0
+    if (change.version() == null
+        || change.version() < 0
         || change.status() == null
         || !List.of("PENDING", "IGNORED").contains(change.status())
         || change.reason() == null

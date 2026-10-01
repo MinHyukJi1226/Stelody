@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -208,6 +210,39 @@ class ReviewIntegrationTest {
         .isEqualTo(1);
   }
 
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{\"status\":\"IGNORED\",\"reason\":\"not a song\"}",
+        "{\"version\":null,\"status\":\"IGNORED\",\"reason\":\"not a song\"}",
+        "{\"version\":-1,\"status\":\"IGNORED\",\"reason\":\"not a song\"}"
+      })
+  void missingNullAndNegativeVersionsCannotChangeAnInitialCandidate(String body) throws Exception {
+    mvc.perform(
+            auth(patch(ROOT + "/" + REVIEW), admin).contentType("application/json").content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_REVIEW_REQUEST"));
+    assertThat(writer.queryForObject("SELECT review_status FROM app.review_item", String.class))
+        .isEqualTo("PENDING");
+    assertThat(writer.queryForObject("SELECT version FROM app.review_item", Long.class)).isZero();
+    assertThat(writer.queryForObject("SELECT review_note FROM app.review_item", String.class))
+        .isNull();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.admin_audit", Long.class)).isZero();
+  }
+
+  @Test
+  void serviceRejectsNullVersionWithoutHttpValidation() {
+    assertThatThrownBy(
+            () -> service.change(REVIEW, ADMIN, new ReviewDtos.Change(null, "IGNORED", "note")))
+        .isInstanceOf(com.stelody.review.web.ReviewException.class)
+        .extracting(error -> ((com.stelody.review.web.ReviewException) error).code())
+        .isEqualTo("INVALID_REVIEW_REQUEST");
+    assertThat(writer.queryForObject("SELECT review_status FROM app.review_item", String.class))
+        .isEqualTo("PENDING");
+    assertThat(writer.queryForObject("SELECT version FROM app.review_item", Long.class)).isZero();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.admin_audit", Long.class)).isZero();
+  }
+
   @Test
   void metadataRefreshConflictsWithAnAlreadyOpenedReviewTransaction() {
     var tx = new TransactionTemplate(transactions);
@@ -242,7 +277,7 @@ class ReviewIntegrationTest {
     assertThatThrownBy(
             () ->
                 service.change(
-                    REVIEW, UUID.randomUUID(), new ReviewDtos.Change(0, "IGNORED", "note")))
+                    REVIEW, UUID.randomUUID(), new ReviewDtos.Change(0L, "IGNORED", "note")))
         .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     assertThat(writer.queryForObject("SELECT review_status FROM app.review_item", String.class))
         .isEqualTo("PENDING");

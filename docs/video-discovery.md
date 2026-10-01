@@ -83,7 +83,7 @@ java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover --backfil
 }
 ```
 
-복원은 같은 경로에 현재 `version`, `status=PENDING`, 복원 사유를 전달한다. 사유는 1~500자이며 공백만 입력할 수 없다. 관리자 ID는 세션에서 결정하고 요청으로 받지 않는다. 잘못된 입력은 400 `INVALID_REVIEW_REQUEST`, 없는 후보는 404 `REVIEW_NOT_FOUND`, 오래된 버전은 409 `REVIEW_VERSION_CONFLICT`다.
+복원은 같은 경로에 현재 `version`, `status=PENDING`, 복원 사유를 전달한다. `version`은 필수이며 누락·null·음수는 400으로 거절한다. 명시한 0은 최초 버전으로 허용한다. 사유는 1~500자이며 공백만 입력할 수 없다. 관리자 ID는 세션에서 결정하고 요청으로 받지 않는다. 잘못된 입력은 400 `INVALID_REVIEW_REQUEST`, 없는 후보는 404 `REVIEW_NOT_FOUND`, 오래된 버전은 409 `REVIEW_VERSION_CONFLICT`다.
 
 수집 갱신도 버전을 증가시키므로 관리자 화면을 읽은 뒤 원본이 변경되면 충돌한다. 최신 후보를 다시 조회해야 한다. 변경과 변경 이력은 한 트랜잭션이며, 이력 저장 실패 시 판단 변경도 롤백한다. 동일 상태·동일 사유를 현재 버전으로 다시 요청하면 추가 변경 이력을 만들지 않는다. 이력에는 서버에서 결정한 관리자 ID, 변경 전후 상태·사유, 시각을 남긴다.
 

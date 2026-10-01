@@ -2,6 +2,7 @@ package com.stelody.review.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -12,7 +13,7 @@ public final class ReviewDtos {
   private ReviewDtos() {}
 
   public record Change(
-      @Min(0) long version,
+      @NotNull @Min(0) Long version,
       @Pattern(regexp = "PENDING|IGNORED") @NotBlank String status,
       @NotBlank @Size(max = 500) String reason) {}
 
