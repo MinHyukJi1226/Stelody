@@ -1,5 +1,7 @@
 package com.stelody.collector.config;
 
+import com.stelody.collector.domain.CollectionBudget;
+import com.stelody.collector.service.DiscoveryCollector;
 import com.stelody.collector.service.VideoCollector;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -21,16 +23,18 @@ import org.springframework.core.env.Environment;
 public class CollectorConfiguration {
   @Bean
   CollectorRunner collectorRunner(Environment environment) {
-    return new CollectorRunner(CollectorSettings.from(environment));
+    return new CollectorRunner(CollectorSettings.from(environment), environment);
   }
 
   public static final class CollectorRunner implements ApplicationRunner, ExitCodeGenerator {
     private static final Logger LOG = LoggerFactory.getLogger(CollectorRunner.class);
     private final CollectorSettings settings;
+    private final Environment environment;
     private int exitCode;
 
-    CollectorRunner(CollectorSettings settings) {
+    CollectorRunner(CollectorSettings settings, Environment environment) {
       this.settings = settings;
+      this.environment = environment;
     }
 
     @Override
@@ -40,7 +44,13 @@ public class CollectorConfiguration {
         return;
       }
       try {
+        boolean discover = arguments.containsOption("discover");
+        if (discover && !environment.getProperty("DISCOVERY_ENABLED", Boolean.class, false)) {
+          LOG.info("discovery status=SKIPPED_DISABLED");
+          return;
+        }
         settings.validate();
+        var options = discover ? DiscoveryOptions.from(environment, arguments) : null;
         var config = new HikariConfig();
         config.setJdbcUrl(settings.dbUrl());
         config.setUsername(settings.dbUsername());
@@ -52,16 +62,37 @@ public class CollectorConfiguration {
         config.addDataSourceProperty("connectTimeout", "5");
         config.addDataSourceProperty("socketTimeout", "10");
         try (var source = new HikariDataSource(config)) {
+          var budget = new CollectionBudget(settings.maxRuntime());
           var collector =
               new VideoCollector(
                   source, settings, Clock.systemUTC(), duration -> Thread.sleep(duration));
-          var result = collector.collect();
-          exitCode = result.exitCode();
-          LOG.info(
-              "collector runId={} status={} code={}",
-              result.runId(),
-              result.status(),
-              result.code());
+          var result = options != null && options.backfill() ? null : collector.collect(budget);
+          if (result != null) {
+            exitCode = result.exitCode();
+            LOG.info(
+                "collector runId={} status={} code={}",
+                result.runId(),
+                result.status(),
+                result.code());
+          }
+          if (discover
+              && (result == null
+                  || (result.exitCode() == 0 && !result.status().equals("SKIPPED_LOCKED")))) {
+            var discovered =
+                new DiscoveryCollector(
+                        source,
+                        settings,
+                        options,
+                        Clock.systemUTC(),
+                        duration -> Thread.sleep(duration))
+                    .collect(budget);
+            exitCode = discovered.exitCode();
+            LOG.info(
+                "discovery runId={} status={} code={}",
+                discovered.runId(),
+                discovered.status(),
+                discovered.code());
+          }
         }
       } catch (RuntimeException exception) {
         exitCode = 1;

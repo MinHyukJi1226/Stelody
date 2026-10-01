@@ -2,8 +2,14 @@ name: YouTube Collector
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17 1-23/2 * * *'
+    - cron: '17 */2 * * *'
   workflow_dispatch:
+    inputs:
+      discover:
+        description: Also discover new uploads (requires DISCOVERY_ENABLED variable)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -86,6 +92,9 @@ jobs:
           COLLECTOR_DB_PASSWORD: ${{ secrets.COLLECTOR_DB_PASSWORD }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           SPRING_PROFILES_ACTIVE: prod
+          DISCOVERY_ENABLED: ${{ vars.DISCOVERY_ENABLED }}
+          DISCOVERY_CLASSIFICATION_ALLOWED: ${{ vars.DISCOVERY_CLASSIFICATION_ALLOWED }}
+          DISCOVER_THIS_RUN: ${{ vars.DISCOVERY_ENABLED == 'true' && (github.event.schedule == '17 */2 * * *' || inputs.discover == true) }}
         run: |
           test -n "$COLLECTOR_DB_URL"
           test -n "$COLLECTOR_DB_USERNAME"
@@ -97,4 +106,9 @@ jobs:
             jar=$(find backend/build/libs -name '*.jar' ! -name '*-plain.jar' -type f | head -n 1)
           fi
           test -n "$jar"
-          timeout --signal=TERM 11m java -jar "$jar" --collector
+          if test "$DISCOVER_THIS_RUN" = true; then
+            test -f backend/src/main/java/com/stelody/collector/service/DiscoveryCollector.java
+            timeout --signal=TERM 11m java -jar "$jar" --collector --discover
+          else
+            timeout --signal=TERM 11m java -jar "$jar" --collector
+          fi

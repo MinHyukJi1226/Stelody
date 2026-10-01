@@ -5,27 +5,18 @@ import com.stelody.collector.domain.CollectionBudget;
 import com.stelody.collector.domain.CollectionFailure;
 import com.stelody.collector.domain.VideoObservation;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 public final class YouTubeVideoClient {
-  private static final int MAX_BODY = 2 * 1024 * 1024;
-  private final CollectorSettings settings;
-  private final CollectionBudget.Sleeper sleeper;
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final YouTubeApiClient api;
 
   public YouTubeVideoClient(CollectorSettings settings, CollectionBudget.Sleeper sleeper) {
-    this.settings = settings;
-    this.sleeper = sleeper;
+    api = new YouTubeApiClient(settings, sleeper);
   }
 
   public Map<String, VideoObservation> fetch(List<String> ids, CollectionBudget budget) {
@@ -34,83 +25,16 @@ public final class YouTubeVideoClient {
         || ids.stream().distinct().count() != ids.size()
         || ids.stream().anyMatch(id -> !id.matches("[A-Za-z0-9_-]{11}")))
       throw new IllegalArgumentException("Invalid video batch");
-    for (int attempt = 1; ; attempt++) {
-      try {
-        return request(ids, budget);
-      } catch (CollectionFailure failure) {
-        if (!failure.retryable() || attempt >= settings.maxAttempts()) throw failure;
-        budget.pause(settings.retryDelay().multipliedBy(1L << (attempt - 1)), sleeper);
-      }
-    }
+    return parse(
+        ids,
+        api.get(
+            "videos",
+            Map.of("part", "snippet,contentDetails,status,statistics", "id", String.join(",", ids)),
+            budget));
   }
 
-  private Map<String, VideoObservation> request(List<String> ids, CollectionBudget budget) {
-    Duration timeout =
-        settings.readTimeout().compareTo(budget.remaining()) < 0
-            ? settings.readTimeout()
-            : budget.remaining();
-    var http =
-        HttpClient.newBuilder()
-            .connectTimeout(
-                settings.connectTimeout().compareTo(timeout) < 0
-                    ? settings.connectTimeout()
-                    : timeout)
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
-    var factory = new JdkClientHttpRequestFactory(http);
-    factory.setReadTimeout(timeout);
-    try (http) {
-      var rest =
-          RestClient.builder()
-              .baseUrl(settings.apiBase().toString())
-              .requestFactory(factory)
-              .build();
-      return rest.get()
-          .uri(
-              builder ->
-                  builder
-                      .path("/videos")
-                      .queryParam("part", "snippet,contentDetails,status,statistics")
-                      .queryParam("id", String.join(",", ids))
-                      .build())
-          .header("X-Goog-Api-Key", settings.apiKey())
-          .exchange(
-              (request, response) -> {
-                int status = response.getStatusCode().value();
-                byte[] bytes = response.getBody().readNBytes(MAX_BODY + 1);
-                budget.remaining();
-                if (bytes.length > MAX_BODY) throw new CollectionFailure("INVALID_RESPONSE", false);
-                if (status != 200) throw httpFailure(status, bytes);
-                return parse(ids, bytes);
-              });
-    } catch (CollectionFailure failure) {
-      throw failure;
-    } catch (RestClientException exception) {
-      throw new CollectionFailure("API_IO_ERROR", true);
-    } catch (RuntimeException exception) {
-      throw new CollectionFailure("INVALID_RESPONSE", false);
-    }
-  }
-
-  private CollectionFailure httpFailure(int status, byte[] body) {
+  private Map<String, VideoObservation> parse(List<String> ids, JsonNode root) {
     try {
-      var errors = mapper.readTree(body).path("error").path("errors");
-      for (var error : errors) {
-        String reason = error.path("reason").asText();
-        if (reason.equals("quotaExceeded") || reason.equals("dailyLimitExceeded"))
-          return new CollectionFailure("QUOTA_EXHAUSTED", false);
-        if (reason.equals("rateLimitExceeded") || reason.equals("userRateLimitExceeded"))
-          return new CollectionFailure("API_RATE_LIMIT", true);
-      }
-    } catch (RuntimeException ignored) {
-      /* Only normalized status is retained. */
-    }
-    return new CollectionFailure("API_HTTP_" + status, status == 429 || status >= 500);
-  }
-
-  private Map<String, VideoObservation> parse(List<String> ids, byte[] body) {
-    try {
-      JsonNode root = mapper.readTree(body);
       if (!root.path("kind").asText().equals("youtube#videoListResponse")
           || !root.path("items").isArray()
           || root.has("nextPageToken")) invalid();

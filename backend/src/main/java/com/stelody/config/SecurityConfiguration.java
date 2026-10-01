@@ -67,6 +67,11 @@ public class SecurityConfiguration {
                         "/api/v1/me/favorites",
                         "/api/v1/me/favorites/{songId}")
                     .authenticated()
+                    .requestMatchers(
+                        HttpMethod.GET, "/api/v1/admin/reviews", "/api/v1/admin/reviews/{id}")
+                    .hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/reviews/{id}")
+                    .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PUT, "/api/v1/me/favorites/{songId}")
                     .authenticated()
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/me/favorites/{songId}")
