@@ -24,6 +24,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Format, unit tests, PostgreSQL integration tests, and build
         run: ./gradlew check bootJar --no-daemon
+      - name: Store verified collector executable
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-collector-${{ github.sha }}
+          path: backend/build/libs/*-SNAPSHOT.jar
+          if-no-files-found: error
+          retention-days: 7
 
   required-checks:
     if: always()

@@ -129,3 +129,14 @@ Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계
 ```sh
 ./gradlew integrationTest --tests '*PlaylistIntegrationTest' --tests '*PlaylistMigrationIntegrationTest' --no-daemon
 ```
+
+## YouTube 등록 영상 수집
+
+같은 jar에 `--collector`를 전달하면 HTTP 서버 없이 수집 작업을 실행하고 종료합니다. 기본 비활성이며 수집 계정·API 키 설정 전에는 DB와 외부 API에 접속하지 않습니다. 수집 전용 계정은 회원·개인 목록·세션을 읽을 수 없어야 합니다. V8 적용 후 [권한 스크립트](../infra/sql/collector-grants.sql)를 스키마 소유자 계정으로 실행하세요.
+
+허용된 공식 채널의 등록 영상만 갱신합니다. 작업 중복과 부분 실패를 처리하고 완료된 결과만 공개 조회수로 게시합니다. KST 일별 마지막 관측값과 보관 정리도 제공합니다. [수집·설정 안내](../docs/youtube-collector.md)에 Google API 키 발급, DB 계정과 GitHub Actions 설정, 실패·재개 규칙을 정리했습니다. 신규 영상 탐색과 관리자 검토·통계 화면은 후속 단계입니다.
+
+```sh
+./gradlew bootJar --no-daemon
+java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector
+```
