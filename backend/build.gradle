@@ -60,3 +60,6 @@ tasks.register('integrationTest', Test) {
 }
 
 tasks.named('check') { dependsOn integrationTest }
+
+// Exercise the same role grant script used for deployment.
+sourceSets.test.resources.srcDir('../infra/sql')

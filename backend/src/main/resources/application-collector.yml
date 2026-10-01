@@ -1,0 +1,12 @@
+# Explicit collector context does not enable web/JPA/session/Flyway auto-configuration.
+stelody:
+  collector:
+    enabled: ${COLLECTOR_ENABLED:false}
+    db-url: ${COLLECTOR_DB_URL:}
+    db-username: ${COLLECTOR_DB_USERNAME:}
+    db-password: ${COLLECTOR_DB_PASSWORD:}
+    api-key: ${YOUTUBE_API_KEY:}
+logging:
+  level:
+    org.springframework.web.client: OFF
+    com.zaxxer.hikari: WARN
