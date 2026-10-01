@@ -141,11 +141,10 @@ Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계
 java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector
 ```
 
-## 공식 채널 탐색
+## 공식 채널 탐색·관리자 후보 검토
 
-V9 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식 채널 등록](../infra/sql/official-channels.sql)을 스키마 소유자로 수동 적용합니다. 채널 등록은 사용자가 제공한 공식 그룹·개인 채널 11곳만 포함하며 기존 채널과 멤버 자료를 덮어쓰지 않습니다.
+V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식 채널 등록](../infra/sql/official-channels.sql)을 스키마 소유자로 수동 적용합니다. 채널 등록은 사용자가 제공한 공식 그룹·개인 채널 11곳만 포함하며 기존 채널과 멤버 자료를 덮어쓰지 않습니다.
 
 `DISCOVERY_ENABLED=true`를 설정하고 프로그램 인수 `--collector --discover`로 실행하면 최신 업로드를 검토 후보로 저장합니다. `DISCOVERY_CLASSIFICATION_ALLOWED`는 기본 false이며 자동 곡 등록·공개는 제공하지 않습니다. 과거 목록은 채널 UUID를 지정한 작은 수동 배치로 탐색합니다.
 
-
-[탐색 계약](../docs/video-discovery.md)에 실행 방법, 페이지 재개, 분류 제안과 권한을 정리했습니다. 관리자 후보 검토 API는 후속 작업입니다.
+관리자 전용 GET `/api/v1/admin/reviews`, GET·PATCH `/api/v1/admin/reviews/{id}`로 조회·무시·복원합니다. 변경에는 CSRF 토큰, 현재 후보 버전, 사유가 필요합니다. 일반 회원은 사용할 수 없으며 변경 이력은 트랜잭션으로 기록합니다. 관리자 지정·곡 등록 화면은 후속 작업입니다. [탐색·검토 계약](../docs/video-discovery.md)에 실행 방법, 페이지 재개, 분류 제안, 관리자 API와 권한을 정리했습니다.

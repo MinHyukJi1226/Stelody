@@ -37,7 +37,7 @@ class DiscoveryMigrationIntegrationTest {
                 postgres.getJdbcUrl(), "stelody_migrator", "test-migrator"));
     writer.execute(
         "INSERT INTO app.app_user(id,google_subject,email) VALUES('00000000-0000-0000-0000-000000000001','test','test@example.invalid')");
-    assertThat(config.target("9").load().migrate().migrationsExecuted).isEqualTo(1);
+    assertThat(config.target("10").load().migrate().migrationsExecuted).isEqualTo(2);
     assertThat(config.load().migrate().migrationsExecuted).isZero();
     assertThat(writer.queryForObject("SELECT count(*) FROM app.app_user", Long.class)).isEqualTo(1);
     var runtime =

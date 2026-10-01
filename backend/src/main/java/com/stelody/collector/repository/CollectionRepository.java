@@ -35,7 +35,7 @@ public final class CollectionRepository {
                 """
         SELECT rolsuper OR rolcreaterole OR has_schema_privilege(current_user, 'app', 'CREATE') OR
                       EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                        WHERE ((n.nspname = 'app' AND c.relname IN ('app_user', 'favorite', 'playlist', 'playlist_item'))
+                        WHERE ((n.nspname = 'app' AND c.relname IN ('app_user', 'favorite', 'playlist', 'playlist_item', 'admin_audit'))
                           OR (n.nspname = 'session' AND c.relname IN ('spring_session', 'spring_session_attributes')))
                           AND has_table_privilege(current_user, c.oid, 'SELECT'))
                     FROM pg_roles WHERE rolname = current_user

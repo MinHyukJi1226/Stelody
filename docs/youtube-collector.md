@@ -2,7 +2,7 @@
 
 ## 이번 단계
 
-허용된 공식 채널의 **이미 등록된 영상**을 갱신한다. `channel.collection_enabled = true`이고 `channel_type`이 `GROUP` 또는 `MEMBER`인 채널만 대상이다. 실제 곡을 임의로 등록하지 않으며 Testcontainers 자료로 검증한다. 신규 업로드 탐색는 [별도 계약](video-discovery.md)에 기록한다.
+허용된 공식 채널의 **이미 등록된 영상**을 갱신한다. `channel.collection_enabled = true`이고 `channel_type`이 `GROUP` 또는 `MEMBER`인 채널만 대상이다. 실제 곡을 임의로 등록하지 않으며 Testcontainers 자료로 검증한다. 신규 업로드 탐색·관리자 후보 검토는 [별도 계약](video-discovery.md)에 기록한다.
 
 - 영상별 조회수, 이용 가능 상태, YouTube 원본 제목·공개일·썸네일·길이·임베드 가능 여부
 - 작업·시도·대상별 처리 기록, DB 중복 실행 방지, 실패 후 재개
@@ -10,7 +10,7 @@
 - 실제 관측의 시간별 저장과 KST 일별 마지막 성공 관측값
 - GitHub Actions 정기 실행·수동 실행
 
-신규 영상 탐색·분류 제안을 추가했다. 곡 등록·공개와 관리자 후보 검토·재시도 버튼·상태 API, 조회수 차트·급상승 계산, YouTube 내보내기는 후속 기능이다. 운영 자동 분류·공개를 활성화하지 않는다.
+신규 영상 탐색·분류 제안과 관리자 후보 조회·무시·복원을 추가했다. 곡 등록·공개와 관리자 재시도 버튼·상태 API, 조회수 차트·급상승 계산, YouTube 내보내기는 후속 기능이다. 운영 자동 분류·공개를 활성화하지 않는다.
 
 ## 실행 모드
 
@@ -41,7 +41,7 @@ Spring Boot는 `.env`를 자동으로 읽지 않는다. IntelliJ 환경변수 �
 3. 스키마 소유자 계정으로 [권한 스크립트](../infra/sql/collector-grants.sql)를 실행한다. 실제 역할 이름이 다르면 스크립트의 역할 이름을 수정한 후 실행한다. 로그인 이름과 PostgreSQL 역할 이름은 풀러 구성에 따라 다를 수 있다.
 4. 수집 실행에 전용 계정을 설정한다. 공유 개발 계정·웹 계정·마이그레이션 계정은 사용하지 않는다.
 
-탐색까지 실행하려면 V9을 추가 적용하고 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식 채널 등록](../infra/sql/official-channels.sql)을 스키마 소유자로 수동 실행한다. `DISCOVERY_ENABLED=true` 및 `--discover`가 필요하다. 최초 탐색은 채널당 최신 50개까지만 처리하며 과거 목록은 별도 수동 배치다.
+탐색까지 실행하려면 V9·V10을 추가 적용하고 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식 채널 등록](../infra/sql/official-channels.sql)을 스키마 소유자로 수동 실행한다. `DISCOVERY_ENABLED=true` 및 `--discover`가 필요하다. 최초 탐색은 채널당 최신 50개까지만 처리하며 과거 목록은 별도 수동 배치다.
 
 권한 스크립트는 `app.channel`, `app.video` 조회, 영상 source·상태 열 갱신, 수집·관측·공개 조회수 테이블의 필요한 작업만 허용한다. `song_entry`의 제목·노출·참여·대표 영상, `video.published_at`·`thumbnail_url`의 수동 표시값을 수정하지 못한다. 회원·즐겨찾기·개인 플레이리스트·세션 조회와 DDL도 허용하지 않는다.
 
@@ -99,7 +99,7 @@ Spring Boot는 `.env`를 자동으로 읽지 않는다. IntelliJ 환경변수 �
 - `COLLECTOR_DB_PASSWORD`
 - `YOUTUBE_API_KEY`
 
-Backend CI를 통과한 최신 main 커밋을 선택하고 그 커밋의 실행 jar를 사용한다. CI가 성공한 main 빌드는 jar를 7일간 artifact로 보관한다. 이후 수집 실행은 같은 SHA의 cache·artifact를 재사용한다. artifact와 cache가 없으면 검증된 커밋을 한 번 빌드하여 외부 수집 전에 cache에 저장한다. 정기 실행에서 전체 테스트를 반복하지 않는다. 배포 DB에는 선택된 실행 파일의 V8 스키마가 먼저 적용되어 있어야 한다. 탐색 활성화 시에는 V9 및 탐색 권한·채널 등록도 먼저 적용한다.
+Backend CI를 통과한 최신 main 커밋을 선택하고 그 커밋의 실행 jar를 사용한다. CI가 성공한 main 빌드는 jar를 7일간 artifact로 보관한다. 이후 수집 실행은 같은 SHA의 cache·artifact를 재사용한다. artifact와 cache가 없으면 검증된 커밋을 한 번 빌드하여 외부 수집 전에 cache에 저장한다. 정기 실행에서 전체 테스트를 반복하지 않는다. 배포 DB에는 선택된 실행 파일의 V8 스키마가 먼저 적용되어 있어야 한다. 탐색 활성화 시에는 V9·V10 및 탐색 권한·채널 등록도 먼저 적용한다.
 
 수집 자체는 최대 10분, 프로세스의 외부 제한은 11분, workflow job은 15분이다. 강제 중단 후에는 다음 실행에서 DB 기록을 기준으로 재개한다. Actions 실행 목록으로 수동 실행·진행·실패를 확인할 수 있다. 사이트 관리자 버튼은 후속 단계다.
 

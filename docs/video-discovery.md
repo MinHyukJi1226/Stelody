@@ -1,14 +1,14 @@
-# 공식 채널 영상 탐색
+# 공식 채널 영상 탐색과 관리자 검토
 
 ## 범위
 
 사용자가 제공한 공식 그룹·개인 채널 11곳의 업로드 목록에서 검토 후보를 수집한다. `collection_enabled=true`인 `GROUP`·`MEMBER` 채널만 탐색한다. 곡·작품·참여자·대표 영상은 생성하거나 변경하지 않는다. 채널 소유자를 참여자로 추정하지 않으며 그룹 채널의 영상을 모든 멤버의 곡으로 연결하지 않는다.
 
-관리자 후보 조회·무시·복원 API는 후속 작업이다. 곡 등록·연결·공개, 참여자 확정, 규칙 편집, 관리자 계정 지정, 수동 재시도 버튼은 후속 작업이다. 공개 곡·멤버 API는 계속 로그인 없이 이용할 수 있다.
+관리자는 후보 목록·상세를 조회하고 무시·복원한다. 곡 등록·연결·공개, 참여자 확정, 규칙 편집, 관리자 계정 지정, 수동 재시도 버튼은 후속 작업이다. 공개 곡·멤버 API는 계속 로그인 없이 이용할 수 있다.
 
 ## 준비와 실행
 
-1. 서버의 마이그레이션 계정으로 V9을 적용한다. 기존 V1~V8은 유지한다. 수집 역할이 없어도 마이그레이션할 수 있다.
+1. 서버의 마이그레이션 계정으로 V9·V10을 적용한다. 기존 V1~V8은 유지한다. 수집 역할이 없어도 마이그레이션할 수 있다.
 2. 스키마 소유자로 기존 [수집 권한](../infra/sql/collector-grants.sql)과 새 [탐색 권한](../infra/sql/discovery-grants.sql)을 적용한다. 역할 이름이 다르면 먼저 스크립트를 수정한다.
 3. 스키마 소유자로 [공식 채널 등록](../infra/sql/official-channels.sql)을 수동 적용한다. 이 스크립트는 사용자가 준 11개 핸들을 실제 API로 확인한 채널 ID를 사용한다. 기존 채널은 덮어쓰지 않는다. 개인 채널의 `member_id`는 실제 멤버 자료 확인 전까지 비워 둔다.
 4. 기존 `COLLECTOR_*`, `YOUTUBE_API_KEY` 설정에 `DISCOVERY_ENABLED=true`를 추가한다. 제목 자동 분류는 정책 확인 전까지 `DISCOVERY_CLASSIFICATION_ALLOWED=false`로 유지한다. 운영에서 활성화하기 전에 해당 스키마·권한·허용 목록을 먼저 준비한다.
@@ -61,11 +61,37 @@ java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover --backfil
 
 규칙 제안과 수동 판단은 분리한다. `IGNORED` 후보는 재탐색으로 복원되지 않는다. `PENDING` 복원은 검토 대상으로 되돌리며 곡 등록·공개 또는 분류 변경을 의미하지 않는다. 어떤 규칙도 이번 단계에서 자동 공개하지 않는다.
 
+## 관리자 API
+
+모든 경로는 DB에서 현재 역할이 `ADMIN`인 로그인 세션이 필요하다. 비로그인 401, 일반 회원 403이다. 응답은 `Cache-Control: no-store`이며 PATCH에는 CSRF 토큰이 필요하다. 운영 관리자 지정 방식은 아직 제공하지 않는다.
+
+| 메서드·경로 | 동작 |
+|---|---|
+| GET `/api/v1/admin/reviews` | 후보 목록; page=0, size=20, status=PENDING 기본값 |
+| GET `/api/v1/admin/reviews/{id}` | 후보 상세 |
+| PATCH `/api/v1/admin/reviews/{id}` | 무시 또는 복원과 사유 기록 |
+
+목록의 `size`는 1~50, `page`는 0~10000이다. `status`는 PENDING·IGNORED, 선택 `disposition`은 REVIEW·EXCLUDED·DEFERRED이다. 최초 발견 시각·ID 내림차순으로 반환하며 `{items,page,size,hasNext}` 형식이다. 만료된 원본은 DEFERRED 필터에서도 일관되게 조회한다.
+
+상세·목록 항목은 내부 ID, YouTube ID, 채널 ID·이름, 원본 제목·공개일·썸네일·길이·관측 시각, 이용 가능 상태, 규칙 버전·제안·사유, 수동 판단·메모, 최초 발견 시각, `version`, `sourceExpired`를 제공한다.
+
+```json
+{
+  "version": 0,
+  "status": "IGNORED",
+  "reason": "노래 영상이 아닌 방송 안내"
+}
+```
+
+복원은 같은 경로에 현재 `version`, `status=PENDING`, 복원 사유를 전달한다. 사유는 1~500자이며 공백만 입력할 수 없다. 관리자 ID는 세션에서 결정하고 요청으로 받지 않는다. 잘못된 입력은 400 `INVALID_REVIEW_REQUEST`, 없는 후보는 404 `REVIEW_NOT_FOUND`, 오래된 버전은 409 `REVIEW_VERSION_CONFLICT`다.
+
+수집 갱신도 버전을 증가시키므로 관리자 화면을 읽은 뒤 원본이 변경되면 충돌한다. 최신 후보를 다시 조회해야 한다. 변경과 변경 이력은 한 트랜잭션이며, 이력 저장 실패 시 판단 변경도 롤백한다. 동일 상태·동일 사유를 현재 버전으로 다시 요청하면 추가 변경 이력을 만들지 않는다. 이력에는 서버에서 결정한 관리자 ID, 변경 전후 상태·사유, 시각을 남긴다.
+
 ## 권한과 보관
 
-웹 실행 역할은 후보를 읽는다. 수집 역할은 원본·규칙 제안·버전만 갱신하며 수동 메모·판단 시각을 읽거나 수동 판단을 쓰지 못한다. 회원·개인 목록·세션·곡 생성 권한도 없다.
+웹 실행 역할은 후보를 읽고 수동 판단·메모·시각·버전만 갱신하며 변경 이력을 추가한다. 수집 역할은 원본·규칙 제안·버전만 갱신한다. 수집 역할은 수동 메모·판단 시각과 변경 이력을 읽거나 수동 판단을 쓰지 못한다. 회원·개인 목록·세션·곡 생성 권한도 없다.
 
-YouTube 원본은 마지막 관측 후 30일이 지나면 다음 탐색 실행에서 비운다. 중복·무시 식별을 위한 영상 ID와 관리자 판단·메모는 유지한다. 탐색 실행 이력은 종료 후 30일에 정리한다. 탐색을 장기간 중지할 때에는 별도 보관 정리도 운영에서 처리해야 한다.
+YouTube 원본은 마지막 관측 후 30일이 지나면 다음 탐색 실행에서 비운다. 관리자 조회는 정리 실행 전에도 만료된 원본을 숨긴다. 중복·무시 식별을 위한 영상 ID와 관리자 판단·메모는 유지한다. 탐색 실행 이력은 종료 후 30일에 정리한다. 탐색을 장기간 중지할 때에는 별도 보관 정리도 운영에서 처리해야 한다.
 
 ## 정기 실행과 검증
 
@@ -73,8 +99,16 @@ YouTube 원본은 마지막 관측 후 30일이 지나면 다음 탐색 실행�
 
 ```sh
 ./gradlew test --tests '*DiscoveryRulesTest' --tests '*DiscoveryOptionsTest' --tests '*YouTubeUploadsClientTest' --no-daemon
-./gradlew integrationTest --tests '*DiscoveryCollectorIntegrationTest' --tests '*DiscoveryMigrationIntegrationTest' --no-daemon
+./gradlew integrationTest --tests '*DiscoveryCollectorIntegrationTest' --tests '*DiscoveryMigrationIntegrationTest' --tests '*ReviewIntegrationTest' --no-daemon
 ./gradlew check bootJar --no-daemon
 ```
 
-검증 대상은 페이지 재개·과거 커서 분리·무시/등록 중복 방지·토큰 인코딩·잘못된 토큰·할당량·시간 제한·채널 비활성·다른 채널 응답·잠금·역할 분리·보관 정리·기존 V8 업그레이드다.
+검증 대상은 페이지 재개·과거 커서 분리·무시/등록 중복 방지·토큰 인코딩·잘못된 토큰·할당량·시간 제한·채널 비활성·다른 채널 응답·잠금·역할 분리·보관 정리·관리자 인증/CSRF/역할 철회·낙관적 충돌·변경 이력 롤백·기존 V8 업그레이드다.
+
+### 2026-10-01 로컬 검증 결과
+
+- `spotlessApply check bootJar --no-daemon` 성공: 단위 테스트 63개, PostgreSQL 통합 테스트 150개, 총 213개 실패·건너뜀 없이 통과했다.
+- 로컬 DB 백업 후 V8에서 V9·V10으로 업그레이드하고 수집 권한·공식 채널 스크립트를 적용했다. 실제 API와 수집 전용 DB 계정으로 11채널·11페이지·550개 고유 후보를 저장했다. 공개 549개는 자동 분류 비활성 상태의 REVIEW, 공개 상태를 확인할 수 없는 1개는 DEFERRED였다. 곡 생성은 0개였다.
+- 즉시 재실행도 성공했다. 등록 영상 갱신은 완료 슬롯을 건너뛰고 탐색은 추가 페이지·후보 반영 없이 종료했다. 고유 후보 550개와 곡 0개가 유지됐다.
+- Backend CI·수집 workflow의 actionlint 1.7.7 검사 통과. 로컬에 ShellCheck가 없어 해당 검사는 제외했다. GitHub 정기 실행은 활성화하거나 실행하지 않았다.
+- 관리자 API는 역할을 분리한 Testcontainers·MockMvc로 검증했다. 실제 사용자 계정을 관리자로 승격하거나 관리자 화면을 만들지는 않았다.

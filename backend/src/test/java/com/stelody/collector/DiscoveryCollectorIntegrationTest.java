@@ -456,6 +456,8 @@ class DiscoveryCollectorIntegrationTest {
     assertThatThrownBy(
             () -> collector.execute("UPDATE app.review_item SET review_status='PENDING'"))
         .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    assertThatThrownBy(() -> collector.queryForList("SELECT * FROM app.admin_audit"))
+        .isInstanceOf(org.springframework.dao.DataAccessException.class);
     assertThatThrownBy(() -> collector.queryForList("SELECT review_note FROM app.review_item"))
         .isInstanceOf(org.springframework.dao.DataAccessException.class);
     assertThatThrownBy(
