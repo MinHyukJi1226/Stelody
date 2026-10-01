@@ -134,9 +134,18 @@ Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계
 
 같은 jar에 `--collector`를 전달하면 HTTP 서버 없이 수집 작업을 실행하고 종료합니다. 기본 비활성이며 수집 계정·API 키 설정 전에는 DB와 외부 API에 접속하지 않습니다. 수집 전용 계정은 회원·개인 목록·세션을 읽을 수 없어야 합니다. V8 적용 후 [권한 스크립트](../infra/sql/collector-grants.sql)를 스키마 소유자 계정으로 실행하세요.
 
-허용된 공식 채널의 등록 영상만 갱신합니다. 작업 중복과 부분 실패를 처리하고 완료된 결과만 공개 조회수로 게시합니다. KST 일별 마지막 관측값과 보관 정리도 제공합니다. [수집·설정 안내](../docs/youtube-collector.md)에 Google API 키 발급, DB 계정과 GitHub Actions 설정, 실패·재개 규칙을 정리했습니다. 신규 영상 탐색과 관리자 검토·통계 화면은 후속 단계입니다.
+허용된 공식 채널의 등록 영상만 갱신합니다. 작업 중복과 부분 실패를 처리하고 완료된 결과만 공개 조회수로 게시합니다. KST 일별 마지막 관측값과 보관 정리도 제공합니다. [수집·설정 안내](../docs/youtube-collector.md)에 Google API 키 발급, DB 계정과 GitHub Actions 설정, 실패·재개 규칙을 정리했습니다. 통계 화면은 후속 단계입니다.
 
 ```sh
 ./gradlew bootJar --no-daemon
 java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector
 ```
+
+## 공식 채널 탐색
+
+V9 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식 채널 등록](../infra/sql/official-channels.sql)을 스키마 소유자로 수동 적용합니다. 채널 등록은 사용자가 제공한 공식 그룹·개인 채널 11곳만 포함하며 기존 채널과 멤버 자료를 덮어쓰지 않습니다.
+
+`DISCOVERY_ENABLED=true`를 설정하고 프로그램 인수 `--collector --discover`로 실행하면 최신 업로드를 검토 후보로 저장합니다. `DISCOVERY_CLASSIFICATION_ALLOWED`는 기본 false이며 자동 곡 등록·공개는 제공하지 않습니다. 과거 목록은 채널 UUID를 지정한 작은 수동 배치로 탐색합니다.
+
+
+[탐색 계약](../docs/video-discovery.md)에 실행 방법, 페이지 재개, 분류 제안과 권한을 정리했습니다. 관리자 후보 검토 API는 후속 작업입니다.

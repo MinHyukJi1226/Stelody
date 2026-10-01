@@ -36,10 +36,13 @@ public final class VideoCollector {
   }
 
   public Result collect() {
+    return collect(new CollectionBudget(settings.maxRuntime()));
+  }
+
+  public Result collect(CollectionBudget budget) {
     if (!settings.enabled()) return new Result(null, "SKIPPED_DISABLED", null);
     UUID token = UUID.randomUUID();
     CollectionRepository.Run run = null;
-    var budget = new CollectionBudget(settings.maxRuntime());
     try {
       settings.validate();
       repository.checkPrivileges();
