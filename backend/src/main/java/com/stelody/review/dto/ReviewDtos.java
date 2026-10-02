@@ -36,7 +36,8 @@ public final class ReviewDtos {
       String reviewNote,
       Instant firstSeenAt,
       long version,
-      boolean sourceExpired) {}
+      boolean sourceExpired,
+      UUID registeredVideoId) {}
 
   public record Page(List<Item> items, int page, int size, boolean hasNext) {}
 }

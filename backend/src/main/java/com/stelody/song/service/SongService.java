@@ -51,6 +51,12 @@ public class SongService {
             "https://www.youtube.com/watch?v=" + row.youtubeId(),
             row.embeddable()),
         new SongDtos.SearchHelp(row.searchVisibility(), row.recommendedQuery(), row.checkedAt()),
-        songs.cards(songs.related(row, publication)));
+        songs.cards(songs.related(row, publication)),
+        songs.links(id, null),
+        songs.karaoke(id, null),
+        row.workId() == null
+            ? null
+            : new SongDtos.WorkResources(
+                row.workId(), songs.links(null, row.workId()), songs.karaoke(null, row.workId())));
   }
 }

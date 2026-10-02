@@ -153,3 +153,7 @@ V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식
 ## 운영용 관리자 지정
 
 관리자 역할은 공개 API 없이 `--admin-account` 일회성 명령으로 지정합니다. 별도 운영 계정과 `ADMIN_DB_URL/ADMIN_DB_USERNAME/ADMIN_DB_PASSWORD`를 준비하고 `infra/sql/admin-operator-grants.sql`을 스키마 소유자로 적용해야 합니다. 웹·수집 자격 증명을 재사용하지 않습니다. V11은 웹 실행 계정의 회원 역할/상태 변경을 제한하고 감사 기록을 추가합니다. 상세 실행 방법은 [운영용 관리자 지정](../docs/admin-accounts.md)을 참고합니다.
+
+## 관리자 카탈로그 편집
+
+멤버·원곡·곡 편집과 검토 후보 등록·공개 API는 [관리 API 계약](../docs/catalog-management-api.md)을 참고합니다. 모든 관리 API는 현재 ADMIN 세션과 변경 요청 CSRF 토큰을 요구합니다. V12는 카탈로그 편집 권한·링크·노래방·후보 등록 관계를 추가합니다.

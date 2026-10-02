@@ -27,7 +27,7 @@ public class ReviewService {
         || page > 10000
         || size < 1
         || size > 50
-        || !List.of("PENDING", "IGNORED").contains(status)
+        || !List.of("PENDING", "IGNORED", "REGISTERED").contains(status)
         || (disposition != null
             && !List.of("REVIEW", "EXCLUDED", "DEFERRED").contains(disposition)))
       throw ReviewException.invalid();
@@ -55,6 +55,8 @@ public class ReviewService {
             .findById(id)
             .orElseThrow(() -> new ReviewException(404, "REVIEW_NOT_FOUND", "검토 후보를 찾을 수 없습니다"));
     if (item.version() != change.version()) throw ReviewException.conflict();
+    if ("REGISTERED".equals(item.status()))
+      throw new ReviewException(409, "REVIEW_ALREADY_REGISTERED", "등록된 영상은 곡 관리에서 수정해 주세요");
     String before = item.status(), oldNote = item.note(), note = change.reason().strip();
     if (before.equals(change.status()) && note.equals(oldNote)) return queries.detail(id);
     Instant now = Instant.now();
