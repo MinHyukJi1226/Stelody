@@ -818,6 +818,108 @@ class CatalogManagementIntegrationTest {
   }
 
   @Test
+  void registeredCandidateAuditIsRetrievableWithLinkedVideoAndSong() throws Exception {
+    UUID song = song(member(), "COVER");
+    UUID video = attach(song, REVIEW, 0, 0, "OFFICIAL_COVER");
+    mvc.perform(auth(get(ROOT + "/reviews/" + REVIEW + "/audit"), admin))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(jsonPath("$.items[0].targetType").value("REVIEWS"))
+        .andExpect(jsonPath("$.items[0].targetId").value(REVIEW.toString()))
+        .andExpect(jsonPath("$.items[0].actorId").value(ADMIN.toString()))
+        .andExpect(jsonPath("$.items[0].action").value("REGISTER"))
+        .andExpect(jsonPath("$.items[0].reason").value("same recording confirmed"))
+        .andExpect(jsonPath("$.items[0].before.status").value("PENDING"))
+        .andExpect(jsonPath("$.items[0].after.status").value("REGISTERED"))
+        .andExpect(jsonPath("$.items[0].after.videoId").value(video.toString()))
+        .andExpect(jsonPath("$.items[0].after.songId").value(song.toString()))
+        .andExpect(jsonPath("$.hasNext").value(false));
+  }
+
+  @Test
+  void videoAuditExposesManualChangesAndPagesWithoutRetainingSourceMetadata() throws Exception {
+    UUID song = song(member(), "COVER");
+    UUID video = attach(song, REVIEW, 0, 0, "OFFICIAL_COVER");
+    String path = ROOT + "/videos/" + video + "/audit";
+    mvc.perform(auth(get(path), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(0));
+    var input = new HashMap<String, Object>();
+    input.put("version", 0);
+    input.put("kind", "OTHER");
+    input.put("publishedAt", "2026-01-01T00:00:00Z");
+    input.put("thumbnailUrl", "https://example.invalid/manual-thumbnail");
+    input.put("reason", "manual details verified");
+    mvc.perform(
+            json(
+                put(ROOT + "/songs/" + song + "/videos/" + video).param("songVersion", "1"), input))
+        .andExpect(status().isOk());
+    var result =
+        mvc.perform(auth(get(path), admin))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.items[0].targetType").value("VIDEOS"))
+            .andExpect(jsonPath("$.items[0].targetId").value(video.toString()))
+            .andExpect(jsonPath("$.items[0].actorId").value(ADMIN.toString()))
+            .andExpect(jsonPath("$.items[0].action").value("UPDATE"))
+            .andExpect(jsonPath("$.items[0].reason").value("manual details verified"))
+            .andExpect(jsonPath("$.items[0].before.kind").value("OFFICIAL_COVER"))
+            .andExpect(jsonPath("$.items[0].after.kind").value("OTHER"))
+            .andExpect(jsonPath("$.items[0].after.publishedAt").value("2026-01-01T00:00:00Z"))
+            .andExpect(
+                jsonPath("$.items[0].after.thumbnailUrl")
+                    .value("https://example.invalid/manual-thumbnail"))
+            .andReturn();
+    var audit = mapper.readTree(result.getResponse().getContentAsString()).path("items").get(0);
+    for (String field :
+        List.of(
+            "sourceTitle",
+            "sourcePublishedAt",
+            "sourceThumbnailUrl",
+            "sourceObservedAt",
+            "availability",
+            "embeddable")) {
+      assertThat(audit.path("before").has(field)).isFalse();
+      assertThat(audit.path("after").has(field)).isFalse();
+    }
+    input.put("version", 1);
+    input.put("kind", "OFFICIAL_COVER");
+    input.put("publishedAt", null);
+    input.put("thumbnailUrl", null);
+    mvc.perform(
+            json(
+                put(ROOT + "/songs/" + song + "/videos/" + video).param("songVersion", "2"), input))
+        .andExpect(status().isOk());
+    mvc.perform(auth(get(path).param("size", "1"), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.items[0].after.version").value(2))
+        .andExpect(jsonPath("$.hasNext").value(true));
+    mvc.perform(auth(get(path).param("size", "1").param("page", "1"), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].after.version").value(1))
+        .andExpect(jsonPath("$.hasNext").value(false));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"videos", "reviews"})
+  void videoAndReviewAuditsRequireCurrentAdminAndValidateTargetAndPage(String resource)
+      throws Exception {
+    UUID song = song(member(), "COVER");
+    UUID video = attach(song, REVIEW, 0, 0, "OFFICIAL_COVER");
+    String path =
+        ROOT + "/" + resource + "/" + (resource.equals("videos") ? video : REVIEW) + "/audit";
+    mvc.perform(get(path)).andExpect(status().isUnauthorized());
+    mvc.perform(auth(get(path), user)).andExpect(status().isForbidden());
+    mvc.perform(auth(get(ROOT + "/" + resource + "/" + UUID.randomUUID() + "/audit"), admin))
+        .andExpect(status().isNotFound());
+    mvc.perform(auth(get(path).param("page", "-1"), admin)).andExpect(status().isBadRequest());
+    mvc.perform(auth(get(path).param("size", "51"), admin)).andExpect(status().isBadRequest());
+    writer.update("UPDATE app.app_user SET role='USER' WHERE id=?", ADMIN);
+    mvc.perform(auth(get(path), admin)).andExpect(status().isForbidden());
+  }
+
+  @Test
   void duplicateChannelIsAConflictAndLeavesNoExtraAudit() throws Exception {
     var body =
         Map.of(

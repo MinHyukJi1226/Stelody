@@ -88,7 +88,9 @@ public class SecurityConfiguration {
                         "/api/v1/admin/songs/{id}/audit",
                         "/api/v1/admin/channels",
                         "/api/v1/admin/channels/{id}",
-                        "/api/v1/admin/channels/{id}/audit")
+                        "/api/v1/admin/channels/{id}/audit",
+                        "/api/v1/admin/videos/{id}/audit",
+                        "/api/v1/admin/reviews/{id}/audit")
                     .hasRole("ADMIN")
                     .requestMatchers(
                         HttpMethod.POST,

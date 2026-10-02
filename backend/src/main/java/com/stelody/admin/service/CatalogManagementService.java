@@ -43,9 +43,23 @@ public class CatalogManagementService {
   @Transactional(readOnly = true)
   public AuditPage audits(String kind, UUID id, int page, int size) {
     page(page, size);
-    Resource resource = Resource.parse(kind);
-    queries.detail(resource, id);
-    var rows = queries.audits(resource.name(), id, page, size);
+    String targetType =
+        switch (kind) {
+          case "videos" -> {
+            queries.video(id);
+            yield "VIDEOS";
+          }
+          case "reviews" -> {
+            queries.candidate(id);
+            yield "REVIEWS";
+          }
+          default -> {
+            Resource resource = Resource.parse(kind);
+            queries.detail(resource, id);
+            yield resource.name();
+          }
+        };
+    var rows = queries.audits(targetType, id, page, size);
     return new AuditPage(
         rows.subList(0, Math.min(size, rows.size())), page, size, rows.size() > size);
   }

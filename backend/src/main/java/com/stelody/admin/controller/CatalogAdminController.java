@@ -46,7 +46,9 @@ public class CatalogAdminController {
     "/artists/{id}/audit",
     "/works/{id}/audit",
     "/songs/{id}/audit",
-    "/channels/{id}/audit"
+    "/channels/{id}/audit",
+    "/videos/{id}/audit",
+    "/reviews/{id}/audit"
   })
   public ResponseEntity<AuditPage> audit(
       jakarta.servlet.http.HttpServletRequest request,
