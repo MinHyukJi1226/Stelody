@@ -1,0 +1,4 @@
+logging:
+  level:
+    com.zaxxer.hikari: OFF
+    org.springframework.jdbc: OFF

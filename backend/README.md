@@ -148,3 +148,8 @@ V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식
 `DISCOVERY_ENABLED=true`를 설정하고 프로그램 인수 `--collector --discover`로 실행하면 최신 업로드를 검토 후보로 저장합니다. `DISCOVERY_CLASSIFICATION_ALLOWED`는 기본 false이며 자동 곡 등록·공개는 제공하지 않습니다. 과거 목록은 채널 UUID를 지정한 작은 수동 배치로 탐색합니다.
 
 관리자 전용 GET `/api/v1/admin/reviews`, GET·PATCH `/api/v1/admin/reviews/{id}`로 조회·무시·복원합니다. 변경에는 CSRF 토큰, 현재 후보 버전, 사유가 필요합니다. 일반 회원은 사용할 수 없으며 변경 이력은 트랜잭션으로 기록합니다. 관리자 지정·곡 등록 화면은 후속 작업입니다. [탐색·검토 계약](../docs/video-discovery.md)에 실행 방법, 페이지 재개, 분류 제안, 관리자 API와 권한을 정리했습니다.
+
+
+## 운영용 관리자 지정
+
+관리자 역할은 공개 API 없이 `--admin-account` 일회성 명령으로 지정합니다. 별도 운영 계정과 `ADMIN_DB_URL/ADMIN_DB_USERNAME/ADMIN_DB_PASSWORD`를 준비하고 `infra/sql/admin-operator-grants.sql`을 스키마 소유자로 적용해야 합니다. 웹·수집 자격 증명을 재사용하지 않습니다. V11은 웹 실행 계정의 회원 역할/상태 변경을 제한하고 감사 기록을 추가합니다. 상세 실행 방법은 [운영용 관리자 지정](../docs/admin-accounts.md)을 참고합니다.
