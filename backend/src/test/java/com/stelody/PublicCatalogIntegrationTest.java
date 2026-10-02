@@ -554,9 +554,8 @@ class PublicCatalogIntegrationTest {
   }
 
   @Test
-  void databaseConstraintsAndReadOnlyRuntimePrivilegesAreEnforced() {
-    assertThatThrownBy(
-            () -> runtime.update("UPDATE app.song_entry SET title = 'Forbidden' WHERE id = ?", S1))
+  void databaseConstraintsAndCollectorOwnedFieldsAreEnforced() {
+    assertThatThrownBy(() -> runtime.execute("UPDATE app.video SET source_title = 'Forbidden'"))
         .isInstanceOf(DataAccessException.class);
     assertThatThrownBy(
             () ->

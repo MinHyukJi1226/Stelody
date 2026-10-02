@@ -72,6 +72,45 @@ public class SecurityConfiguration {
                     .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/reviews/{id}")
                     .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/admin/members",
+                        "/api/v1/admin/members/{id}",
+                        "/api/v1/admin/members/{id}/audit",
+                        "/api/v1/admin/artists",
+                        "/api/v1/admin/artists/{id}",
+                        "/api/v1/admin/artists/{id}/audit",
+                        "/api/v1/admin/works",
+                        "/api/v1/admin/works/{id}",
+                        "/api/v1/admin/works/{id}/audit",
+                        "/api/v1/admin/songs",
+                        "/api/v1/admin/songs/{id}",
+                        "/api/v1/admin/songs/{id}/audit",
+                        "/api/v1/admin/channels",
+                        "/api/v1/admin/channels/{id}",
+                        "/api/v1/admin/channels/{id}/audit",
+                        "/api/v1/admin/videos/{id}/audit",
+                        "/api/v1/admin/reviews/{id}/audit")
+                    .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/admin/members",
+                        "/api/v1/admin/artists",
+                        "/api/v1/admin/works",
+                        "/api/v1/admin/channels",
+                        "/api/v1/admin/songs",
+                        "/api/v1/admin/songs/{id}/videos",
+                        "/api/v1/admin/reviews/{id}/registration")
+                    .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.PUT,
+                        "/api/v1/admin/members/{id}",
+                        "/api/v1/admin/artists/{id}",
+                        "/api/v1/admin/works/{id}",
+                        "/api/v1/admin/channels/{id}",
+                        "/api/v1/admin/songs/{id}",
+                        "/api/v1/admin/songs/{id}/videos/{videoId}")
+                    .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PUT, "/api/v1/me/favorites/{songId}")
                     .authenticated()
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/me/favorites/{songId}")

@@ -147,6 +147,35 @@ public class SongRepository {
     return works;
   }
 
+  public List<SongDtos.ExternalLink> links(UUID songId, UUID workId) {
+    return jdbc.sql(
+            "SELECT platform,url FROM app.external_link WHERE "
+                + (songId != null ? "song_id" : "work_id")
+                + "=:id ORDER BY platform,id")
+        .param("id", songId != null ? songId : workId)
+        .query(SongDtos.ExternalLink.class)
+        .list();
+  }
+
+  public List<SongDtos.Karaoke> karaoke(UUID songId, UUID workId) {
+    var stored =
+        jdbc.sql(
+                "SELECT provider,status,number FROM app.karaoke_entry WHERE "
+                    + (songId != null ? "song_id" : "work_id")
+                    + "=:id ORDER BY provider")
+            .param("id", songId != null ? songId : workId)
+            .query(SongDtos.Karaoke.class)
+            .list();
+    var result = new ArrayList<SongDtos.Karaoke>();
+    for (String provider : List.of("TJ", "KY"))
+      result.add(
+          stored.stream()
+              .filter(k -> provider.equals(k.provider()))
+              .findFirst()
+              .orElse(new SongDtos.Karaoke(provider, "UNKNOWN", null)));
+    return result;
+  }
+
   private Row map(ResultSet rs, int n) throws SQLException {
     return new Row(
         rs.getObject("id", UUID.class),

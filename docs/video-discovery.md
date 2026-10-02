@@ -4,7 +4,7 @@
 
 사용자가 제공한 공식 그룹·개인 채널 11곳의 업로드 목록에서 검토 후보를 수집한다. `collection_enabled=true`인 `GROUP`·`MEMBER` 채널만 탐색한다. 곡·작품·참여자·대표 영상은 생성하거나 변경하지 않는다. 채널 소유자를 참여자로 추정하지 않으며 그룹 채널의 영상을 모든 멤버의 곡으로 연결하지 않는다.
 
-관리자는 후보 목록·상세를 조회하고 무시·복원한다. 곡 등록·연결·공개, 참여자 확정, 규칙 편집, 관리자 계정 지정, 수동 재시도 버튼은 후속 작업이다. 공개 곡·멤버 API는 계속 로그인 없이 이용할 수 있다.
+관리자는 후보 목록·상세를 조회하고 무시·복원한다. 곡 등록·연결·공개와 관리자 계정 지정은 [관리 API 문서](catalog-management-api.md)에 추가됐다. 규칙 편집과 수동 재시도 버튼은 후속 작업이다. 공개 곡·멤버 API는 계속 로그인 없이 이용할 수 있다.
 
 ## 준비와 실행
 
@@ -56,14 +56,14 @@ java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover --backfil
 |---|---|
 | disposition | REVIEW: 검토, EXCLUDED: 제외 제안, DEFERRED: 공개 상태·원본 재확인 필요 |
 | suggestedType | UNKNOWN, COVER, ORIGINAL; 확정 곡 유형이 아님 |
-| reviewStatus | PENDING: 검토 대상, IGNORED: 관리자가 무시 |
+| reviewStatus | PENDING: 검토 대상, IGNORED: 관리자가 무시, REGISTERED: 곡 영상으로 등록 완료 |
 | decisionReason | CLASSIFICATION_DISABLED, EXPLICIT_EXCLUSION_MARKER, COVER_REQUIRES_PARTICIPANT_REVIEW, ORIGINAL_REQUIRES_REVIEW, TYPE_UNCONFIRMED, NOT_PUBLIC, SOURCE_EXPIRED |
 
 규칙 제안과 수동 판단은 분리한다. `IGNORED` 후보는 재탐색으로 복원되지 않는다. `PENDING` 복원은 검토 대상으로 되돌리며 곡 등록·공개 또는 분류 변경을 의미하지 않는다. 어떤 규칙도 이번 단계에서 자동 공개하지 않는다.
 
 ## 관리자 API
 
-모든 경로는 DB에서 현재 역할이 `ADMIN`인 로그인 세션이 필요하다. 비로그인 401, 일반 회원 403이다. 응답은 `Cache-Control: no-store`이며 PATCH에는 CSRF 토큰이 필요하다. 운영 관리자 지정 방식은 아직 제공하지 않는다.
+모든 경로는 DB에서 현재 역할이 `ADMIN`인 로그인 세션이 필요하다. 비로그인 401, 일반 회원 403이다. 응답은 `Cache-Control: no-store`이며 PATCH에는 CSRF 토큰이 필요하다. 운영 관리자 지정은 별도 계정의 `--admin-account` 명령으로 수행한다.
 
 | 메서드·경로 | 동작 |
 |---|---|

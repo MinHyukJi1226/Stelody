@@ -368,7 +368,13 @@ class GoogleLoginIntegrationTest {
     var first = login(subject, "suspended@example.invalid");
     var second = login(subject, "suspended@example.invalid");
     String id = mapper.readTree(first.get("/api/v1/me").body()).get("id").asText();
-    jdbc.update("update app.app_user set status = 'SUSPENDED' where id = ?", UUID.fromString(id));
+    // Suspension is an operator action; the web role intentionally cannot change account status.
+    var operator =
+        new JdbcTemplate(
+            new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                postgres.getJdbcUrl(), "stelody_migrator", "test-migrator"));
+    operator.update(
+        "update app.app_user set status = 'SUSPENDED' where id = ?", UUID.fromString(id));
     assertThat(first.get("/api/v1/me").statusCode()).isEqualTo(401);
     assertThat(sessions.findByPrincipalName(id)).isEmpty();
     assertThat(second.get("/api/v1/me").statusCode()).isEqualTo(401);

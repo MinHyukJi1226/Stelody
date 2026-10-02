@@ -24,6 +24,9 @@ public class ReviewItem {
   @Column(name = "reviewed_at")
   private Instant reviewedAt;
 
+  @Column(name = "registered_video_id")
+  private UUID registeredVideoId;
+
   @Version private long version;
 
   protected ReviewItem() {}
@@ -38,6 +41,11 @@ public class ReviewItem {
 
   public long version() {
     return version;
+  }
+
+  public void register(UUID videoId, String note, Instant now) {
+    registeredVideoId = videoId;
+    review("REGISTERED", note, now);
   }
 
   public void review(String status, String note, Instant now) {

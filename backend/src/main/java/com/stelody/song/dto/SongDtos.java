@@ -31,8 +31,20 @@ public final class SongDtos {
 
   public record SearchHelp(String visibility, String recommendedQuery, Instant checkedAt) {}
 
+  public record ExternalLink(String platform, String url) {}
+
+  public record Karaoke(String provider, String status, String number) {}
+
+  public record WorkResources(UUID workId, List<ExternalLink> links, List<Karaoke> karaoke) {}
+
   public record Detail(
-      Card song, Video representativeVideo, SearchHelp searchHelp, List<Card> relatedSongs) {}
+      Card song,
+      Video representativeVideo,
+      SearchHelp searchHelp,
+      List<Card> relatedSongs,
+      List<ExternalLink> links,
+      List<Karaoke> karaoke,
+      WorkResources workResources) {}
 
   public record Page(List<Card> items, String nextCursor, boolean hasNext) {}
 }

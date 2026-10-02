@@ -92,3 +92,8 @@ GET /api/v1/songs?memberIds={memberA},{memberB}&sort=LATEST
 1,000곡 테스트에서 20개와 50개 페이지 모두 SELECT 4회였다. 로컬 MockMvc로 예열 후 20회 검색한 표본 p95는 15ms였다. HTTP 네트워크·운영 호스팅·동시 10명 부하는 이 수치에 포함하지 않는다.
 
 노래방 번호·외부 음원 링크·관리자 편집·즐겨찾기·플레이리스트·조회수 차트·프론트 화면·OpenAPI 자동 생성은 후속 기능이다.
+
+
+## 원곡·개별 버전의 링크와 노래방 번호
+
+노래 상세는 곡 자체의 `links`(platform/url), `karaoke`(provider/status/number)와 원곡의 `workResources`(workId/links/karaoke)를 각각 반환한다. TJ·KY는 UNKNOWN, NOT_LISTED, REGISTERED를 구분하며 미입력 사업자는 UNKNOWN이다. 번호는 문자열이고 앞자리 0을 보존한다. 원곡이 없으면 workResources는 null이다. 원곡의 링크·번호를 커버 버전의 정보로 복사하지 않는다.

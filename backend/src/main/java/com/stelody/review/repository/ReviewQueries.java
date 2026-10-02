@@ -93,7 +93,8 @@ public class ReviewQueries {
         rs.getString("review_note"),
         rs.getTimestamp("first_seen_at").toInstant(),
         rs.getLong("version"),
-        expired);
+        expired,
+        rs.getObject("registered_video_id", UUID.class));
   }
 
   private Instant instant(Timestamp value) {
