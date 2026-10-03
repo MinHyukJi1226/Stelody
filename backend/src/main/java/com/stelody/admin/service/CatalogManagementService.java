@@ -302,7 +302,10 @@ public class CatalogManagementService {
     rules.text(input.reason());
     var song = existing(ManagedSong.class, input.songId(), input.songVersion());
     Object oldSong = queries.song(song.id());
-    var review = entities.find(ReviewItem.class, reviewId);
+    // Match the automatic registration lock order: candidate before channel.
+    var review =
+        entities.find(
+            ReviewItem.class, reviewId, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
     if (review == null) throw AdminCatalogException.missing();
     if (review.version() != input.version()) throw AdminCatalogException.conflict();
     if (!"PENDING".equals(review.status()))

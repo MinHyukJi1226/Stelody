@@ -90,7 +90,8 @@ public final class YouTubeVideoClient {
                 thumb,
                 seconds,
                 status.path("embeddable").asBoolean(),
-                publicVideo ? views : null));
+                publicVideo ? views : null,
+                optionalText(snippet, "liveBroadcastContent")));
       }
       for (String id : ids) result.putIfAbsent(id, VideoObservation.unavailable(id));
       return Map.copyOf(result);

@@ -72,7 +72,9 @@ public class CollectorConfiguration {
                         budget,
                         environment.getProperty("DISCOVERY_ENABLED", Boolean.class, false),
                         environment.getProperty(
-                            "DISCOVERY_CLASSIFICATION_ALLOWED", Boolean.class, false));
+                            "DISCOVERY_CLASSIFICATION_ALLOWED", Boolean.class, false),
+                        environment.getProperty(
+                            "COVER_AUTO_PUBLICATION_POLICY_ALLOWED", Boolean.class, false));
             if (retried.isPresent()) {
               var result = retried.get();
               exitCode = result.exitCode();

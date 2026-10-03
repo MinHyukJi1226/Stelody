@@ -63,6 +63,9 @@ class SecurityConfigurationTest {
   com.stelody.admin.service.CollectionRuleService collectionRules;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.admin.service.CoverPublicationService coverPublication;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.admin.service.SpecialReviewService specialReviews;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean

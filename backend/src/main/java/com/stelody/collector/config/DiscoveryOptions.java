@@ -5,7 +5,16 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.core.env.Environment;
 
 public record DiscoveryOptions(
-    boolean classificationAllowed, UUID channelId, boolean backfill, int maxPages) {
+    boolean classificationAllowed,
+    UUID channelId,
+    boolean backfill,
+    int maxPages,
+    boolean autoPublicationPolicyAllowed) {
+  public DiscoveryOptions(
+      boolean classificationAllowed, UUID channelId, boolean backfill, int maxPages) {
+    this(classificationAllowed, channelId, backfill, maxPages, false);
+  }
+
   public DiscoveryOptions {
     if (maxPages < 1 || maxPages > 5 || (backfill && channelId == null))
       throw new IllegalArgumentException("Invalid discovery options");
@@ -19,7 +28,8 @@ public record DiscoveryOptions(
         env.getProperty("DISCOVERY_CLASSIFICATION_ALLOWED", Boolean.class, false),
         channel == null ? null : UUID.fromString(channel),
         backfill,
-        pages);
+        pages,
+        env.getProperty("COVER_AUTO_PUBLICATION_POLICY_ALLOWED", Boolean.class, false));
   }
 
   private static String one(ApplicationArguments args, String name, String fallback) {

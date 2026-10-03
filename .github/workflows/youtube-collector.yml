@@ -95,6 +95,7 @@ jobs:
           COLLECTION_RETRY_ENABLED: ${{ vars.COLLECTION_RETRY_ENABLED }}
           DISCOVERY_ENABLED: ${{ vars.DISCOVERY_ENABLED }}
           DISCOVERY_CLASSIFICATION_ALLOWED: ${{ vars.DISCOVERY_CLASSIFICATION_ALLOWED }}
+          COVER_AUTO_PUBLICATION_POLICY_ALLOWED: ${{ vars.COVER_AUTO_PUBLICATION_POLICY_ALLOWED }}
           DISCOVER_THIS_RUN: ${{ vars.DISCOVERY_ENABLED == 'true' && (github.event.schedule == '17 */2 * * *' || inputs.discover == true) }}
         run: |
           test -n "$COLLECTOR_DB_URL"

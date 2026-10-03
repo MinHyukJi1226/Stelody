@@ -2,9 +2,9 @@
 
 ## 범위
 
-사용자가 제공한 공식 그룹·개인 채널 11곳의 업로드 목록에서 검토 후보를 수집한다. `collection_enabled=true`인 `GROUP`·`MEMBER` 채널만 탐색한다. 곡·작품·참여자·대표 영상은 생성하거나 변경하지 않는다. 채널 소유자를 참여자로 추정하지 않으며 그룹 채널의 영상을 모든 멤버의 곡으로 연결하지 않는다.
+사용자가 제공한 공식 그룹·개인 채널 11곳의 업로드 목록에서 검토 후보를 수집한다. `collection_enabled=true`인 `GROUP`·`MEMBER` 채널만 탐색한다. V19부터 별도 정책 허용·관리자 활성화 조건을 충족한 명시적 단독 커버는 곡·참여자·대표 영상을 생성하고 공개한다. 조건·중단·부족한 정보 보완은 [자동 공개 계약](cover-auto-publication-api.md)을 참고한다. 채널 소유자를 참여자로 추정하지 않으며 그룹 채널의 영상을 모든 멤버의 곡으로 연결하지 않는다.
 
-관리자는 후보 목록·상세를 조회하고 무시·복원한다. 곡 등록·연결·공개와 관리자 계정 지정은 [관리 API 문서](catalog-management-api.md)에 추가됐다. 규칙 편집과 수동 재시도 버튼은 후속 작업이다. 공개 곡·멤버 API는 계속 로그인 없이 이용할 수 있다.
+관리자는 후보 목록·상세를 조회하고 무시·복원한다. 곡 등록·연결·공개와 관리자 계정 지정은 [관리 API 문서](catalog-management-api.md)에 추가됐다. 규칙 편집과 수동 재시도 API도 제공한다. 공개 곡·멤버 API는 계속 로그인 없이 이용할 수 있다.
 
 ## 준비와 실행
 
@@ -48,7 +48,7 @@ java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover --backfil
 
 ## 분류와 수동 판단
 
-규칙 버전은 `title-v1`이다. 자동 분류가 꺼져 있으면 공개 후보도 `REVIEW / UNKNOWN / CLASSIFICATION_DISABLED`로 저장한다. 이 경우 음악 이외의 업로드도 검토 후보에 포함될 수 있다.
+관리자 분류 규칙 버전은 `title-v2:<설정 버전>`이다. 자동 분류가 꺼져 있으면 공개 후보도 `REVIEW / UNKNOWN / CLASSIFICATION_DISABLED`로 저장한다. 이 경우 음악 이외의 업로드도 검토 후보에 포함될 수 있다.
 
 분류를 명시적으로 허용하면 제목의 단어 경계를 검사한다. Cover·Covered by·歌ってみた는 커버 제안, Original·MV·오리지널은 오리지널 제안이다. Discovery·Recover 같은 부분 문자열을 Cover로 처리하지 않는다. 명시적인 Shorts·Clip·Livestream·[클립]·[방송]·[다시보기] 표기는 제외 제안을 우선한다. 길이만으로 Shorts를 판정하지 않는다. 원곡 제목에 제외 단어가 포함된 경우도 제안이 틀릴 수 있으므로 관리자 판단이 필요하다.
 
@@ -59,7 +59,7 @@ java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover --backfil
 | reviewStatus | PENDING: 검토 대상, IGNORED: 관리자가 무시, REGISTERED: 곡 영상으로 등록 완료 |
 | decisionReason | CLASSIFICATION_DISABLED, EXPLICIT_EXCLUSION_MARKER, COVER_REQUIRES_PARTICIPANT_REVIEW, ORIGINAL_REQUIRES_REVIEW, TYPE_UNCONFIRMED, NOT_PUBLIC, SOURCE_EXPIRED |
 
-규칙 제안과 수동 판단은 분리한다. `IGNORED` 후보는 재탐색으로 복원되지 않는다. `PENDING` 복원은 검토 대상으로 되돌리며 곡 등록·공개 또는 분류 변경을 의미하지 않는다. 어떤 규칙도 이번 단계에서 자동 공개하지 않는다.
+규칙 제안과 수동 판단은 분리한다. `IGNORED` 후보는 재탐색으로 복원되지 않는다. `PENDING` 복원은 검토 대상으로 되돌리며 곡 등록·공개 또는 분류 변경을 의미하지 않는다. 분류 규칙 자체는 제안만 만들며, 별도 자동 공개 판정·정책·관리자 설정을 모두 충족한 단독 커버만 공개한다.
 
 ## 관리자 API
 
@@ -89,7 +89,7 @@ java -jar build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover --backfil
 
 ## 권한과 보관
 
-웹 실행 역할은 후보를 읽고 수동 판단·메모·시각·버전만 갱신하며 변경 이력을 추가한다. 수집 역할은 원본·규칙 제안·버전만 갱신한다. 수집 역할은 수동 메모·판단 시각과 변경 이력을 읽거나 수동 판단을 쓰지 못한다. 회원·개인 목록·세션·곡 생성 권한도 없다.
+웹 실행 역할은 후보를 읽고 수동 판단·메모·시각·버전만 갱신하며 변경 이력을 추가한다. 수집 역할은 원본·규칙 제안·버전만 갱신한다. 수집 역할은 수동 메모·판단 시각과 변경 이력을 읽거나 수동 판단을 쓰지 못한다. 회원·개인 목록·세션 접근과 일반 곡 INSERT/UPDATE 권한은 없다. V19의 제한된 자동 공개 함수로 새 커버만 생성할 수 있다.
 
 YouTube 원본은 마지막 관측 후 30일이 지나면 다음 탐색 실행에서 비운다. 관리자 조회는 정리 실행 전에도 만료된 원본을 숨긴다. 중복·무시 식별을 위한 영상 ID와 관리자 판단·메모는 유지한다. 탐색 실행 이력은 종료 후 30일에 정리한다. 탐색을 장기간 중지할 때에는 별도 보관 정리도 운영에서 처리해야 한다.
 

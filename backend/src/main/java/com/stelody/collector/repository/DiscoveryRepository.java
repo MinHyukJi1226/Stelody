@@ -1,6 +1,8 @@
 package com.stelody.collector.repository;
 
+import com.stelody.catalog.domain.SearchText;
 import com.stelody.collector.domain.CollectionFailure;
+import com.stelody.collector.domain.CoverPublicationRules;
 import com.stelody.collector.domain.DiscoveryRules.Decision;
 import com.stelody.collector.domain.VideoObservation;
 import java.sql.Timestamp;
@@ -28,9 +30,15 @@ public final class DiscoveryRepository {
 
   private final JdbcClient jdbc;
   private final TransactionTemplate transactions;
+  private final boolean autoPublicationAllowed;
 
   public DiscoveryRepository(DataSource source) {
+    this(source, false);
+  }
+
+  public DiscoveryRepository(DataSource source, boolean autoPublicationAllowed) {
     jdbc = JdbcClient.create(source);
+    this.autoPublicationAllowed = autoPublicationAllowed;
     transactions = new TransactionTemplate(new JdbcTransactionManager(source));
     transactions.setTimeout(10);
   }
@@ -43,6 +51,21 @@ public final class DiscoveryRepository {
         .params(channel == null ? Map.of() : Map.of("channel", channel))
         .query((rs, n) -> new Channel(rs.getObject(1, UUID.class), rs.getString(2)))
         .list();
+  }
+
+  public void checkPublicationPrivileges() {
+    if (!autoPublicationAllowed) return;
+    boolean granted =
+        jdbc.sql(
+                """
+        SELECT has_table_privilege(current_user,'app.cover_publication_control','SELECT')
+          AND has_table_privilege(current_user,'app.member','SELECT')
+          AND has_table_privilege(current_user,'app.member_alias','SELECT')
+          AND has_function_privilege(current_user,'app.publish_discovered_cover(uuid,timestamptz,uuid,bigint,text,boolean,text,uuid)','EXECUTE')
+        """)
+            .query(Boolean.class)
+            .single();
+    if (!granted) throw new CollectionFailure("COVER_PUBLICATION_GRANTS_MISSING", false);
   }
 
   public UUID begin(UUID token, UUID channel, boolean backfill, Instant now) {
@@ -151,7 +174,7 @@ public final class DiscoveryRepository {
           allowed(channel);
           State actual = readState(channel.id());
           if (!actual.equals(before)) throw new CollectionFailure("CHECKPOINT_CHANGED", false);
-          int count = save(channel, observations, decisions, now);
+          int count = save(token, channel, observations, decisions, now);
           if (backfill) {
             jdbc.sql(
                     "UPDATE app.discovery_channel_state SET backfill_token=:next,backfill_complete=:done WHERE channel_id=:id")
@@ -186,6 +209,7 @@ public final class DiscoveryRepository {
   }
 
   private int save(
+      UUID token,
       Channel channel,
       Map<String, VideoObservation> observations,
       Map<String, Decision> decisions,
@@ -196,10 +220,30 @@ public final class DiscoveryRepository {
       if (!decisions.containsKey(video.youtubeId()))
         throw new CollectionFailure("INVALID_RESPONSE", false);
     }
+    // The publication function rechecks and locks the stop control before writing.
+    boolean publish =
+        autoPublicationAllowed
+            && jdbc.sql("SELECT enabled FROM app.cover_publication_control WHERE singleton")
+                .query(Boolean.class)
+                .single();
+    var members = publish ? members() : List.<CoverPublicationRules.Member>of();
+    var publicationRules = new CoverPublicationRules();
     int changed = 0;
     for (var video : observations.values()) {
       var decision = decisions.get(video.youtubeId());
-      changed +=
+      CoverPublicationRules.Result eligibility = null;
+      if (publish) {
+        eligibility = publicationRules.decide(video, decision, members, now);
+        if (decision.disposition().equals("REVIEW") && decision.suggestedType().equals("COVER")) {
+          decision =
+              new Decision(
+                  eligibility.reason().equals("PUBLICATION_PENDING") ? "DEFERRED" : "REVIEW",
+                  "COVER",
+                  eligibility.reason(),
+                  decision.version());
+        }
+      }
+      int updated =
           jdbc.sql(
                   """
           INSERT INTO app.review_item(id,youtube_id,channel_id,source_title,source_published_at,
@@ -230,8 +274,46 @@ public final class DiscoveryRepository {
               .param("rule", decision.version())
               .param("reason", decision.reason())
               .update();
+      changed += updated;
+      if (updated == 1 && eligibility != null && eligibility.eligible()) {
+        var member = eligibility.member();
+        jdbc.sql(
+                """
+            SELECT app.publish_discovered_cover(id,:now,:member,:version,:title,:embed,:rule,:token)
+            FROM app.review_item WHERE youtube_id=:youtube AND channel_id=:channel
+            """)
+            .param("now", ts(now))
+            .param("member", member.id())
+            .param("version", member.version())
+            .param("title", SearchText.normalize(video.title()))
+            .param("embed", video.embeddable())
+            .param("rule", CoverPublicationRules.VERSION)
+            .param("token", token)
+            .param("youtube", video.youtubeId())
+            .param("channel", channel.id())
+            .query((rs, n) -> rs.getObject(1, UUID.class))
+            .list();
+      }
     }
     return changed;
+  }
+
+  private List<CoverPublicationRules.Member> members() {
+    return jdbc.sql("SELECT id,name,version FROM app.member ORDER BY id")
+        .query(
+            (rs, n) -> {
+              UUID id = rs.getObject("id", UUID.class);
+              var names = new java.util.ArrayList<String>();
+              names.add(rs.getString("name"));
+              names.addAll(
+                  jdbc.sql("SELECT alias FROM app.member_alias WHERE member_id=:id ORDER BY alias")
+                      .param("id", id)
+                      .query(String.class)
+                      .list());
+              return new CoverPublicationRules.Member(
+                  id, rs.getLong("version"), List.copyOf(names));
+            })
+        .list();
   }
 
   public List<String> deferred(Channel channel, Instant oldestCheck) {
@@ -239,6 +321,28 @@ public final class DiscoveryRepository {
             """
         SELECT youtube_id FROM app.review_item WHERE channel_id=:channel AND review_status='PENDING'
           AND disposition='DEFERRED' AND source_observed_at<:cutoff ORDER BY source_observed_at,id LIMIT 50
+        """)
+        .param("channel", channel.id())
+        .param("cutoff", ts(oldestCheck))
+        .query(String.class)
+        .list();
+  }
+
+  public List<String> recheck(Channel channel, Instant oldestCheck) {
+    boolean enabled =
+        autoPublicationAllowed
+            && jdbc.sql("SELECT enabled FROM app.cover_publication_control WHERE singleton")
+                .query(Boolean.class)
+                .single();
+    if (!enabled) return deferred(channel, oldestCheck);
+    // Revisit existing pending candidates after activation, including classification-disabled
+    // imports.
+    // Fresh remote observation is required; stale persisted titles never publish on their own.
+    return jdbc.sql(
+            """
+        SELECT youtube_id FROM app.review_item WHERE channel_id=:channel AND review_status='PENDING'
+          AND (disposition='DEFERRED' OR (disposition='REVIEW' AND suggested_type IN ('UNKNOWN','COVER')))
+          AND source_observed_at<:cutoff ORDER BY source_observed_at,id LIMIT 50
         """)
         .param("channel", channel.id())
         .param("cutoff", ts(oldestCheck))
@@ -256,7 +360,7 @@ public final class DiscoveryRepository {
         status -> {
           fence(token);
           allowed(channel);
-          save(channel, values, decisions, now);
+          save(token, channel, values, decisions, now);
         });
   }
 
