@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.stelody.admin.dto.CollectionRuleDtos.*;
 import com.stelody.admin.dto.SpecialReviewDtos;
+import com.stelody.admin.repository.SpecialReviewQueries;
 import com.stelody.admin.service.CollectionRuleService;
 import com.stelody.admin.service.SpecialReviewService;
 import com.stelody.auth.domain.SessionUser;
@@ -17,6 +18,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -72,6 +74,7 @@ class ClassificationManagementIntegrationTest {
   @Autowired JdbcTemplate runtime;
   @Autowired CollectionRuleService rules;
   @Autowired SpecialReviewService special;
+  @Autowired SpecialReviewQueries specialQueries;
   JdbcTemplate writer, collector;
   Browser admin, user;
 
@@ -389,6 +392,60 @@ class ClassificationManagementIntegrationTest {
               MEMBER);
     }
     assertThat(candidate()).isNull();
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "PENDING,representative",
+    "PENDING,participants",
+    "PENDING,dates",
+    "CONFIRMED,representative",
+    "CONFIRMED,participants",
+    "CONFIRMED,dates",
+    "DISMISSED,representative",
+    "DISMISSED,participants",
+    "DISMISSED,dates"
+  })
+  void refreshWithoutCurrentMatchReturnsNullAndKeepsManualDecision(
+      String reviewStatus, String condition) throws Exception {
+    UUID id = candidate();
+    if (!reviewStatus.equals("PENDING"))
+      update(id, decision(id, reviewStatus, reviewStatus.equals("CONFIRMED") ? "기념곡" : null), 200);
+    var before = specialQueries.get(id);
+    var songBefore = special.detail(id);
+    switch (condition) {
+      case "representative" ->
+          writer.update("UPDATE app.song_entry SET representative_video_id=NULL WHERE id=?", SONG);
+      case "participants" ->
+          writer.update("UPDATE app.song_member SET confirmed=false WHERE song_id=?", SONG);
+      case "dates" ->
+          writer.update(
+              "UPDATE app.member SET birthday_month=NULL,birthday_day=NULL,debut_date=NULL WHERE id=?",
+              MEMBER);
+    }
+    var response =
+        mapper.readTree(
+            mvc.perform(auth(post("/api/v1/admin/songs/" + SONG + "/special-event-review"), admin))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(response.get("candidateId").isNull()).isTrue();
+    var after = specialQueries.get(id);
+    assertThat(after.id()).isEqualTo(id);
+    assertThat(after.status()).isEqualTo(before.status());
+    if (reviewStatus.equals("PENDING")) {
+      assertThat(after.active()).isFalse();
+      assertThat(after.evidence()).isEmpty();
+      assertThat(after.version()).isEqualTo(before.version() + 1);
+    } else {
+      assertThat(after).isEqualTo(before);
+    }
+    var songAfter = special.detail(id);
+    assertThat(songAfter.isSpecialEvent()).isEqualTo(songBefore.isSpecialEvent());
+    assertThat(songAfter.specialEventLabel()).isEqualTo(songBefore.specialEventLabel());
+    assertThat(songAfter.songVersion()).isEqualTo(songBefore.songVersion());
+    assertThat(special.audits(id, 0, 20).items()).hasSize(reviewStatus.equals("PENDING") ? 0 : 1);
   }
 
   @Test
