@@ -1,6 +1,7 @@
 package com.stelody.admin.web;
 
 import com.stelody.admin.controller.CatalogAdminController;
+import com.stelody.admin.controller.CollectionRuleController;
 import com.stelody.auth.web.ApiProblems;
 import jakarta.servlet.http.*;
 import java.io.IOException;
@@ -10,7 +11,8 @@ import org.springframework.web.bind.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-@RestControllerAdvice(assignableTypes = CatalogAdminController.class)
+@RestControllerAdvice(
+    assignableTypes = {CatalogAdminController.class, CollectionRuleController.class})
 public class AdminCatalogExceptionHandler {
   private final ApiProblems problems;
 

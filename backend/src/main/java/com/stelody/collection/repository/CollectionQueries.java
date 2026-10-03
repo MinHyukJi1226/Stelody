@@ -14,7 +14,7 @@ public class CollectionQueries {
       """
       SELECT r.id,'VIDEO' AS kind,NULL::text AS mode,NULL::uuid AS channel_id,r.logical_slot,
         r.status,r.attempt,r.started_at,r.finished_at,r.error_code,
-        t.total,t.observed,t.skipped,t.pending,0 AS pages,0 AS candidates
+        t.total,t.observed,t.skipped,t.pending,0 AS pages,0 AS candidates,NULL::text AS rule_version
       FROM app.collection_run r LEFT JOIN LATERAL (
         SELECT count(*) AS total,count(*) FILTER(WHERE outcome='OBSERVED') AS observed,
           count(*) FILTER(WHERE outcome='SKIPPED') AS skipped,
@@ -26,7 +26,7 @@ public class CollectionQueries {
       """
       SELECT r.id,'DISCOVERY' AS kind,r.mode,r.channel_id,NULL::timestamptz AS logical_slot,
         r.status,1 AS attempt,r.started_at,r.finished_at,r.error_code,
-        0 AS total,0 AS observed,0 AS skipped,0 AS pending,r.pages,r.candidates
+        0 AS total,0 AS observed,0 AS skipped,0 AS pending,r.pages,r.candidates,r.rule_version
       FROM app.discovery_run r
       """;
   private final JdbcClient jdbc;
@@ -197,7 +197,8 @@ public class CollectionQueries {
         r.getLong("skipped"),
         r.getLong("pending"),
         r.getInt("pages"),
-        r.getInt("candidates"));
+        r.getInt("candidates"),
+        r.getString("rule_version"));
   }
 
   private Retry retry(ResultSet r, int n) throws SQLException {

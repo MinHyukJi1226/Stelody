@@ -1,33 +1,43 @@
 package com.stelody.collector.domain;
 
-import java.util.regex.Pattern;
+import com.stelody.catalog.domain.SearchText;
 
 /** Suggestions only. No rule establishes participants or creates/publishes a song. */
 public final class DiscoveryRules {
   public static final String VERSION = "title-v1";
+  private final RuleConfiguration configuration;
+  private final String version;
 
   public record Decision(String disposition, String suggestedType, String reason, String version) {}
 
-  private static final Pattern COVER =
-      Pattern.compile("(?iu)(?<![\\p{L}\\p{N}])cover(?:ed\\s+by)?(?![\\p{L}\\p{N}])|歌ってみた");
-  private static final Pattern EXCLUDE =
-      Pattern.compile(
-          "(?iu)(?<![\\p{L}\\p{N}])(?:shorts|clip|clips|livestream)(?![\\p{L}\\p{N}])|\\[(?:클립|방송|다시보기)\\]");
-  private static final Pattern ORIGINAL =
-      Pattern.compile("(?iu)(?<![\\p{L}\\p{N}])(?:original|mv)(?![\\p{L}\\p{N}])|오리지널");
+  public DiscoveryRules() {
+    this(RuleConfiguration.defaults(), VERSION);
+  }
+
+  public DiscoveryRules(RuleConfiguration configuration, String version) {
+    this.configuration = configuration.validated();
+    this.version = version;
+  }
 
   public Decision decide(VideoObservation video, boolean classificationAllowed) {
     if (!video.availability().equals("PUBLIC"))
-      return new Decision("DEFERRED", "UNKNOWN", "NOT_PUBLIC", VERSION);
-    if (!classificationAllowed)
-      return new Decision("REVIEW", "UNKNOWN", "CLASSIFICATION_DISABLED", VERSION);
-    String title = video.title() == null ? "" : video.title();
-    if (EXCLUDE.matcher(title).find())
-      return new Decision("EXCLUDED", "UNKNOWN", "EXPLICIT_EXCLUSION_MARKER", VERSION);
-    if (COVER.matcher(title).find())
-      return new Decision("REVIEW", "COVER", "COVER_REQUIRES_PARTICIPANT_REVIEW", VERSION);
-    if (ORIGINAL.matcher(title).find())
-      return new Decision("REVIEW", "ORIGINAL", "ORIGINAL_REQUIRES_REVIEW", VERSION);
-    return new Decision("REVIEW", "UNKNOWN", "TYPE_UNCONFIRMED", VERSION);
+      return decision("DEFERRED", "UNKNOWN", "NOT_PUBLIC");
+    if (!classificationAllowed) return decision("REVIEW", "UNKNOWN", "CLASSIFICATION_DISABLED");
+    String title = SearchText.normalize(video.title() == null ? "" : video.title());
+    if (RuleConfiguration.matches(configuration.exclude(), title))
+      return decision("EXCLUDED", "UNKNOWN", "EXPLICIT_EXCLUSION_MARKER");
+    if (RuleConfiguration.matches(configuration.cover(), title))
+      return decision("REVIEW", "COVER", "COVER_REQUIRES_PARTICIPANT_REVIEW");
+    if (RuleConfiguration.matches(configuration.original(), title))
+      return decision("REVIEW", "ORIGINAL", "ORIGINAL_REQUIRES_REVIEW");
+    return decision("REVIEW", "UNKNOWN", "TYPE_UNCONFIRMED");
+  }
+
+  public String version() {
+    return version;
+  }
+
+  private Decision decision(String disposition, String type, String reason) {
+    return new Decision(disposition, type, reason, version);
   }
 }

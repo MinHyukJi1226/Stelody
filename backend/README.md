@@ -171,3 +171,7 @@ V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식
 등록 영상·탐색 실행의 최근 상태, 처리 수, 실패 이력과 3슬롯 이상 지연 경고를 관리자 API로 조회합니다. 실패 작업의 수동 재시도는 DB에 접수하고 다음 수집기 실행에서 처리합니다. 현재 ADMIN 세션과 변경 요청 CSRF 토큰이 필요합니다.
 
 V15 적용 후 스키마 소유자로 [운영 요청 수집 권한](../infra/sql/collection-operations-grants.sql)을 추가 적용하고 웹·수집 실행 환경 모두에 `COLLECTION_RETRY_ENABLED=true`를 설정합니다. 기본 비활성이며 GitHub Actions에서는 같은 이름의 저장소 Variable을 사용합니다. 응답·진행 조회·시간 기준·설정과 제한은 [수집 운영 API 계약](../docs/collection-operations-api.md)을 참고합니다.
+
+## 수집 분류 규칙 관리
+
+관리자는 분류 키워드를 샘플 미리보기로 확인하고 버전·변경 이력을 남겨 수정할 수 있습니다. 탐색기는 실행마다 규칙을 고정하고 후보·실행에 적용 버전을 기록합니다. V16 이후 제목 분류를 켜기 전에 스키마 소유자로 [규칙 읽기 권한](../infra/sql/collection-rule-grants.sql)을 추가 적용하세요. 기존 채널 허용 목록 관리 API를 그대로 사용합니다.

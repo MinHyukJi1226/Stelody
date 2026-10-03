@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.*;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.stelody.collector.config.CollectorSettings;
 import com.stelody.collector.config.DiscoveryOptions;
+import com.stelody.collector.domain.RuleConfiguration;
 import com.stelody.collector.repository.DiscoveryRepository;
 import com.stelody.collector.service.CollectionLock;
 import com.stelody.collector.service.DiscoveryCollector;
@@ -59,9 +60,13 @@ class DiscoveryCollectorIntegrationTest {
     writer.execute(
         "TRUNCATE app.channel,app.song_entry,app.discovery_run,app.view_publication CASCADE");
     writer.execute("UPDATE app.collection_control SET owner_token=NULL");
+    writer.update(
+        "UPDATE app.collection_rule SET version=0,configuration=CAST(? AS jsonb)",
+        mapper.writeValueAsString(RuleConfiguration.defaults()));
     new ResourceDatabasePopulator(
             new ClassPathResource("collector-grants.sql"),
-            new ClassPathResource("discovery-grants.sql"))
+            new ClassPathResource("discovery-grants.sql"),
+            new ClassPathResource("collection-rule-grants.sql"))
         .execute(owner);
     writer.update(
         "INSERT INTO app.channel(id,youtube_id,name,channel_type,collection_enabled) VALUES(?,?,'test','GROUP',true)",
@@ -193,12 +198,79 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   @Test
+  void collectorFreezesRuleVersionUntilNextRun() {
+    var exclude =
+        new RuleConfiguration(
+            List.of(),
+            List.of(),
+            List.of(new RuleConfiguration.Marker("cover", RuleConfiguration.Match.WORD)));
+    writer.update(
+        "UPDATE app.collection_rule SET configuration=CAST(? AS jsonb)",
+        mapper.writeValueAsString(exclude));
+    var changed = new java.util.concurrent.atomic.AtomicBoolean();
+    server.addMockServiceRequestListener(
+        (request, response) -> {
+          if (request.getUrl().startsWith("/videos") && changed.compareAndSet(false, true))
+            writer.update(
+                "UPDATE app.collection_rule SET version=1,configuration=CAST(? AS jsonb)",
+                mapper.writeValueAsString(new RuleConfiguration(List.of(), List.of(), List.of())));
+        });
+    page(null, "history", 1);
+    videos(1);
+    assertThat(run(NOW, false, 1).status()).isEqualTo("SUCCEEDED");
+    assertThat(writer.queryForObject("SELECT rule_version FROM app.review_item", String.class))
+        .isEqualTo("title-v2:0");
+    assertThat(writer.queryForObject("SELECT disposition FROM app.review_item", String.class))
+        .isEqualTo("EXCLUDED");
+    page(null, null, 2, 1);
+    videos(2);
+    assertThat(run(NOW.plusSeconds(7200), false, 1).status()).isEqualTo("SUCCEEDED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT suggested_type FROM app.review_item WHERE youtube_id=?",
+                String.class,
+                yt(2)))
+        .isEqualTo("UNKNOWN");
+    assertThat(
+            writer.queryForObject(
+                "SELECT rule_version FROM app.review_item WHERE youtube_id=?", String.class, yt(2)))
+        .isEqualTo("title-v2:1");
+  }
+
+  @Test
+  void missingRuleGrantFailsBeforeRemoteFetchAndDoesNotFallbackToDefaults() {
+    writer.execute("REVOKE SELECT ON app.collection_rule FROM stelody_collector");
+    assertThat(run(NOW, false, 1).status()).isEqualTo("FAILED");
+    assertThat(count("review_item")).isZero();
+    server.verify(0, getRequestedFor(urlPathEqualTo("/channels")));
+    page(null, null, 1);
+    videos(1);
+    var result =
+        new DiscoveryCollector(
+                source,
+                settings(),
+                new DiscoveryOptions(false, null, false, 1),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                d -> {})
+            .collect();
+    assertThat(result.status()).isEqualTo("SUCCEEDED");
+    assertThat(writer.queryForObject("SELECT decision_reason FROM app.review_item", String.class))
+        .isEqualTo("CLASSIFICATION_DISABLED");
+  }
+
+  @Test
   void initialScanStoresLatestPageOnlyAndNoSongsOrParticipants() {
     page(null, "older", 3, 2);
     videos(3, 2);
     var result = run(NOW, false, 3);
     assertThat(result.status()).as(result.toString()).isEqualTo("SUCCEEDED");
     assertThat(count("review_item")).isEqualTo(2);
+    assertThat(
+            writer.queryForObject(
+                "SELECT rule_version FROM app.discovery_run WHERE id=?",
+                String.class,
+                result.runId()))
+        .isEqualTo("title-v2:0");
     assertThat(count("song_entry")).isZero();
     assertThat(count("song_member")).isZero();
     assertThat(
