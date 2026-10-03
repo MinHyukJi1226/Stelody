@@ -161,3 +161,7 @@ V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식
 ## 조회수 추이·급상승
 
 로그인 없이 `GET /api/v1/songs/{id}/views?days=7|30`로 대표 영상의 KST 일별 관측을 조회합니다. `GET /api/v1/songs/trending`은 마지막 성공 게시본 기준 24시간 증가량이며 `TRENDING_ENABLED`와 `TRENDING_POLICY_ALLOWED` 모두 true일 때만 제공합니다. 기본은 비활성입니다. V13 적용 후 수집 실행 계정에 `infra/sql/statistics-collector-grants.sql`을 추가로 적용해야 합니다. 결측·대표 변경·보관·표시 상태는 [통계 API 계약](../docs/view-statistics-api.md)을 참고합니다.
+
+## YouTube 플레이리스트 내보내기
+
+기존 Google 로그인과 별도로 YouTube 추가 동의를 받아 새 비공개 재생목록으로 복사합니다. 이용 불가 곡은 제외하고 진행·제외·실패 결과를 확인하며 같은 작업을 재시도할 수 있습니다. 토큰은 AES-256-GCM으로 암호화하고 기본 활성화 설정은 false입니다. V14와 추가 콜백 주소·암호화 키·OAuth scope 설정, 엔드포인트 및 실제 계정 검증 절차는 [내보내기 API 문서](../docs/youtube-export-api.md)를 참고합니다.

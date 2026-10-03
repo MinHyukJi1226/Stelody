@@ -135,6 +135,21 @@ public class SecurityConfiguration {
                     .authenticated()
                     .requestMatchers(HttpMethod.PUT, "/api/v1/me/playlists/{id}/order")
                     .authenticated()
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/me/youtube/connection",
+                        "/api/v1/me/youtube/callback",
+                        "/api/v1/me/youtube-exports/{id}")
+                    .authenticated()
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/me/youtube/authorizations",
+                        "/api/v1/me/playlists/{id}/youtube-exports",
+                        "/api/v1/me/youtube-exports/{id}/retry",
+                        "/api/v1/me/youtube-exports/{id}/cancel")
+                    .authenticated()
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/me/youtube/connection")
+                    .authenticated()
                     .anyRequest()
                     .denyAll())
         .formLogin(AbstractHttpConfigurer::disable)

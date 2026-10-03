@@ -51,6 +51,9 @@ management:
       show-details: never
 
 stelody:
+  export:
+    enabled: ${YOUTUBE_EXPORT_ENABLED:false}
+    redirect-uri: ${YOUTUBE_EXPORT_REDIRECT_URI:}
   statistics:
     trending-enabled: ${TRENDING_ENABLED:false}
     trending-policy-allowed: ${TRENDING_POLICY_ALLOWED:false}
