@@ -4,6 +4,7 @@ import com.stelody.auth.service.GoogleOidcUserService;
 import com.stelody.auth.web.AccountSessionFilter;
 import com.stelody.auth.web.ApiProblems;
 import com.stelody.auth.web.LoginHandlers;
+import com.stelody.auth.web.LoginReturnFilter;
 import com.stelody.auth.web.ReauthenticationRequests;
 import com.stelody.user.service.AccountService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,7 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
@@ -200,6 +202,8 @@ public class SecurityConfiguration {
         .formLogin(AbstractHttpConfigurer::disable)
         .httpBasic(AbstractHttpConfigurer::disable)
         .requestCache(cache -> cache.requestCache(new NullRequestCache()))
+        .addFilterBefore(
+            new LoginReturnFilter(problems), OAuth2AuthorizationRequestRedirectFilter.class)
         .addFilterAfter(
             new AccountSessionFilter(accounts, problems, sessions),
             SecurityContextHolderFilter.class)

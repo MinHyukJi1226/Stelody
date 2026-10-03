@@ -1,5 +1,6 @@
 package com.stelody.auth.controller;
 
+import com.stelody.auth.domain.LoginReturn;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.auth.web.ApiProblems;
 import com.stelody.user.dto.CurrentUser;
@@ -7,6 +8,8 @@ import com.stelody.user.service.AccountService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -39,7 +42,12 @@ public class AuthController {
     if (clients.getIfAvailable() == null) {
       problems.write(request, response, 503, "GOOGLE_LOGIN_UNAVAILABLE", "Google 로그인 설정이 필요합니다");
     } else {
-      response.sendRedirect("/api/v1/auth/authorize/google");
+      var target = (LoginReturn) request.getAttribute(LoginReturn.ATTRIBUTE);
+      response.sendRedirect(
+          "/api/v1/auth/authorize/google"
+              + (target == null
+                  ? ""
+                  : "?returnTo=" + URLEncoder.encode(target.path(), StandardCharsets.UTF_8)));
     }
   }
 
