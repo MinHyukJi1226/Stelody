@@ -1,6 +1,7 @@
 package com.stelody.admin;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -34,6 +36,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.session.*;
 import org.springframework.test.context.*;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.*;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.junit.jupiter.*;
@@ -74,7 +77,7 @@ class ClassificationManagementIntegrationTest {
   @Autowired JdbcTemplate runtime;
   @Autowired CollectionRuleService rules;
   @Autowired SpecialReviewService special;
-  @Autowired SpecialReviewQueries specialQueries;
+  @MockitoSpyBean SpecialReviewQueries specialQueries;
   JdbcTemplate writer, collector;
   Browser admin, user;
 
@@ -446,6 +449,74 @@ class ClassificationManagementIntegrationTest {
     assertThat(songAfter.specialEventLabel()).isEqualTo(songBefore.specialEventLabel());
     assertThat(songAfter.songVersion()).isEqualTo(songBefore.songVersion());
     assertThat(special.audits(id, 0, 20).items()).hasSize(reviewStatus.equals("PENDING") ? 0 : 1);
+  }
+
+  void expireAfterCandidateRead(UUID id) {
+    writer.update(
+        "UPDATE app.special_event_review SET source_expires_at=now()-interval '1 second' WHERE id=?",
+        id);
+    var once = new AtomicBoolean(true);
+    doAnswer(
+            invocation -> {
+              var previous = invocation.callRealMethod();
+              if (once.compareAndSet(true, false))
+                CompletableFuture.runAsync(special::expire).get(5, TimeUnit.SECONDS);
+              return previous;
+            })
+        .when(specialQueries)
+        .forSong(SONG);
+  }
+
+  void assertExpiredThenRefreshable(UUID id) {
+    var expired = specialQueries.get(id);
+    assertThat(expired.version()).isEqualTo(1);
+    assertThat(expired.active()).isFalse();
+    assertThat(expired.evidence()).isEmpty();
+    assertThat(candidate()).isEqualTo(id);
+    var restored = special.detail(id);
+    assertThat(restored.version()).isEqualTo(2);
+    assertThat(restored.basisCurrent()).isTrue();
+    assertThat(restored.evidence()).hasSize(2);
+  }
+
+  @Test
+  void refreshConflictingWithExpirationReturnsConflictAndCanBeRetried() throws Exception {
+    UUID id = candidate();
+    expireAfterCandidateRead(id);
+    mvc.perform(auth(post("/api/v1/admin/songs/" + SONG + "/special-event-review"), admin))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CATALOG_VERSION_CONFLICT"));
+    assertExpiredThenRefreshable(id);
+  }
+
+  @Test
+  void scanConflictingWithExpirationRollsBackCursorAndCanBeRetried() {
+    UUID id = candidate();
+    UUID cursor = new UUID(0, 19);
+    writer.update("UPDATE app.special_event_scan_state SET last_song_id=?", cursor);
+    expireAfterCandidateRead(id);
+    assertThatThrownBy(special::scan)
+        .isInstanceOf(com.stelody.admin.web.AdminCatalogException.class)
+        .satisfies(
+            e ->
+                assertThat(((com.stelody.admin.web.AdminCatalogException) e).status())
+                    .isEqualTo(409));
+    assertThat(
+            writer.queryForObject(
+                "SELECT last_song_id FROM app.special_event_scan_state", UUID.class))
+        .isEqualTo(cursor);
+    var expired = specialQueries.get(id);
+    assertThat(expired.version()).isEqualTo(1);
+    assertThat(expired.active()).isFalse();
+    assertThat(expired.evidence()).isEmpty();
+    special.scan();
+    assertThat(
+            writer.queryForObject(
+                "SELECT last_song_id FROM app.special_event_scan_state", UUID.class))
+        .isNull();
+    assertThat(special.detail(id).version()).isEqualTo(2);
+    assertThat(special.detail(id).basisCurrent()).isTrue();
+    assertThat(special.detail(id).evidence()).hasSize(2);
   }
 
   @Test

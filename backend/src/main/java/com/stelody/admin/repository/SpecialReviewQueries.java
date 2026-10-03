@@ -164,14 +164,15 @@ public class SpecialReviewQueries {
     var previous = old.get();
     UUID matchedId = basis.evidence().isEmpty() ? null : previous.id();
     if (previous.status() != Status.PENDING) return matchedId;
-    jdbc.sql(
-            "UPDATE app.special_event_review SET evidence=CAST(:evidence AS jsonb),active=:active,source_expires_at=:expires,version=version+CASE WHEN evidence<>CAST(:evidence AS jsonb) OR active<>:active THEN 1 ELSE 0 END,updated_at=now() WHERE id=:id AND status='PENDING' AND version=:version")
-        .param("evidence", mapper.writeValueAsString(basis.evidence()))
-        .param("active", !basis.evidence().isEmpty())
-        .param("expires", Timestamp.from(basis.expiresAt()))
-        .param("id", previous.id())
-        .param("version", previous.version())
-        .update();
+    if (jdbc.sql(
+                "UPDATE app.special_event_review SET evidence=CAST(:evidence AS jsonb),active=:active,source_expires_at=:expires,version=version+CASE WHEN evidence<>CAST(:evidence AS jsonb) OR active<>:active THEN 1 ELSE 0 END,updated_at=now() WHERE id=:id AND status='PENDING' AND version=:version")
+            .param("evidence", mapper.writeValueAsString(basis.evidence()))
+            .param("active", !basis.evidence().isEmpty())
+            .param("expires", Timestamp.from(basis.expiresAt()))
+            .param("id", previous.id())
+            .param("version", previous.version())
+            .update()
+        != 1) throw AdminCatalogException.conflict();
     return matchedId;
   }
 
