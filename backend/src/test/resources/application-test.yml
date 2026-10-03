@@ -8,5 +8,7 @@ spring:
       maximum-pool-size: 2
 
 stelody:
+  reauthentication:
+    cleanup-delay-ms: 86400000
   special-review:
     scan-delay-ms: 86400000

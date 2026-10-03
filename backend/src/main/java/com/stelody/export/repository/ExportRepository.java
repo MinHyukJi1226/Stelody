@@ -14,6 +14,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Repository
 public class ExportRepository {
+  public static final long PROCESS_LOCK = 2026100301L;
+
   public record Connection(
       UUID userId,
       UUID generation,
@@ -45,6 +47,13 @@ public class ExportRepository {
 
   public <T> T tx(Supplier<T> action) {
     return transaction.execute(s -> action.get());
+  }
+
+  public boolean tryProcessingLock() {
+    return jdbc.sql("SELECT pg_try_advisory_xact_lock(:lock)")
+        .param("lock", PROCESS_LOCK)
+        .query(Boolean.class)
+        .single();
   }
 
   public String lockActive(UUID user) {
