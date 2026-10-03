@@ -9,7 +9,7 @@
 - 제목의 마지막 `/` 구간이 `멤버명 Cover`이거나, 제목 끝에 `Covered by 멤버명`이 있다. 제목 전체가 `멤버명 Cover`인 경우도 허용한다. 등록된 본명·별칭을 사용하며, `아오쿠모 린 (Aokumo Rin) Cover`처럼 같은 멤버의 별칭을 병기할 수 있다. 다른 텍스트가 가수 구간에 남으면 검토한다.
 - 제목에 언급된 등록 멤버는 정확히 한 명이어야 한다. 중복 별칭이 서로 다른 멤버에 매칭되는 경우도 검토한다. MEMBER 채널은 관리자가 연결한 소유 멤버와 명시된 가수가 같아야 한다. GROUP 채널도 한 명의 명시된 가수만 연결하며 전체 멤버를 추정하지 않는다.
 - feat/duet/collab/chorus/live/teaser/medley/remix, 합창·콜라보·듀엣·클립·쇼츠 등의 표기나 `&`, `+`, `×`, 단독 `x`가 있으면 자동 공개하지 않는다. Original·오리지널과 커버 표기가 충돌해도 검토한다. 이 기준은 보수적이므로 곡 제목 자체의 단어 때문에 검토로 남을 수 있다.
-- `snippet.liveBroadcastContent=none`이 확인돼야 한다. 라이브·불명확 응답은 검토, upcoming은 DEFERRED다. [YouTube 영상 필드](https://developers.google.com/youtube/v3/docs/videos#snippet.liveBroadcastContent)를 사용한다.
+- `videos.list`에 `liveStreamingDetails`를 요청하고, 해당 객체가 없으며 `snippet.liveBroadcastContent=none`일 때만 자동 공개한다. `none`만으로 종료된 방송을 구분할 수 없다. 방송 메타데이터가 있으면 종료 시각 유무와 관계없이 `LIVE_BROADCAST_METADATA_PRESENT`로 검토하며, upcoming은 DEFERRED다. 불명확한 상태는 검토하고 잘못된 방송 메타데이터 형식은 `INVALID_RESPONSE`로 수집을 실패 처리한다. [YouTube 방송 필드](https://developers.google.com/youtube/v3/docs/videos#liveStreamingDetails)를 사용한다.
 - 길이가 없거나 180초 이하면 `FULL_LENGTH_UNCONFIRMED`로 **검토**한다. 짧다는 이유만으로 Shorts나 제외 영상으로 확정하지 않는다. 현재 [YouTube Shorts 기준](https://support.google.com/youtube/answer/15424877?hl=en)은 길이와 화면 비율을 함께 사용하지만 이 수집기는 화면 비율을 확인하지 않으므로 자동 공개를 보류한다.
 - 제목이 300자 이내여야 한다. 긴 제목은 임의로 잘라 공개하지 않고 검토한다.
 
@@ -65,6 +65,7 @@ YouTube 영상 ID의 유일성, 실행 잠금·소유 토큰, 후보 행 잠금�
 - 명시된 단독 본명·별칭 및 GROUP 채널 단독 크레딧의 자동 공개, 로그인 없는 공개 목록 노출
 - 원곡·부가정보 없이 공개, 졸업 멤버 포함, 임베드 금지 링크 유지
 - 참여·콘텐츠·짧은 길이·라이브·예약·미래 공개일·제외 규칙의 보류
+- `liveBroadcastContent=none`인 종료 방송의 신규 탐색·재검사 시 공개 차단, 종료 시각 없는 방송 객체 감지, 잘못된 방송 메타데이터 응답 거부
 - 정책/분류/관리자 활성화 각각의 차단, 원격 요청 중 중단, 기존 후보의 새 관측
 - 반복·과거 탐색·동시 함수 호출 중복 방지, 등록 기록 실패 시 전체 페이지 롤백·재시도
 - 원본 갱신 후 관리자 값·HIDDEN 보존, 무시 기록 유지
@@ -81,4 +82,4 @@ YouTube 영상 ID의 유일성, 실행 잠금·소유 토큰, 후보 행 잠금�
 
 ### 로컬 검증 결과
 
-`GRADLE_USER_HOME=/tmp/stelody-gradle ./gradlew spotlessApply check bootJar --no-daemon` 성공. 단위 128개·PostgreSQL 통합 348개, 총 476개 테스트가 실패·건너뜀 없이 통과했다. actionlint 1.7.7로 수집 workflow 검사도 통과했다. 로컬에 ShellCheck가 없어 해당 검사는 제외했다. 문서 내부 파일 링크와 `git diff --check`를 확인했다.
+`GRADLE_USER_HOME=/tmp/stelody-gradle ./gradlew spotlessApply check bootJar --no-daemon` 성공. 종료 방송 판정 수정 후 단위 138개·PostgreSQL 통합 349개, 총 487개 테스트가 실패·건너뜀 없이 통과했다. 수정 전 모의 API의 종료 방송 응답으로 곡 1개가 자동 공개되는 문제를 재현했고, 수정 후 신규 탐색과 재검사 모두 곡·영상·자동 등록 기록을 생성하지 않고 검토 대기로 남는 것을 확인했다. 최초 구현 시 actionlint 1.7.7로 수집 workflow 검사도 통과했다. 로컬에 ShellCheck가 없어 해당 검사는 제외했다. `git diff --check`를 확인했다.

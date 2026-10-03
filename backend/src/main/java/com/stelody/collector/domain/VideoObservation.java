@@ -12,7 +12,8 @@ public record VideoObservation(
     Long durationSeconds,
     boolean embeddable,
     Long viewCount,
-    String liveBroadcastContent) {
+    String liveBroadcastContent,
+    boolean liveStreamingDetailsPresent) {
   public VideoObservation(
       String youtubeId,
       String channelId,
@@ -33,7 +34,8 @@ public record VideoObservation(
         durationSeconds,
         embeddable,
         viewCount,
-        null);
+        null,
+        false);
   }
 
   public static VideoObservation unavailable(String id) {

@@ -80,14 +80,62 @@ class YouTubeVideoClientTest {
     assertThat(value.viewCount()).isEqualTo(12345);
     assertThat(value.durationSeconds()).isEqualTo(192);
     assertThat(value.availability()).isEqualTo("PUBLIC");
+    assertThat(value.liveStreamingDetailsPresent()).isFalse();
     server.verify(
         getRequestedFor(urlPathEqualTo("/videos"))
             .withQueryParam("id", equalTo(ID))
-            .withQueryParam("part", equalTo("snippet,contentDetails,status,statistics"))
+            .withQueryParam(
+                "part", equalTo("snippet,contentDetails,status,statistics,liveStreamingDetails"))
             .withHeader("X-Goog-Api-Key", equalTo("test-api-key"))
             .withoutQueryParam("key"));
     assertThat(settings(3, Duration.ofSeconds(1)).toString())
         .doesNotContain("secret", "test-api-key");
+  }
+
+  @Test
+  void completedBroadcastRetainsHistoryDespiteNoneStatus() {
+    response(
+        200,
+        video(
+                ",\"liveStreamingDetails\":{\"actualStartTime\":\"2026-10-01T00:00:00Z\",\"actualEndTime\":\"2026-10-01T00:03:12Z\"}",
+                "")
+            .replace(
+                "\"title\":\"테스트 영상\"", "\"title\":\"테스트 영상\",\"liveBroadcastContent\":\"none\""));
+    var value =
+        new YouTubeVideoClient(settings(1, Duration.ofSeconds(1)), d -> {})
+            .fetch(List.of(ID), new CollectionBudget(Duration.ofSeconds(5)))
+            .get(ID);
+    assertThat(value.liveBroadcastContent()).isEqualTo("none");
+    assertThat(value.liveStreamingDetailsPresent()).isTrue();
+    assertThat(value.availability()).isEqualTo("PUBLIC");
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{}",
+        "{\"scheduledStartTime\":\"2026-10-02T00:00:00Z\"}",
+        "{\"actualStartTime\":\"2026-10-01T00:00:00Z\"}"
+      })
+  void broadcastObjectPresenceDoesNotRequireEndTime(String details) {
+    response(200, video(",\"liveStreamingDetails\":" + details, ""));
+    var value =
+        new YouTubeVideoClient(settings(1, Duration.ofSeconds(1)), d -> {})
+            .fetch(List.of(ID), new CollectionBudget(Duration.ofSeconds(5)))
+            .get(ID);
+    assertThat(value.liveStreamingDetailsPresent()).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"null", "[]", "\"none\"", "true", "0"})
+  void malformedBroadcastMetadataCannotBeTreatedAsNoBroadcast(String details) {
+    response(200, video(",\"liveStreamingDetails\":" + details, ""));
+    assertThatThrownBy(
+            () ->
+                new YouTubeVideoClient(settings(1, Duration.ofSeconds(1)), d -> {})
+                    .fetch(List.of(ID), new CollectionBudget(Duration.ofSeconds(5))))
+        .isInstanceOfSatisfying(
+            CollectionFailure.class, e -> assertThat(e.code()).isEqualTo("INVALID_RESPONSE"));
   }
 
   @Test

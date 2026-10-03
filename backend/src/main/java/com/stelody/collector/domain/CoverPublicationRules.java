@@ -33,6 +33,8 @@ public final class CoverPublicationRules {
         || video.publishedAt() == null
         || video.channelId() == null) return no("REQUIRED_FIELDS_MISSING");
     if (video.publishedAt().isAfter(now)) return no("PUBLICATION_PENDING");
+    // Completed broadcasts also report "none"; durable broadcast metadata takes precedence.
+    if (video.liveStreamingDetailsPresent()) return no("LIVE_BROADCAST_METADATA_PRESENT");
     if (!"none".equals(video.liveBroadcastContent())) return no("LIVE_STATUS_UNCONFIRMED");
     // Review short/unknown-length uploads; duration alone never excludes or labels a Short.
     if (video.durationSeconds() == null || video.durationSeconds() <= 180)

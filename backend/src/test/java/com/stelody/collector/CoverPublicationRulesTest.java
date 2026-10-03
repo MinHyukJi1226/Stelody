@@ -26,7 +26,8 @@ class CoverPublicationRulesTest {
         duration,
         true,
         10L,
-        live);
+        live,
+        false);
   }
 
   CoverPublicationRules.Result decide(
@@ -95,6 +96,26 @@ class CoverPublicationRulesTest {
             decide(video("노래 / 아오쿠모 린 Cover", 240L, "none", NOW.plusSeconds(1)), List.of(member))
                 .reason())
         .isEqualTo("PUBLICATION_PENDING");
+  }
+
+  @Test
+  void completedBroadcastIsNotEligibleEvenWithNoneAndExplicitSoloCredit() {
+    var v =
+        new VideoObservation(
+            "abcdefghijk",
+            "UC" + "a".repeat(22),
+            "PUBLIC",
+            "노래 / 아오쿠모 린 Cover",
+            NOW,
+            null,
+            240L,
+            true,
+            10L,
+            "none",
+            true);
+    var result = decide(v, List.of(member));
+    assertThat(result.eligible()).isFalse();
+    assertThat(result.reason()).isEqualTo("LIVE_BROADCAST_METADATA_PRESENT");
   }
 
   @Test

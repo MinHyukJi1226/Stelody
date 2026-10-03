@@ -571,26 +571,40 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   void clearCovers(String title, String live, String duration, String published, int... numbers) {
+    clearCovers(title, live, duration, published, Map.of(), numbers);
+  }
+
+  void clearCovers(
+      String title,
+      String live,
+      String duration,
+      String published,
+      Map<String, Object> extraFields,
+      int... numbers) {
     var items = new ArrayList<Object>();
-    for (int n : numbers)
-      items.add(
-          Map.of(
-              "id",
-              yt(n),
-              "snippet",
+    for (int n : numbers) {
+      var item =
+          new HashMap<String, Object>(
               Map.of(
-                  "channelId",
-                  YTCHANNEL,
-                  "title",
-                  title,
-                  "publishedAt",
-                  published,
-                  "liveBroadcastContent",
-                  live),
-              "status",
-              Map.of("privacyStatus", "public", "embeddable", false),
-              "contentDetails",
-              Map.of("duration", duration)));
+                  "id",
+                  yt(n),
+                  "snippet",
+                  Map.of(
+                      "channelId",
+                      YTCHANNEL,
+                      "title",
+                      title,
+                      "publishedAt",
+                      published,
+                      "liveBroadcastContent",
+                      live),
+                  "status",
+                  Map.of("privacyStatus", "public", "embeddable", false),
+                  "contentDetails",
+                  Map.of("duration", duration)));
+      item.putAll(extraFields);
+      items.add(item);
+    }
     server.stubFor(
         get(urlPathEqualTo("/videos"))
             .willReturn(
@@ -666,6 +680,36 @@ class DiscoveryCollectorIntegrationTest {
     assertThat(count("song_entry")).isEqualTo(2);
     assertThat(count("cover_auto_registration")).isEqualTo(2);
     server.verify(0, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
+  void completedBroadcastWithExplicitSoloCreditStaysPendingOnDiscoveryAndRecheck() {
+    enableAuto();
+    page(null, null, 1);
+    clearCovers(
+        "노래 / 아오쿠모 린 (Aokumo Rin) Cover",
+        "none",
+        "PT3M21S",
+        "2026-09-01T00:00:00Z",
+        Map.of(
+            "liveStreamingDetails",
+            Map.of(
+                "actualStartTime", "2026-09-01T00:00:00Z",
+                "actualEndTime", "2026-09-01T00:03:21Z")),
+        1);
+    for (Instant now : List.of(NOW, NOW.plusSeconds(7201))) {
+      assertThat(autoRun(now, true, true, false).status()).isEqualTo("SUCCEEDED");
+      assertThat(count("song_entry")).isZero();
+      assertThat(count("video")).isZero();
+      assertThat(count("cover_auto_registration")).isZero();
+      assertThat(writer.queryForObject("SELECT review_status FROM app.review_item", String.class))
+          .isEqualTo("PENDING");
+      assertThat(writer.queryForObject("SELECT disposition FROM app.review_item", String.class))
+          .isEqualTo("REVIEW");
+      assertThat(writer.queryForObject("SELECT decision_reason FROM app.review_item", String.class))
+          .isEqualTo("LIVE_BROADCAST_METADATA_PRESENT");
+    }
+    server.verify(2, getRequestedFor(urlPathEqualTo("/videos")));
   }
 
   @Test

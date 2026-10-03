@@ -29,7 +29,11 @@ public final class YouTubeVideoClient {
         ids,
         api.get(
             "videos",
-            Map.of("part", "snippet,contentDetails,status,statistics", "id", String.join(",", ids)),
+            Map.of(
+                "part",
+                "snippet,contentDetails,status,statistics,liveStreamingDetails",
+                "id",
+                String.join(",", ids)),
             budget));
   }
 
@@ -79,6 +83,9 @@ public final class YouTubeVideoClient {
         }
         if (!status.path("embeddable").isBoolean()) invalid();
         Long views = optionalCount(item.path("statistics"), "viewCount");
+        // An absent part means no broadcast history. A malformed present part is not absence.
+        var liveStreamingDetails = item.path("liveStreamingDetails");
+        if (!liveStreamingDetails.isMissingNode() && !liveStreamingDetails.isObject()) invalid();
         result.put(
             id,
             new VideoObservation(
@@ -91,7 +98,8 @@ public final class YouTubeVideoClient {
                 seconds,
                 status.path("embeddable").asBoolean(),
                 publicVideo ? views : null,
-                optionalText(snippet, "liveBroadcastContent")));
+                optionalText(snippet, "liveBroadcastContent"),
+                !liveStreamingDetails.isMissingNode()));
       }
       for (String id : ids) result.putIfAbsent(id, VideoObservation.unavailable(id));
       return Map.copyOf(result);
