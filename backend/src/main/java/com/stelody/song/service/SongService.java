@@ -3,10 +3,13 @@ package com.stelody.song.service;
 import com.stelody.catalog.web.CatalogException;
 import com.stelody.song.domain.SongCursor;
 import com.stelody.song.domain.SongQuery;
+import com.stelody.song.domain.SongRecommendations;
 import com.stelody.song.dto.SongDtos;
 import com.stelody.song.repository.SongRepository;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,5 +61,15 @@ public class SongService {
             ? null
             : new SongDtos.WorkResources(
                 row.workId(), songs.links(null, row.workId()), songs.karaoke(null, row.workId())));
+  }
+
+  public SongDtos.Recommendations recommendations(int size) {
+    if (size < 1 || size > 20) throw CatalogException.invalid();
+    var ids = SongRecommendations.select(songs.recommendationCandidates(), size);
+    if (ids.isEmpty()) return new SongDtos.Recommendations(List.of());
+    var rows =
+        songs.findAll(ids, songs.publication()).stream()
+            .collect(Collectors.toMap(SongRepository.Row::id, Function.identity()));
+    return new SongDtos.Recommendations(songs.cards(ids.stream().map(rows::get).toList()));
   }
 }

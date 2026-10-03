@@ -47,4 +47,6 @@ public final class SongDtos {
       WorkResources workResources) {}
 
   public record Page(List<Card> items, String nextCursor, boolean hasNext) {}
+
+  public record Recommendations(List<Card> items) {}
 }

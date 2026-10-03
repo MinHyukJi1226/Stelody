@@ -19,6 +19,14 @@ final class SongSqlQueries {
   static final String PUBLICATION =
       "SELECT view_publication_id FROM app.catalog_state WHERE singleton";
 
+  static final String RECOMMENDATION_CANDIDATES =
+      PublicCatalogSql.SONGS
+          + """
+          SELECT s.id, sm.member_id FROM public_songs s
+          JOIN app.song_member sm ON sm.song_id = s.id AND sm.confirmed
+          ORDER BY s.id, sm.member_id
+          """;
+
   static final String PARTICIPANTS =
       """
       SELECT sm.song_id, m.id, m.name, 'MEMBER' AS kind, m.activity_status, sm.position

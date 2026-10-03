@@ -2,12 +2,14 @@ package com.stelody.song.repository;
 
 import com.stelody.song.domain.SongCursor.Position;
 import com.stelody.song.domain.SongQuery;
+import com.stelody.song.domain.SongRecommendations.Candidate;
 import com.stelody.song.dto.SongDtos;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,6 +54,22 @@ public class SongRepository {
   }
 
   private record Publication(UUID id) {}
+
+  public List<Candidate> recommendationCandidates() {
+    var members = new LinkedHashMap<UUID, List<UUID>>();
+    jdbc.sql(SongSqlQueries.RECOMMENDATION_CANDIDATES)
+        .query(
+            (rs, n) -> {
+              members
+                  .computeIfAbsent(rs.getObject("id", UUID.class), key -> new ArrayList<>())
+                  .add(rs.getObject("member_id", UUID.class));
+              return 0;
+            })
+        .list();
+    return members.entrySet().stream()
+        .map(entry -> new Candidate(entry.getKey(), List.copyOf(entry.getValue())))
+        .toList();
+  }
 
   public List<Row> list(SongQuery query, UUID publication, Position cursor) {
     var statement = SongSqlQueries.list(query, publication, cursor);

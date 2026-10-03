@@ -37,4 +37,9 @@ public class SongController {
   public SongDtos.Detail detail(@PathVariable UUID id) {
     return songs.detail(id);
   }
+
+  @GetMapping("/api/v1/songs/recommendations")
+  public SongDtos.Recommendations recommendations(@RequestParam(defaultValue = "6") int size) {
+    return songs.recommendations(size);
+  }
 }

@@ -113,6 +113,8 @@ Google 통합 테스트는 WireMock의 모의 OAuth 서버와 서명된 ID 토�
 
 GET `/api/v1/songs`, `/api/v1/songs/{id}`, `/api/v1/members`, `/api/v1/members/{id}`, `/api/v1/members/{id}/songs`는 로그인 없이 조회할 수 있습니다. 검색·필터·커서 및 응답 필드는 [공개 API 계약](../docs/public-catalog-api.md)을 참고하세요.
 
+메인 랜덤 추천은 GET `/api/v1/songs/recommendations?size=6`으로 조회합니다. size는 1~20, 기본 6이며 `{items}`에 기존 곡 카드를 반환합니다. 전체 공개 곡에서 중복 없이 선택하고 확정 멤버의 반복을 줄입니다. 후보가 부족하면 있는 곡만 반환하며 졸업 멤버·공동 참여곡도 포함합니다. 추가 환경 설정이나 DB 마이그레이션은 없습니다.
+
 Flyway V4는 곡·작품·업로드와 참여 관계, 완료된 조회수 집계 조회용 스키마를 구성합니다. V5는 pg_trgm 검색 인덱스를 생성합니다. 기존 Google 회원과 세션 데이터는 유지합니다. 운영 확장 설치 권한은 배포 전에 확인해야 합니다.
 
 테스트 자료는 Testcontainers에만 등록합니다. 실제 곡 자료가 아직 없으면 로컬 목록 API는 빈 items를 반환하며, 초기 콘텐츠 입력은 관리자·자료 등록 단계에서 진행합니다. 노래방·음원 링크·조회수 차트와 수집은 다음 기능에서 추가합니다.
