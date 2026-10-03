@@ -86,6 +86,14 @@ public class SecurityConfiguration {
                         "/api/v1/admin/collection-rules",
                         "/api/v1/admin/collection-rules/audit")
                     .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/admin/cover-auto-publication",
+                        "/api/v1/admin/cover-auto-publication/registrations",
+                        "/api/v1/admin/cover-auto-publication/audit")
+                    .hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.PUT, "/api/v1/admin/cover-auto-publication")
+                    .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PUT, "/api/v1/admin/collection-rules")
                     .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.POST, "/api/v1/admin/collection-rules/preview")

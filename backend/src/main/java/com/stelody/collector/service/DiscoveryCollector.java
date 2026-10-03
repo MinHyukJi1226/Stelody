@@ -41,7 +41,9 @@ public final class DiscoveryCollector {
     this.settings = settings;
     this.options = options;
     this.clock = clock;
-    repository = new DiscoveryRepository(source);
+    repository =
+        new DiscoveryRepository(
+            source, options.classificationAllowed() && options.autoPublicationPolicyAllowed());
     uploads = new YouTubeUploadsClient(settings, sleeper);
     videos = new YouTubeVideoClient(settings, sleeper);
   }
@@ -83,6 +85,7 @@ public final class DiscoveryCollector {
                       .rules()
                   : new DiscoveryRules();
           repository.ruleVersion(token, run, rules.version());
+          repository.checkPublicationPrivileges();
           repository.cleanup(token, clock.instant());
           for (var channel : channels) {
             budget.remaining();
@@ -150,7 +153,7 @@ public final class DiscoveryCollector {
             if (!options.backfill()) {
               var deferred =
                   repository.needed(
-                      repository.deferred(channel, clock.instant().minusSeconds(7200)));
+                      repository.recheck(channel, clock.instant().minusSeconds(7200)));
               if (!deferred.isEmpty()) {
                 var observations = videos.fetch(deferred, budget);
                 budget.remaining();

@@ -2,7 +2,7 @@ package com.stelody.collector.domain;
 
 import com.stelody.catalog.domain.SearchText;
 
-/** Suggestions only. No rule establishes participants or creates/publishes a song. */
+/** Content suggestions; CoverPublicationRules independently verifies solo credits. */
 public final class DiscoveryRules {
   public static final String VERSION = "title-v1";
   private final RuleConfiguration configuration;

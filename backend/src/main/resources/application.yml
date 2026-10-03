@@ -51,6 +51,8 @@ management:
       show-details: never
 
 stelody:
+  cover-publication:
+    policy-allowed: ${COVER_AUTO_PUBLICATION_POLICY_ALLOWED:false}
   special-review:
     enabled: ${SPECIAL_EVENT_REVIEW_ENABLED:false}
     policy-allowed: ${SPECIAL_EVENT_POLICY_ALLOWED:false}

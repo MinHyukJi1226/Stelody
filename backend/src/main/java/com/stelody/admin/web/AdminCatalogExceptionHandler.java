@@ -2,6 +2,7 @@ package com.stelody.admin.web;
 
 import com.stelody.admin.controller.CatalogAdminController;
 import com.stelody.admin.controller.CollectionRuleController;
+import com.stelody.admin.controller.CoverPublicationController;
 import com.stelody.admin.controller.SpecialReviewController;
 import com.stelody.auth.web.ApiProblems;
 import jakarta.servlet.http.*;
@@ -16,6 +17,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
     assignableTypes = {
       CatalogAdminController.class,
       CollectionRuleController.class,
+      CoverPublicationController.class,
       SpecialReviewController.class
     })
 public class AdminCatalogExceptionHandler {

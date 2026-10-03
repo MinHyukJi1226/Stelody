@@ -41,6 +41,14 @@ public final class CollectionRetryWorker {
 
   public Optional<VideoCollector.Result> collect(
       CollectionBudget budget, boolean discoveryEnabled, boolean classificationAllowed) {
+    return collect(budget, discoveryEnabled, classificationAllowed, false);
+  }
+
+  public Optional<VideoCollector.Result> collect(
+      CollectionBudget budget,
+      boolean discoveryEnabled,
+      boolean classificationAllowed,
+      boolean autoPublicationPolicyAllowed) {
     if (!settings.enabled()) return Optional.empty();
     try {
       settings.validate();
@@ -126,7 +134,8 @@ public final class CollectionRetryWorker {
                   classificationAllowed,
                   original.channel(),
                   original.mode().equals("BACKFILL"),
-                  original.mode().equals("BACKFILL") ? 1 : 3);
+                  original.mode().equals("BACKFILL") ? 1 : 3,
+                  autoPublicationPolicyAllowed);
           result =
               new DiscoveryCollector(source, settings, options, clock, sleeper)
                   .retry(budget, started);

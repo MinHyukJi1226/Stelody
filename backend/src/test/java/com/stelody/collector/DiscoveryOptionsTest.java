@@ -47,6 +47,16 @@ class DiscoveryOptionsTest {
   }
 
   @Test
+  void autoPublicationRequiresExplicitSeparatePolicyFlag() {
+    var options =
+        DiscoveryOptions.from(
+            new MockEnvironment().withProperty("COVER_AUTO_PUBLICATION_POLICY_ALLOWED", "true"),
+            new DefaultApplicationArguments("--discover"));
+    assertThat(options.autoPublicationPolicyAllowed()).isTrue();
+    assertThat(options.classificationAllowed()).isFalse();
+  }
+
+  @Test
   void disabledDiscoveryNeedsNoCredentialsDatabaseOrServer() {
     var application = new SpringApplication(CollectorConfiguration.class);
     application.setWebApplicationType(WebApplicationType.NONE);

@@ -13,7 +13,7 @@
 
 `configuration`은 `cover`, `original`, `exclude` 배열이다. 각 배열은 최대 30개, 각 원소는 `{ "text": "cover", "match": "WORD" }` 형식이다. `WORD`는 앞뒤가 유니코드 문자·숫자가 아닌 경우만 일치한다. `PHRASE`는 문구가 포함되면 일치한다. 정규식은 지원하지 않는다. NFKC·소문자·공백 정규화 후 빈 문구와 같은 배열의 중복을 거절한다. 문구는 입력·정규화 결과 모두 1~60자다. 빈 배열은 해당 제안을 끈다.
 
-초기 설정은 기존 Cover/Covered by/歌ってみた, original/MV/오리지널, shorts/clip/clips/livestream/[클립]/[방송]/[다시보기] 규칙을 유지한다. 제외 → 커버 → 오리지널 순서이며, 비공개·미등록 상태는 DEFERRED다. 영상 길이로 Shorts를 추정하지 않는다. 곡 생성·참여자 추정·공개는 자동으로 수행하지 않는다.
+초기 설정은 기존 Cover/Covered by/歌ってみた, original/MV/오리지널, shorts/clip/clips/livestream/[클립]/[방송]/[다시보기] 규칙을 유지한다. 제외 → 커버 → 오리지널 순서이며, 비공개·미등록 상태는 DEFERRED다. 영상 길이로 Shorts를 추정하지 않는다. 이 분류 미리보기는 콘텐츠 제안만 반환한다. 실제 탐색에서는 [별도 단독 커버 판정과 설정](cover-auto-publication-api.md)을 충족한 경우 곡 생성·공개를 수행한다. 채널 소유자를 참여자로 추정하지 않는다.
 
 미리보기 요청 예시:
 
