@@ -51,6 +51,9 @@ management:
       show-details: never
 
 stelody:
+  statistics:
+    trending-enabled: ${TRENDING_ENABLED:false}
+    trending-policy-allowed: ${TRENDING_POLICY_ALLOWED:false}
   playlists:
     limit: ${PLAYLIST_LIMIT:50}
     item-limit: ${PLAYLIST_ITEM_LIMIT:500}

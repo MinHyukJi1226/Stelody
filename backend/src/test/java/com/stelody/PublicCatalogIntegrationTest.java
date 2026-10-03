@@ -224,6 +224,13 @@ class PublicCatalogIntegrationTest {
     return mapper.readTree(response.getContentAsString());
   }
 
+  @Test
+  void trendingIsDisabledByDefaultWithoutLogin() throws Exception {
+    var data = request("/api/v1/songs/trending");
+    assertThat(data.path("status").asText()).isEqualTo("DISABLED");
+    assertThat(data.path("items").size()).isZero();
+  }
+
   List<String> ids(JsonNode page) {
     var values = new ArrayList<String>();
     page.get("items").forEach(row -> values.add(row.get("id").asText()));

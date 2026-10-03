@@ -81,6 +81,8 @@ class VideoCollectorIntegrationTest {
     writer.execute("UPDATE app.collection_control SET owner_token = NULL");
     writer.execute("INSERT INTO app.catalog_state(singleton) VALUES(true) ON CONFLICT DO NOTHING");
     new ResourceDatabasePopulator(new ClassPathResource("collector-grants.sql")).execute(owner);
+    new ResourceDatabasePopulator(new ClassPathResource("statistics-collector-grants.sql"))
+        .execute(owner);
     writer.update(
         "INSERT INTO app.member(id, name, search_name, activity_status) VALUES (?, 'test', 'test', 'ACTIVE')",
         MEMBER);
@@ -460,6 +462,12 @@ class VideoCollectorIntegrationTest {
         .isEqualTo(301);
     assertThat(writer.queryForObject("SELECT count(*) FROM app.daily_video_view", Long.class))
         .isEqualTo(2);
+    assertThat(
+            writer
+                .queryForObject(
+                    "SELECT view_collection_started_at FROM app.video", java.sql.Timestamp.class)
+                .toInstant())
+        .isEqualTo(before);
     var repo = new CollectionRepository(source);
     UUID token = UUID.randomUUID();
     repo.begin(
@@ -470,6 +478,12 @@ class VideoCollectorIntegrationTest {
     assertThat(count("view_snapshot")).isZero();
     assertThat(count("daily_video_view")).isZero();
     assertThat(count("published_video_view")).isZero();
+    assertThat(
+            writer
+                .queryForObject(
+                    "SELECT view_collection_started_at FROM app.video", java.sql.Timestamp.class)
+                .toInstant())
+        .isEqualTo(before);
     assertThat(runtime.queryForObject("SELECT thumbnail_url FROM app.video", String.class))
         .isEqualTo("https://manual.invalid/override.jpg");
     assertThat(runtime.queryForObject("SELECT source_title FROM app.video", String.class))
