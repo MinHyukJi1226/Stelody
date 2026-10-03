@@ -238,6 +238,64 @@ class PublicCatalogIntegrationTest {
   }
 
   @Test
+  void recommendationsAreAnonymousUniquePublicCardsWithGraduatedAndExternalParticipants()
+      throws Exception {
+    var publication = publish(10L, 0L, null, 20L);
+    var pending = UUID.randomUUID();
+    writer.update("INSERT INTO app.view_publication VALUES (?, current_timestamp)", pending);
+    writer.update(
+        "INSERT INTO app.published_video_view VALUES (?, ?, 99999, current_timestamp)",
+        pending,
+        id(S1.hashCode() + 1000));
+    var response = request("/api/v1/songs/recommendations");
+    assertThat(ids(response))
+        .containsExactlyInAnyOrder(S1.toString(), S2.toString(), S3.toString(), S4.toString());
+    for (var card : response.path("items")) {
+      var detail = request("/api/v1/songs/" + card.path("id").asText());
+      assertThat(card).isEqualTo(detail.get("song"));
+    }
+    assertThat(response.path("items").toString()).contains("GRADUATED", "EXTERNAL_ARTIST");
+    assertThat(
+            runtime.queryForObject(
+                "SELECT view_publication_id FROM app.catalog_state WHERE singleton", UUID.class))
+        .isEqualTo(publication);
+    mvc.perform(post("/api/v1/songs/recommendations")).andExpect(status().isForbidden());
+  }
+
+  @Test
+  void recommendationsExcludeUnavailableDraftUnlistedAndUnconfirmedSongs() throws Exception {
+    writer.update("UPDATE app.video SET availability = 'UNAVAILABLE' WHERE song_id = ?", S1);
+    writer.update("UPDATE app.song_entry SET visibility = 'DRAFT' WHERE id = ?", S2);
+    writer.update("UPDATE app.video SET availability = 'UNLISTED' WHERE song_id = ?", S3);
+    writer.update("UPDATE app.video SET published_at = null WHERE song_id = ?", S4);
+    assertThat(ids(request("/api/v1/songs/recommendations"))).isEmpty();
+    writer.update(
+        "UPDATE app.video SET source_published_at = '2026-01-04T00:00:00Z' WHERE song_id = ?", S4);
+    assertThat(ids(request("/api/v1/songs/recommendations"))).containsExactly(S4.toString());
+  }
+
+  @Test
+  void recommendationsReduceMemberRepetitionUsingConfirmedMembersAcrossTheWholeCatalog()
+      throws Exception {
+    writer.update("UPDATE app.song_entry SET visibility = 'HIDDEN'");
+    for (int i = 0; i < 25; i++)
+      song(id(300 + i), "Recent " + i, "COVER", null, "2026-03-01T00:00:00Z", M1);
+    song(id(400), "Older graduated", "COVER", null, "2025-01-01T00:00:00Z", M2);
+    song(id(401), "Older original", "ORIGINAL", null, "2025-01-01T00:00:00Z", M3);
+    // Unconfirmed participants must not affect the choice of a different confirmed member.
+    writer.update("INSERT INTO app.song_member VALUES (?, ?, 1, false)", id(400), M1);
+    var selected = ids(request("/api/v1/songs/recommendations?size=3"));
+    assertThat(selected)
+        .hasSize(3)
+        .doesNotHaveDuplicates()
+        .contains(id(400).toString(), id(401).toString());
+    assertThat(ids(request("/api/v1/songs/recommendations"))).hasSize(6).doesNotHaveDuplicates();
+    assertThat(ids(request("/api/v1/songs/recommendations?size=20")))
+        .hasSize(20)
+        .doesNotHaveDuplicates();
+  }
+
+  @Test
   void anonymousReadsExposeOnlyPublicSongsAndKeepPrivateRoutesClosed() throws Exception {
     assertThat(ids(request("/api/v1/songs")))
         .containsExactly(S4.toString(), S3.toString(), S2.toString(), S1.toString());
@@ -506,7 +564,11 @@ class PublicCatalogIntegrationTest {
         "/api/v1/songs/not-a-uuid",
         "/api/v1/members?status=wrong",
         "/api/v1/members?cursor=bad",
-        "/api/v1/songs?memberIds=bad"
+        "/api/v1/songs?memberIds=bad",
+        "/api/v1/songs/recommendations?size=0",
+        "/api/v1/songs/recommendations?size=-1",
+        "/api/v1/songs/recommendations?size=21",
+        "/api/v1/songs/recommendations?size=x"
       })
   void invalidQueriesReturnProblemWithoutInternalDetails(String path) throws Exception {
     mvc.perform(get(path))
@@ -549,6 +611,17 @@ class PublicCatalogIntegrationTest {
     assertThat(ids(request("/api/v1/songs?size=50&q=bench"))).hasSize(50);
     assertThat(twenty).isEqualTo(4);
     assertThat(SELECTS.get()).isEqualTo(twenty);
+    SELECTS.set(0);
+    assertThat(ids(request("/api/v1/songs/recommendations?size=6")))
+        .hasSize(6)
+        .doesNotHaveDuplicates();
+    int sixRecommendations = SELECTS.get();
+    SELECTS.set(0);
+    assertThat(ids(request("/api/v1/songs/recommendations?size=20")))
+        .hasSize(20)
+        .doesNotHaveDuplicates();
+    assertThat(sixRecommendations).isEqualTo(5);
+    assertThat(SELECTS.get()).isEqualTo(sixRecommendations);
     var durations = new ArrayList<Long>();
     for (int i = 0; i < 20; i++) {
       long started = System.nanoTime();

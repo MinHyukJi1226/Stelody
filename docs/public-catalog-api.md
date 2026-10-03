@@ -5,6 +5,7 @@
 | 메서드·경로 | 응답 |
 |---|---|
 | GET `/songs` | 곡 카드의 커서 목록 |
+| GET `/songs/recommendations` | 공개 곡에서 뽑은 랜덤 추천 카드 |
 | GET `/songs/{id}` | 곡 카드, 대표 영상, 검색 노출 안내, 관련곡 최대 6개 |
 | GET `/members` | 멤버 카드와 공개 곡 수의 커서 목록 |
 | GET `/members/{id}` | 멤버 카드와 공식 채널 링크 |
@@ -60,6 +61,24 @@ GET /api/v1/songs?memberIds={memberA},{memberB}&sort=LATEST
 원곡이 확인되면 work는 `{id, title, artists: [{id, name}]}`다. 원곡 미확인과 조회수 미수집을 임의 값으로 채우지 않는다. 외부 참여자는 멤버 목록에 포함하지 않고 곡의 participants에서 kind로 구분한다. 확인되지 않은 참여 관계는 표시·검색·집계에서 제외한다.
 
 상세는 `{song, representativeVideo, searchHelp, relatedSongs}`다. representativeVideo는 `{id, youtubeId, kind, url, embeddable}`이며 재생이 안 되는 공개 영상도 원본 링크를 제공한다. searchHelp는 `{visibility, recommendedQuery, checkedAt}`다. 관련곡은 같은 작품의 다른 커버 또는 확인된 참여 멤버를 공유하는 다른 곡 중 최신 최대 6개다.
+
+## 메인 랜덤 추천
+
+2026-10-03 추가. GET `/api/v1/songs/recommendations?size=6`는 로그인 없이 호출한다. `size`는 1~20, 기본 6이며 응답은 `{ "items": [...] }`다. items에는 위 곡 카드와 같은 필드를 반환한다. 커서·개인화·추가 환경 설정은 없다.
+
+검색 목록과 같은 공개 조건을 만족하는 전체 곡에서 선택한다. 최신 페이지나 조회수 순위로 후보를 제한하지 않으며 오리지널·커버·공동 참여곡·졸업 멤버의 곡을 포함한다. 결과 내 곡 ID는 중복되지 않는다. 후보가 요청 개수보다 적으면 있는 곡만, 공개 곡이 없으면 빈 items를 200으로 반환한다.
+
+후보 순서를 무작위로 섞고, 이미 선택된 곡에서 확정된 멤버들이 등장한 횟수의 합이 가장 적은 곡부터 선택한다. 동점은 섞인 순서로 해소하고 최종 카드 순서도 섞는다. 공동 참여곡은 확정된 모든 스텔라이브 멤버를 반영하며 외부 가수와 미확정 관계는 반복 계산에 넣지 않는다. 멤버 다양성이 부족해도 다른 곡으로 요청 개수를 채운다. 같은 멤버 반복을 줄이는 방식이므로 모든 곡의 선택 확률이 같거나 멤버당 한 곡이 보장되는 것은 아니다. 별도 요청 사이에는 같은 곡이 다시 나올 수 있다.
+
+후보 조회·선택된 카드·확정 참여자·완료된 조회수 게시본을 같은 REPEATABLE_READ 트랜잭션에서 읽는다. 미수집 조회수는 null, 실제 0은 0을 유지한다. YouTube API 호출이나 DB 쓰기는 하지 않는다. 잘못된 size는 400 `INVALID_CATALOG_QUERY`다.
+
+현재 MVP 규모에서는 전체 후보의 곡 ID·확정 멤버 ID만 읽고, 선택된 곡의 카드와 관계를 일괄 조회한다. 후보 읽기와 메모리 사용은 전체 공개 곡 수에 비례한다. 카탈로그 확대 시 부하 측정에 따라 선택 방식을 조정한다.
+
+역할이 분리된 PostgreSQL 통합 테스트로 비로그인 조회, 공개 조건, 중복 방지, 졸업 멤버·오리지널·공동 참여, 미확정 참여자 제외, 오래된 곡 포함, 후보 부족과 size 오류를 검증한다. 조회수 게시본·0/null과 기존 카드 형식을 유지한다. 1,000곡을 추가한 테스트에서 추천 6곡·20곡 모두 SELECT 5회였으며 곡별 관계 조회는 추가되지 않았다.
+
+```sh
+./gradlew test --tests '*SongRecommendationsTest' integrationTest --tests '*PublicCatalogIntegrationTest' --no-daemon
+```
 
 ## 멤버 조회
 
