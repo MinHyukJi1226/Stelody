@@ -24,7 +24,8 @@ public final class CollectionDtos {
       long skippedCount,
       long pendingCount,
       int pages,
-      int candidates) {}
+      int candidates,
+      String ruleVersion) {}
 
   public record Page(List<Run> items, int page, int size, boolean hasNext) {}
 

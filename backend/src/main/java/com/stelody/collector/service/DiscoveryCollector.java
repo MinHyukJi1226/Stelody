@@ -7,6 +7,7 @@ import com.stelody.collector.domain.CollectionFailure;
 import com.stelody.collector.domain.DiscoveryRules;
 import com.stelody.collector.domain.VideoObservation;
 import com.stelody.collector.repository.CollectionRepository;
+import com.stelody.collector.repository.CollectionRuleStore;
 import com.stelody.collector.repository.DiscoveryRepository;
 import com.stelody.collector.youtube.YouTubeUploadsClient;
 import com.stelody.collector.youtube.YouTubeVideoClient;
@@ -18,6 +19,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 import javax.sql.DataSource;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import tools.jackson.databind.ObjectMapper;
 
 public final class DiscoveryCollector {
   private final DataSource source;
@@ -27,7 +30,6 @@ public final class DiscoveryCollector {
   private final DiscoveryRepository repository;
   private final YouTubeUploadsClient uploads;
   private final YouTubeVideoClient videos;
-  private final DiscoveryRules rules = new DiscoveryRules();
 
   public DiscoveryCollector(
       DataSource source,
@@ -72,6 +74,15 @@ public final class DiscoveryCollector {
         run = repository.begin(token, options.channelId(), options.backfill(), clock.instant());
         started.accept(run);
         try {
+          // Freeze one configuration for this entire run, even if an administrator edits it.
+          // Classification-disabled deployments do not require the new collector read grant.
+          var rules =
+              options.classificationAllowed()
+                  ? new CollectionRuleStore(JdbcClient.create(source), new ObjectMapper())
+                      .current()
+                      .rules()
+                  : new DiscoveryRules();
+          repository.ruleVersion(token, run, rules.version());
           repository.cleanup(token, clock.instant());
           for (var channel : channels) {
             budget.remaining();
@@ -127,7 +138,7 @@ public final class DiscoveryCollector {
                       channel,
                       state,
                       observations,
-                      decisions(observations),
+                      decisions(observations, rules),
                       head,
                       response.nextToken(),
                       complete,
@@ -144,7 +155,7 @@ public final class DiscoveryCollector {
                 var observations = videos.fetch(deferred, budget);
                 budget.remaining();
                 repository.refresh(
-                    token, channel, observations, decisions(observations), clock.instant());
+                    token, channel, observations, decisions(observations, rules), clock.instant());
               }
             }
           }
@@ -170,7 +181,8 @@ public final class DiscoveryCollector {
     }
   }
 
-  private Map<String, DiscoveryRules.Decision> decisions(Map<String, VideoObservation> values) {
+  private Map<String, DiscoveryRules.Decision> decisions(
+      Map<String, VideoObservation> values, DiscoveryRules rules) {
     var result = new HashMap<String, DiscoveryRules.Decision>();
     values.forEach(
         (id, value) -> result.put(id, rules.decide(value, options.classificationAllowed())));

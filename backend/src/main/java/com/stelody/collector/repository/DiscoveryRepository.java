@@ -68,6 +68,18 @@ public final class DiscoveryRepository {
         });
   }
 
+  public void ruleVersion(UUID token, UUID run, String version) {
+    transactions.executeWithoutResult(
+        status -> {
+          fence(token);
+          jdbc.sql(
+                  "UPDATE app.discovery_run SET rule_version=:version WHERE id=:id AND status='RUNNING'")
+              .param("version", version)
+              .param("id", run)
+              .update();
+        });
+  }
+
   public State state(UUID token, Channel channel, String uploads) {
     return transactions.execute(
         status -> {

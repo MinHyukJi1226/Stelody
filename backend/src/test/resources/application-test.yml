@@ -6,3 +6,7 @@ spring:
   datasource:
     hikari:
       maximum-pool-size: 2
+
+stelody:
+  special-review:
+    scan-delay-ms: 86400000

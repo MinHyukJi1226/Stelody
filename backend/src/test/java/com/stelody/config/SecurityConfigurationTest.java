@@ -59,6 +59,12 @@ class SecurityConfigurationTest {
   @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.collection.service.CollectionOperations collectionOperations;
 
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.admin.service.CollectionRuleService collectionRules;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.admin.service.SpecialReviewService specialReviews;
+
   @Test
   void missingGoogleConfigurationIsReportedWithoutFakeLogin() throws Exception {
     mvc.perform(get("/api/v1/auth/google"))
@@ -84,7 +90,7 @@ class SecurityConfigurationTest {
 
   @Test
   void unimplementedRoutesRemainClosedEvenForAuthenticatedUsers() throws Exception {
-    mvc.perform(get("/api/v1/admin/collection-rules").with(user("admin").roles("ADMIN")))
+    mvc.perform(get("/api/v1/admin/unimplemented").with(user("admin").roles("ADMIN")))
         .andExpect(status().isForbidden());
   }
 
