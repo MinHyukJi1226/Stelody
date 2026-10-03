@@ -1,5 +1,6 @@
 package com.stelody.auth.web;
 
+import com.stelody.auth.domain.LoginReturn;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.auth.service.GoogleOidcUserService.LocalOidcUser;
 import com.stelody.auth.service.ReauthenticationService;
@@ -13,6 +14,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.TransactionException;
@@ -59,8 +61,10 @@ public class LoginHandlers {
       response.sendRedirect("/api/v1/me/withdrawal-confirmation");
       return;
     }
-    // Fixed same-origin destination: request parameters cannot create an open redirect.
-    response.sendRedirect("/api/v1/me");
+    response.setHeader("Cache-Control", "no-store");
+    response.setHeader("Referrer-Policy", "no-referrer");
+    var target = (LoginReturn) request.getAttribute(LoginReturn.ATTRIBUTE);
+    response.sendRedirect(target == null ? "/api/v1/me" : target.location("success"));
   }
 
   public void failure(
@@ -69,6 +73,18 @@ public class LoginHandlers {
     // A public callback failure must not destroy an existing authenticated session.
     // Spring removes the matching pending authorization request during callback processing.
     SecurityContextHolder.clearContext();
+    response.setHeader("Referrer-Policy", "no-referrer");
+    var target = (LoginReturn) request.getAttribute(LoginReturn.ATTRIBUTE);
+    if (target != null) {
+      String result =
+          exception instanceof OAuth2AuthenticationException oauth
+                  && oauth.getError().getErrorCode().equals("access_denied")
+              ? "cancelled"
+              : "failed";
+      response.setHeader("Cache-Control", "no-store");
+      response.sendRedirect(target.location(result));
+      return;
+    }
     problems.write(request, response, 401, "GOOGLE_LOGIN_FAILED", "Google 로그인을 완료하지 못했습니다");
   }
 }

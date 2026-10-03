@@ -76,7 +76,7 @@ SPRING_PROFILES_ACTIVE=local,google
 
 | 메서드·경로 | 동작 |
 |---|---|
-| GET `/api/v1/auth/google` | Google 로그인 시작; 브라우저 페이지 이동으로 호출 |
+| GET `/api/v1/auth/google` | Google 로그인 시작; 브라우저 페이지 이동으로 호출, 선택적으로 `returnTo` 전달 |
 | GET `/api/v1/auth/authorize/google` | Spring Security의 OAuth 인증 요청 생성 |
 | GET `/api/v1/auth/callback/google` | Google 콜백; 클라이언트가 직접 만들지 않음 |
 | GET `/api/v1/auth/csrf` | `{headerName, token}` 반환 |
@@ -86,7 +86,9 @@ SPRING_PROFILES_ACTIVE=local,google
 | GET `/api/v1/me/withdrawal-confirmation` | 현재 세션의 탈퇴 확인과 만료 시각 조회 |
 | DELETE `/api/v1/me` | 재인증 완료 후 5분 내 탈퇴 확정; CSRF 필요, 204 |
 
-브라우저에서 `http://localhost:8080/api/v1/auth/google`을 열면 로그인 후 `/api/v1/me`로 이동합니다. 아직 프론트 로그인 화면이 없어 JSON으로 결과를 확인합니다. 임의 returnTo/redirect 주소는 받지 않습니다. 원래 화면 복귀와 저장 의도 복원은 프론트 연동 때 추가합니다.
+브라우저에서 `http://localhost:8080/api/v1/auth/google`을 열면 로그인 후 `/api/v1/me`로 이동합니다. 원래 화면으로 돌아가려면 `returnTo`에 `/songs?q=cover#results` 같은 사이트 내부 경로를 URL 인코딩하여 전달합니다. 성공·동의 취소·인증 실패 시 저장된 경로에 각각 `loginResult=success`, `cancelled`, `failed`를 붙여 이동합니다. 프론트 화면은 별도 구현이므로 현재 검증은 리다이렉트와 인증 API 응답을 확인합니다.
+
+복귀 경로는 서버의 OAuth 요청에 저장하며 같은 브라우저·일치하는 `state`로 5분 안에 완료해야 합니다. 외부 주소·API 경로·인코딩 우회는 시작 단계에서 400으로 거부합니다. 잘못된 `state`·만료·재사용된 콜백은 복귀하지 않고 401을 반환합니다. 콜백의 `returnTo`는 무시합니다. 계약은 [로그인 복귀 API](../docs/login-return-api.md)를 참고하세요. 프론트는 `loginResult`만으로 로그인 여부를 판단하지 않고 `/api/v1/me`로 확인하며, 저장 의도를 보관·한 번 실행하는 동작은 프론트에서 구현합니다.
 
 로그인 전과 로그인·로그아웃 후에는 CSRF 토큰을 새로 받습니다. 변경 요청에 `X-CSRF-TOKEN` 헤더를 넣고, 로그아웃 성공 시 프론트의 개인 Query 캐시도 제거해야 합니다. 로그아웃은 Stelody 세션만 종료하며 Google 계정을 로그아웃하거나 동의를 철회하지 않습니다.
 

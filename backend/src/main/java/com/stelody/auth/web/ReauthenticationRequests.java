@@ -4,6 +4,7 @@ import com.stelody.auth.domain.*;
 import com.stelody.auth.service.ReauthenticationService;
 import com.stelody.export.service.YouTubeConnectionService;
 import jakarta.servlet.http.*;
+import java.time.Instant;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.client.web.*;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -31,6 +32,14 @@ public class ReauthenticationRequests
       OAuth2AuthorizationRequest authorization,
       HttpServletRequest request,
       HttpServletResponse response) {
+    var target = (LoginReturn) request.getAttribute(LoginReturn.ATTRIBUTE);
+    if (authorization != null
+        && target != null
+        && authorization.getAttribute(ReauthenticationContext.ATTRIBUTE) == null)
+      authorization =
+          OAuth2AuthorizationRequest.from(authorization)
+              .attributes(a -> a.put(LoginReturn.ATTRIBUTE, target))
+              .build();
     delegate.saveAuthorizationRequest(authorization, request, response);
   }
 
@@ -52,6 +61,13 @@ public class ReauthenticationRequests
         throw new OAuth2AuthenticationException("invalid_reauthentication");
       reauthentication.consume(context, authorization.getState());
       request.setAttribute(ReauthenticationContext.ATTRIBUTE, context);
+    } else {
+      LoginReturn target = authorization.getAttribute(LoginReturn.ATTRIBUTE);
+      if (target != null) {
+        if (!Instant.now().isBefore(target.expiresAt()))
+          throw new OAuth2AuthenticationException("login_return_expired");
+        request.setAttribute(LoginReturn.ATTRIBUTE, target);
+      }
     }
     return authorization;
   }

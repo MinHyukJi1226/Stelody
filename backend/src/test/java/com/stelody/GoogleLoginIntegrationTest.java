@@ -12,6 +12,7 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.stelody.auth.domain.LoginReturn;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.user.service.AccountService;
 import java.net.CookieManager;
@@ -45,6 +46,7 @@ import org.springframework.security.config.oauth2.client.CommonOAuth2Provider;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
@@ -442,7 +444,11 @@ class GoogleLoginIntegrationTest {
   record Authorization(String state, String nonce) {}
 
   Authorization authorize(Browser browser) throws Exception {
-    var response = browser.get("/api/v1/auth/authorize/google");
+    return authorize(browser, "/api/v1/auth/authorize/google");
+  }
+
+  Authorization authorize(Browser browser, String path) throws Exception {
+    var response = browser.get(path);
     assertThat(response.statusCode()).isEqualTo(302);
     var query =
         org.springframework.web.util.UriComponentsBuilder.fromUriString(
@@ -455,6 +461,7 @@ class GoogleLoginIntegrationTest {
     assertThat(query.getFirst("nonce")).isNotBlank();
     assertThat(query.getFirst("code_challenge")).isNotBlank();
     assertThat(query.getFirst("code_challenge_method")).isEqualTo("S256");
+    assertThat(query).doesNotContainKeys("returnTo", "loginResult");
     return new Authorization(query.getFirst("state"), query.getFirst("nonce"));
   }
 
@@ -510,6 +517,229 @@ class GoogleLoginIntegrationTest {
 
   HttpResponse<String> callback(Browser browser, Authorization auth) throws Exception {
     return browser.get("/api/v1/auth/callback/google?code=test-code&state=" + auth.state());
+  }
+
+  String returnQuery(String path) {
+    return "?returnTo=" + java.net.URLEncoder.encode(path, StandardCharsets.UTF_8);
+  }
+
+  @Test
+  void publicStartForwardsEncodedReturnPathAndSuccessPreservesFiltersAndRotatesSession()
+      throws Exception {
+    var browser = new Browser();
+    browser.csrf();
+    String cookie = browser.cookie();
+    String target = "/songs?q=%ED%95%9C%EA%B8%80&member=a&member=b#results";
+    var start = browser.get("/api/v1/auth/google" + returnQuery(target));
+    assertThat(start.statusCode()).isEqualTo(302);
+    assertThat(start.headers().firstValue("Cache-Control")).hasValue("no-store");
+    assertThat(start.headers().firstValue("Referrer-Policy")).hasValue("no-referrer");
+    String forwarded =
+        URI.create(start.headers().firstValue("Location").orElseThrow()).getRawQuery();
+    assertThat(URLDecoder.decode(forwarded.substring("returnTo=".length()), StandardCharsets.UTF_8))
+        .isEqualTo(target);
+    var auth = authorize(browser, "/api/v1/auth/authorize/google?" + forwarded);
+    tokens(auth, UUID.randomUUID().toString(), "return@example.invalid", "none");
+    var result =
+        browser.get(
+            "/api/v1/auth/callback/google?code=test-code&state="
+                + auth.state()
+                + "&returnTo=https://evil.example");
+    assertThat(result.statusCode()).isEqualTo(302);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue(
+            "http://localhost:"
+                + port
+                + "/songs?q=%ED%95%9C%EA%B8%80&member=a&member=b&loginResult=success#results");
+    assertThat(result.headers().firstValue("Referrer-Policy")).hasValue("no-referrer");
+    assertThat(browser.cookie()).isNotEqualTo(cookie);
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "https://evil.example",
+        "//evil.example",
+        "/\\evil.example",
+        "/%2f%2fevil.example",
+        "/%252fevil.example",
+        "/songs/../api/v1/auth/google",
+        "/api/v1/auth/google",
+        "/actuator/env",
+        ""
+      })
+  void bothLoginEntryPointsRejectUnsafeReturnWithoutCreatingSession(String target)
+      throws Exception {
+    for (String path : java.util.List.of("/api/v1/auth/google", "/api/v1/auth/authorize/google")) {
+      var browser = new Browser();
+      var result = browser.get(path + returnQuery(target));
+      assertThat(result.statusCode()).isEqualTo(400);
+      var problem = mapper.readTree(result.body());
+      assertThat(problem.get("code").asText()).isEqualTo("INVALID_LOGIN_RETURN");
+      assertThat(problem.get("title").asText()).isEqualTo("로그인 복귀 경로가 올바르지 않습니다");
+      assertThat(result.headers().firstValue("Location")).isEmpty();
+      assertThat(browser.cookies.getCookieStore().getCookies()).isEmpty();
+    }
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
+  @Test
+  void duplicateReturnPathsAreRejected() throws Exception {
+    var result =
+        new Browser().get("/api/v1/auth/authorize/google?returnTo=%2Fsongs&returnTo=%2Fmembers");
+    assertThat(result.statusCode()).isEqualTo(400);
+    assertThat(result.body()).contains("INVALID_LOGIN_RETURN");
+  }
+
+  @Test
+  void cancellationReturnsToSameScreenWithExplicitResultAndNoLogin() throws Exception {
+    var browser = new Browser();
+    var auth =
+        authorize(
+            browser,
+            "/api/v1/auth/authorize/google"
+                + returnQuery("/songs?q=cover&loginResult=success#results"));
+    var result =
+        browser.get("/api/v1/auth/callback/google?error=access_denied&state=" + auth.state());
+    assertThat(result.statusCode()).isEqualTo(302);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue("http://localhost:" + port + "/songs?q=cover&loginResult=cancelled#results");
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
+  @Test
+  void invalidIdentityReturnsFailureWithoutCreatingAccount() throws Exception {
+    var browser = new Browser();
+    var auth = authorize(browser, "/api/v1/auth/authorize/google" + returnQuery("/songs?q=cover"));
+    String subject = UUID.randomUUID().toString();
+    tokens(auth, subject, "failed-return@example.invalid", "nonce");
+    var result = callback(browser, auth);
+    assertThat(result.statusCode()).isEqualTo(302);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue("http://localhost:" + port + "/songs?q=cover&loginResult=failed");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.app_user WHERE google_subject=?", Integer.class, subject))
+        .isZero();
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(401);
+  }
+
+  @Test
+  void unknownStateCannotRedirectOrConsumeNewestReturnAndCallbackCannotOverrideIt()
+      throws Exception {
+    var browser = new Browser();
+    var old = authorize(browser, "/api/v1/auth/authorize/google" + returnQuery("/songs"));
+    var current =
+        authorize(browser, "/api/v1/auth/authorize/google" + returnQuery("/members?q=rin"));
+    for (Authorization wrong : java.util.List.of(old, new Authorization("unknown", "unused"))) {
+      var result =
+          browser.get(
+              "/api/v1/auth/callback/google?error=access_denied&state="
+                  + wrong.state()
+                  + "&returnTo=%2Fsongs");
+      assertThat(result.statusCode()).isEqualTo(401);
+      assertThat(result.headers().firstValue("Location")).isEmpty();
+    }
+    var otherBrowser = new Browser();
+    assertThat(callback(otherBrowser, current).statusCode()).isEqualTo(401);
+    var result =
+        browser.get(
+            "/api/v1/auth/callback/google?error=access_denied&state="
+                + current.state()
+                + "&returnTo=https://evil.example");
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue("http://localhost:" + port + "/members?q=rin&loginResult=cancelled");
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
+  @Test
+  void cancelledReturnFlowPreservesExistingAccountAndSession() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "keep-return@example.invalid");
+    String original = browser.get("/api/v1/me").body(), cookie = browser.cookie();
+    var auth = authorize(browser, "/api/v1/auth/authorize/google" + returnQuery("/playlists"));
+    var result =
+        browser.get("/api/v1/auth/callback/google?error=access_denied&state=" + auth.state());
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue("http://localhost:" + port + "/playlists?loginResult=cancelled");
+    assertThat(browser.get("/api/v1/me").body()).isEqualTo(original);
+    assertThat(browser.cookie()).isEqualTo(cookie);
+  }
+
+  @Test
+  void expiredReturnStoredInJdbcSessionCannotExchangeTokensOrRedirect() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "return-expiry@example.invalid");
+    String original = browser.get("/api/v1/me").body();
+    String id = accountId(browser).toString();
+    var auth = authorize(browser, "/api/v1/auth/authorize/google" + returnQuery("/songs"));
+    expireLoginReturn(sessions, id);
+    google.resetRequests();
+    var result = callback(browser, auth);
+    assertThat(result.statusCode()).isEqualTo(401);
+    assertThat(result.headers().firstValue("Location")).isEmpty();
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+    assertThat(browser.get("/api/v1/me").body()).isEqualTo(original);
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    var fresh = authorize(browser);
+    result = browser.get("/api/v1/auth/callback/google?error=access_denied&state=" + fresh.state());
+    assertThat(result.statusCode()).isEqualTo(401);
+    assertThat(result.headers().firstValue("Location")).isEmpty();
+  }
+
+  private <S extends Session> void expireLoginReturn(
+      FindByIndexNameSessionRepository<S> repository, String id) {
+    var session = repository.findByPrincipalName(id).values().iterator().next();
+    String attribute =
+        session.getAttributeNames().stream()
+            .filter(name -> session.getAttribute(name) instanceof OAuth2AuthorizationRequest)
+            .findFirst()
+            .orElseThrow();
+    OAuth2AuthorizationRequest authorization = session.getAttribute(attribute);
+    LoginReturn target = authorization.getAttribute(LoginReturn.ATTRIBUTE);
+    session.setAttribute(
+        attribute,
+        OAuth2AuthorizationRequest.from(authorization)
+            .attributes(
+                a ->
+                    a.put(
+                        LoginReturn.ATTRIBUTE,
+                        new LoginReturn(target.path(), Instant.now().minusSeconds(1))))
+            .build());
+    repository.save(session);
+  }
+
+  @Test
+  void reauthenticationIgnoresPreviousReturnAndCallbackReturnWithoutExtendingLogin()
+      throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "return-reauth@example.invalid");
+    UUID id = accountId(browser);
+    SessionUser previous = sessionUser(id);
+    var old = authorize(browser, "/api/v1/auth/authorize/google" + returnQuery("/songs"));
+    var auth = reauthenticate(browser);
+    tokens(auth, subject, "return-reauth@example.invalid", "none");
+    var result =
+        browser.get(
+            "/api/v1/auth/callback/google?code=test-code&state="
+                + auth.state()
+                + "&returnTo=%2Fsongs");
+    assertThat(result.statusCode()).isEqualTo(302);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue("http://localhost:" + port + "/api/v1/me/withdrawal-confirmation");
+    assertThat(sessionUser(id)).isEqualTo(previous);
+    assertThat(
+            mapper
+                .readTree(browser.get("/api/v1/me/withdrawal-confirmation").body())
+                .get("reauthenticated")
+                .asBoolean())
+        .isTrue();
+    result = callback(browser, old);
+    assertThat(result.statusCode()).isEqualTo(401);
+    assertThat(result.headers().firstValue("Location")).isEmpty();
+    google.verify(2, postRequestedFor(urlEqualTo("/token")));
   }
 
   @Test
