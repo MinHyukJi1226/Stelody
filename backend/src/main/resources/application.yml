@@ -51,6 +51,9 @@ management:
       show-details: never
 
 stelody:
+  special-review:
+    enabled: ${SPECIAL_EVENT_REVIEW_ENABLED:false}
+    policy-allowed: ${SPECIAL_EVENT_POLICY_ALLOWED:false}
   collection:
     retry-enabled: ${COLLECTION_RETRY_ENABLED:false}
   export:

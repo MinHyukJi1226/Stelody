@@ -172,6 +172,8 @@ V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식
 
 V15 적용 후 스키마 소유자로 [운영 요청 수집 권한](../infra/sql/collection-operations-grants.sql)을 추가 적용하고 웹·수집 실행 환경 모두에 `COLLECTION_RETRY_ENABLED=true`를 설정합니다. 기본 비활성이며 GitHub Actions에서는 같은 이름의 저장소 Variable을 사용합니다. 응답·진행 조회·시간 기준·설정과 제한은 [수집 운영 API 계약](../docs/collection-operations-api.md)을 참고합니다.
 
-## 수집 분류 규칙 관리
+## 수집 분류 규칙·기념일 검토
 
 관리자는 분류 키워드를 샘플 미리보기로 확인하고 버전·변경 이력을 남겨 수정할 수 있습니다. 탐색기는 실행마다 규칙을 고정하고 후보·실행에 적용 버전을 기록합니다. V16 이후 제목 분류를 켜기 전에 스키마 소유자로 [규칙 읽기 권한](../infra/sql/collection-rule-grants.sql)을 추가 적용하세요. 기존 채널 허용 목록 관리 API를 그대로 사용합니다.
+
+기념일 후보는 대표 영상의 KST 공개일과 확정된 참여 멤버의 생일·데뷔일을 비교합니다. 관리자가 확인한 경우에만 자유 입력 라벨과 특별 목적 표시를 저장하며 확정·무시·해제는 재수집으로 복원하지 않습니다. V17 이후 `SPECIAL_EVENT_POLICY_ALLOWED`가 생성·확정·재검토를 허용하고, `SPECIAL_EVENT_REVIEW_ENABLED`까지 켜면 주기적으로 후보를 생성합니다. 기본은 모두 비활성이며 추가 Google 설정은 없습니다. [API 계약과 적용 순서](../docs/classification-management-api.md)를 참고하세요.

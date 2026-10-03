@@ -41,7 +41,7 @@ class ClassificationMigrationIntegrationTest {
         song);
     administrator.execute("DROP OWNED BY stelody_collector");
     administrator.execute("DROP ROLE stelody_collector");
-    assertThat(cfg.target("16").load().migrate().migrationsExecuted).isEqualTo(1);
+    assertThat(cfg.target("17").load().migrate().migrationsExecuted).isEqualTo(2);
     assertThat(cfg.load().migrate().migrationsExecuted).isZero();
     var web =
         new JdbcTemplate(
@@ -54,8 +54,20 @@ class ClassificationMigrationIntegrationTest {
             web.queryForObject(
                 "SELECT special_event_label FROM app.song_entry WHERE id=?", String.class, song))
         .isEqualTo("keep badge");
+    assertThat(web.queryForObject("SELECT count(*) FROM app.special_event_review", Integer.class))
+        .isZero();
     assertThat(web.queryForObject("SELECT version FROM app.collection_rule", Long.class)).isZero();
     web.execute("UPDATE app.collection_rule SET version=1");
+    assertThat(
+            web.queryForObject(
+                "SELECT has_column_privilege(current_user,'app.special_event_review','song_id','UPDATE')",
+                Boolean.class))
+        .isFalse();
+    assertThat(
+            web.queryForObject(
+                "SELECT has_table_privilege(current_user,'app.special_event_review','DELETE')",
+                Boolean.class))
+        .isFalse();
     assertThat(
             web.queryForObject(
                 "SELECT has_column_privilege(current_user,'app.video','source_title','UPDATE')",

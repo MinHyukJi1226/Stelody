@@ -85,6 +85,17 @@ public class SecurityConfiguration {
                     .hasRole("ADMIN")
                     .requestMatchers(
                         HttpMethod.GET,
+                        "/api/v1/admin/special-event-reviews",
+                        "/api/v1/admin/special-event-reviews/{id}",
+                        "/api/v1/admin/special-event-reviews/{id}/audit")
+                    .hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/special-event-reviews/{id}")
+                    .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.POST, "/api/v1/admin/songs/{id}/special-event-review")
+                    .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.GET,
                         "/api/v1/admin/collection-status",
                         "/api/v1/admin/collection-runs",
                         "/api/v1/admin/collection-runs/{kind}/{id}",
