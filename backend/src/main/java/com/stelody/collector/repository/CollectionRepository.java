@@ -173,6 +173,15 @@ public final class CollectionRepository {
             if (updated == 1 && value.viewCount() != null) {
               jdbc.sql(
                       """
+                  UPDATE app.video SET view_collection_started_at=:observedAt
+                  WHERE id=:id AND (view_collection_started_at IS NULL
+                    OR view_collection_started_at>:observedAt)
+                  """)
+                  .param("id", target.videoId())
+                  .param("observedAt", ts(observedAt))
+                  .update();
+              jdbc.sql(
+                      """
               INSERT INTO app.view_snapshot(video_id, logical_slot, observed_at, view_count)
               VALUES (:videoId, :slot, :observedAt, :views) ON CONFLICT DO NOTHING
               """)

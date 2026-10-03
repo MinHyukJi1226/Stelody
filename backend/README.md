@@ -157,3 +157,7 @@ V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식
 ## 관리자 카탈로그 편집
 
 멤버·원곡·곡 편집과 검토 후보 등록·공개 API는 [관리 API 계약](../docs/catalog-management-api.md)을 참고합니다. 모든 관리 API는 현재 ADMIN 세션과 변경 요청 CSRF 토큰을 요구합니다. V12는 카탈로그 편집 권한·링크·노래방·후보 등록 관계를 추가합니다.
+
+## 조회수 추이
+
+로그인 없이 `GET /api/v1/songs/{id}/views?days=7|30`로 대표 영상의 KST 일별 관측을 조회합니다. V13 적용 후 수집 실행 계정에 `infra/sql/statistics-collector-grants.sql`을 추가로 적용해야 합니다. 결측·대표 변경·보관·표시 상태는 [통계 API 계약](../docs/view-statistics-api.md)을 참고합니다.
