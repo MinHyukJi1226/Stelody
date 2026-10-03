@@ -11,4 +11,6 @@ FROM (
     ) observations GROUP BY video_id
 ) first WHERE v.id = first.video_id;
 
-GRANT SELECT ON app.daily_video_view TO "${runtimeRole}";
+CREATE INDEX view_snapshot_video_observed_idx
+    ON app.view_snapshot(video_id, observed_at DESC, logical_slot DESC);
+GRANT SELECT ON app.view_snapshot, app.daily_video_view TO "${runtimeRole}";

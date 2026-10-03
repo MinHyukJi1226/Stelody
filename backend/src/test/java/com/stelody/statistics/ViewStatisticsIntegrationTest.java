@@ -24,7 +24,11 @@ import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.*;
 
-@SpringBootTest
+@SpringBootTest(
+    properties = {
+      "stelody.statistics.trending-enabled=true",
+      "stelody.statistics.trending-policy-allowed=true"
+    })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
@@ -112,6 +116,15 @@ class ViewStatisticsIntegrationTest {
         "INSERT INTO app.published_video_view(publication_id,video_id,view_count,observed_at) VALUES(?,?,?,?)",
         PUBLICATION,
         id(1000 + n),
+        count,
+        Timestamp.from(observed));
+  }
+
+  void sample(int n, long count, Instant observed) {
+    writer.update(
+        "INSERT INTO app.view_snapshot(video_id,logical_slot,view_count,observed_at) VALUES(?,date_trunc('hour',?::timestamptz),?,?)",
+        id(1000 + n),
+        Timestamp.from(observed),
         count,
         Timestamp.from(observed));
   }
@@ -227,12 +240,110 @@ class ViewStatisticsIntegrationTest {
   }
 
   @Test
+  void trendingUsesCommonReferenceNearestEarlierSamplesAndDeterministicTies() throws Exception {
+    UUID first = song(1, "2020-01-01T00:00:00Z"),
+        second = song(2, "2021-01-01T00:00:00Z"),
+        third = song(3, "2021-01-01T00:00:00Z");
+    for (int n = 1; n <= 3; n++) {
+      latest(n, 200, NOW.minusSeconds(600));
+      sample(n, 100, NOW.minusSeconds(86400));
+      sample(n, 1, NOW.minusSeconds(90000));
+    }
+    var data = request("/api/v1/songs/trending");
+    assertThat(data.path("status").asText()).isEqualTo("READY");
+    assertThat(data.path("referenceAt").asText()).isEqualTo(NOW.toString());
+    assertThat(data.path("metricSource").asText()).isEqualTo("STELODY_VIEW_GROWTH");
+    assertThat(data.path("items").size()).isEqualTo(3);
+    assertThat(data.path("items").get(0).path("song").path("id").asText())
+        .isEqualTo(third.toString());
+    assertThat(data.path("items").get(1).path("song").path("id").asText())
+        .isEqualTo(second.toString());
+    assertThat(data.path("items").get(2).path("song").path("id").asText())
+        .isEqualTo(first.toString());
+    assertThat(data.path("items").get(0).path("increase").asLong()).isEqualTo(100);
+    assertThat(request("/api/v1/songs/trending?size=1").path("items").size()).isEqualTo(1);
+  }
+
+  @Test
+  void trendingIncludesOneHourBoundaryAndRejectsLateOldMissingZeroNegativeOrHiddenSamples()
+      throws Exception {
+    for (int n = 1; n <= 10; n++) song(n, "2020-01-01T00:00:00Z");
+    latest(1, 200, NOW.minusSeconds(3600));
+    sample(1, 100, NOW.minusSeconds(90000)); // inclusive
+    latest(2, 200, NOW.minusSeconds(3601));
+    sample(2, 100, NOW.minusSeconds(86400));
+    latest(3, 200, NOW.plusSeconds(1));
+    sample(3, 100, NOW.minusSeconds(86400));
+    latest(4, 200, NOW);
+    sample(4, 100, NOW.minusSeconds(90001));
+    latest(5, 200, NOW);
+    sample(5, 100, NOW.minusSeconds(86399));
+    latest(6, 200, NOW); // no baseline
+    latest(7, 100, NOW);
+    sample(7, 100, NOW.minusSeconds(86400));
+    latest(8, 90, NOW);
+    sample(8, 100, NOW.minusSeconds(86400));
+    latest(9, 999, NOW);
+    sample(9, 0, NOW.minusSeconds(86400));
+    writer.update("UPDATE app.song_entry SET visibility='HIDDEN' WHERE id=?", id(109));
+    sample(10, 0, NOW.minusSeconds(86400)); // no current count
+    var items = request("/api/v1/songs/trending").path("items");
+    assertThat(items.size()).isEqualTo(1);
+    assertThat(items.get(0).path("song").path("id").asText()).isEqualTo(id(101).toString());
+    assertThat(
+            writer.queryForObject(
+                "SELECT view_count FROM app.view_snapshot WHERE video_id=?", Long.class, id(1008)))
+        .isEqualTo(100);
+  }
+
+  @Test
+  void partialFailedCollectionDoesNotReplaceCompletedRanking() throws Exception {
+    song(1, "2020-01-01T00:00:00Z");
+    latest(1, 200, NOW.minusSeconds(100));
+    sample(1, 100, NOW.minusSeconds(86400));
+    sample(1, 999, NOW.minusSeconds(50));
+    writer.update(
+        "INSERT INTO app.collection_run(id,logical_slot,status,attempt,started_at) VALUES(?,date_trunc('hour',?::timestamptz)+interval '1 hour','FAILED',1,?)",
+        id(4),
+        Timestamp.from(NOW),
+        Timestamp.from(NOW));
+    assertThat(request("/api/v1/songs/trending").path("items").get(0).path("increase").asLong())
+        .isEqualTo(100);
+    writer.execute(
+        "UPDATE app.collection_run SET status='RUNNING' WHERE publication_id IS NOT NULL");
+    var data = request("/api/v1/songs/trending");
+    assertThat(data.path("status").asText()).isEqualTo("PENDING");
+    assertThat(data.path("items").size()).isZero();
+  }
+
+  @Test
+  void stalePublicationDoesNotServeRankingAndNoPublicationIsPending() throws Exception {
+    writer.update(
+        "UPDATE app.view_publication SET published_at=?", Timestamp.from(NOW.minusSeconds(3601)));
+    assertThat(request("/api/v1/songs/trending").path("status").asText()).isEqualTo("STALE");
+    writer.execute("UPDATE app.catalog_state SET view_publication_id=NULL");
+    assertThat(request("/api/v1/songs/trending").path("status").asText()).isEqualTo("PENDING");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "51", "text"})
+  void invalidRankingSizeIsBadRequest(String size) throws Exception {
+    mvc.perform(get("/api/v1/songs/trending").param("size", size))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void runtimeCanReadButCannotRewriteOrDeleteObservationsOrCollectionStart() {
     song(1, "2020-01-01T00:00:00Z");
     daily(1, "2026-10-04", 5, NOW);
+    sample(1, 5, NOW);
     assertThat(runtime.queryForObject("SELECT count(*) FROM app.daily_video_view", Long.class))
         .isEqualTo(1);
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.view_snapshot", Long.class))
+        .isEqualTo(1);
     assertThatThrownBy(() -> runtime.execute("UPDATE app.daily_video_view SET view_count=999"))
+        .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    assertThatThrownBy(() -> runtime.execute("DELETE FROM app.view_snapshot"))
         .isInstanceOf(org.springframework.dao.DataAccessException.class);
     assertThatThrownBy(
             () -> runtime.execute("UPDATE app.video SET view_collection_started_at=now()"))

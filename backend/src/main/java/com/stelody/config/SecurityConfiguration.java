@@ -56,6 +56,7 @@ public class SecurityConfiguration {
                         "/api/v1/auth/authorize/google",
                         "/api/v1/auth/callback/google",
                         "/api/v1/songs",
+                        "/api/v1/songs/trending",
                         "/api/v1/songs/{id}",
                         "/api/v1/songs/{id}/views",
                         "/api/v1/members",

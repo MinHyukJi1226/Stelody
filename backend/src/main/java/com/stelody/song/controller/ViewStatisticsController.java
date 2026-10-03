@@ -20,4 +20,9 @@ public class ViewStatisticsController {
       @PathVariable UUID id, @RequestParam(defaultValue = "7") int days) {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.views(id, days));
   }
+
+  @GetMapping("/api/v1/songs/trending")
+  public ResponseEntity<Trending> trending(@RequestParam(defaultValue = "20") int size) {
+    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.trending(size));
+  }
 }

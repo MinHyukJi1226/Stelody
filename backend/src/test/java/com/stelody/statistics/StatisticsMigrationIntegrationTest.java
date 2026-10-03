@@ -57,7 +57,7 @@ class StatisticsMigrationIntegrationTest {
         .isEqualTo("2026-10-01T01:00:00Z");
     assertThat(runtime.queryForObject("SELECT view_count FROM app.daily_video_view", Long.class))
         .isEqualTo(5);
-    assertThat(owner.queryForObject("SELECT view_count FROM app.view_snapshot", Long.class))
+    assertThat(runtime.queryForObject("SELECT view_count FROM app.view_snapshot", Long.class))
         .isEqualTo(9);
     assertThatThrownBy(
             () -> runtime.execute("UPDATE app.video SET view_collection_started_at=now()"))

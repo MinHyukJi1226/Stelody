@@ -1,5 +1,6 @@
 package com.stelody.statistics.dto;
 
+import com.stelody.song.dto.SongDtos;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -24,4 +25,22 @@ public final class StatisticsDtos {
       UUID publicationId,
       Instant publishedAt,
       List<Point> points) {}
+
+  public record RisingItem(
+      int rank,
+      SongDtos.Card song,
+      long increase,
+      long startViewCount,
+      long endViewCount,
+      Instant startObservedAt,
+      Instant endObservedAt) {}
+
+  public record Trending(
+      String status,
+      String metricSource,
+      int periodHours,
+      int toleranceMinutes,
+      UUID publicationId,
+      Instant referenceAt,
+      List<RisingItem> items) {}
 }
