@@ -4,6 +4,7 @@ import com.stelody.auth.service.GoogleOidcUserService;
 import com.stelody.auth.web.AccountSessionFilter;
 import com.stelody.auth.web.ApiProblems;
 import com.stelody.auth.web.LoginHandlers;
+import com.stelody.auth.web.ReauthenticationRequests;
 import com.stelody.user.service.AccountService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -42,6 +43,7 @@ public class SecurityConfiguration {
       AccountService accounts,
       LoginHandlers handlers,
       GoogleOidcUserService googleUsers,
+      ReauthenticationRequests reauthenticationRequests,
       ObjectProvider<ClientRegistrationRepository> clients,
       ObjectProvider<FindByIndexNameSessionRepository<?>> sessions)
       throws Exception {
@@ -66,8 +68,13 @@ public class SecurityConfiguration {
                     .requestMatchers(
                         HttpMethod.GET,
                         "/api/v1/me",
+                        "/api/v1/me/withdrawal-confirmation",
                         "/api/v1/me/favorites",
                         "/api/v1/me/favorites/{songId}")
+                    .authenticated()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/me/reauthentications")
+                    .authenticated()
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/me")
                     .authenticated()
                     .requestMatchers(
                         HttpMethod.GET, "/api/v1/admin/reviews", "/api/v1/admin/reviews/{id}")
@@ -219,7 +226,10 @@ public class SecurityConfiguration {
                   .authorizedClientRepository(new DiscardAuthorizedClients())
                   .loginPage("/api/v1/auth/google")
                   .authorizationEndpoint(
-                      endpoint -> endpoint.authorizationRequestResolver(resolver))
+                      endpoint ->
+                          endpoint
+                              .authorizationRequestResolver(resolver)
+                              .authorizationRequestRepository(reauthenticationRequests))
                   .redirectionEndpoint(endpoint -> endpoint.baseUri("/api/v1/auth/callback/*"))
                   .userInfoEndpoint(endpoint -> endpoint.oidcUserService(googleUsers))
                   .successHandler(handlers::success)

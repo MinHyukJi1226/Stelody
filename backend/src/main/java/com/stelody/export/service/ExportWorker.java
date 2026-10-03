@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ExportWorker {
-  private static final long LOCK = 2026100301L;
   private static final Logger LOG = LoggerFactory.getLogger(ExportWorker.class);
   private final DataSource source;
   private final ExportRepository store;
@@ -43,7 +42,7 @@ public class ExportWorker {
     if (!settings.enabled() && settings.key().isBlank()) return;
     try (var lockConnection = source.getConnection();
         var statement = lockConnection.prepareStatement("SELECT pg_try_advisory_lock(?)")) {
-      statement.setLong(1, LOCK);
+      statement.setLong(1, ExportRepository.PROCESS_LOCK);
       try (var result = statement.executeQuery()) {
         result.next();
         if (!result.getBoolean(1)) return;
@@ -92,7 +91,7 @@ public class ExportWorker {
         }
       } finally {
         try (var unlock = lockConnection.prepareStatement("SELECT pg_advisory_unlock(?)")) {
-          unlock.setLong(1, LOCK);
+          unlock.setLong(1, ExportRepository.PROCESS_LOCK);
           unlock.execute();
         }
       }

@@ -36,4 +36,13 @@ public class AccountService {
   public Optional<CurrentUser> find(UUID id) {
     return repository.find(id);
   }
+
+  @Transactional
+  public CurrentUser reauthenticate(UUID id, String subject) {
+    if (!repository.lockGoogleSubject(id).filter(expected -> expected.equals(subject)).isPresent())
+      throw new OAuth2AuthenticationException("reauthentication_account_mismatch");
+    return repository
+        .find(id)
+        .orElseThrow(() -> new OAuth2AuthenticationException("account_unavailable"));
+  }
 }

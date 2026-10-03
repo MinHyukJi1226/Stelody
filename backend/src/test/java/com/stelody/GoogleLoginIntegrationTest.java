@@ -151,6 +151,292 @@ class GoogleLoginIntegrationTest {
           .orElseThrow()
           .getValue();
     }
+
+    String csrf() throws Exception {
+      return mapper.readTree(get("/api/v1/auth/csrf").body()).get("token").asText();
+    }
+
+    HttpResponse<String> mutate(String method, String path, String csrf) throws Exception {
+      var request =
+          HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+              .method(method, HttpRequest.BodyPublishers.noBody());
+      if (csrf != null) request.header("X-CSRF-TOKEN", csrf);
+      return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+  }
+
+  JdbcTemplate owner() {
+    return new JdbcTemplate(
+        new org.springframework.jdbc.datasource.DriverManagerDataSource(
+            postgres.getJdbcUrl(), "stelody_migrator", "test-migrator"));
+  }
+
+  UUID accountId(Browser browser) throws Exception {
+    return UUID.fromString(mapper.readTree(browser.get("/api/v1/me").body()).get("id").asText());
+  }
+
+  Authorization reauthenticate(Browser browser) throws Exception {
+    var result = browser.mutate("POST", "/api/v1/me/reauthentications", browser.csrf());
+    assertThat(result.statusCode()).isEqualTo(200);
+    assertThat(result.headers().firstValue("Cache-Control")).hasValue("no-store");
+    var query =
+        org.springframework.web.util.UriComponentsBuilder.fromUriString(
+                mapper.readTree(result.body()).get("authorizationUrl").asText())
+            .build()
+            .getQueryParams();
+    assertThat(query.getFirst("prompt")).isEqualTo("select_account");
+    assertThat(URLDecoder.decode(query.getFirst("scope"), StandardCharsets.UTF_8))
+        .contains("openid", "email")
+        .doesNotContain("youtube", "offline");
+    assertThat(URLDecoder.decode(query.getFirst("redirect_uri"), StandardCharsets.UTF_8))
+        .isEqualTo("http://localhost:" + port + "/api/v1/auth/callback/google");
+    assertThat(query.getFirst("code_challenge_method")).isEqualTo("S256");
+    assertThat(query.getFirst("code_challenge")).isNotBlank();
+    return new Authorization(query.getFirst("state"), query.getFirst("nonce"));
+  }
+
+  SessionUser sessionUser(UUID id) {
+    SecurityContext context =
+        sessions
+            .findByPrincipalName(id.toString())
+            .values()
+            .iterator()
+            .next()
+            .getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+    return (SessionUser) context.getAuthentication().getPrincipal();
+  }
+
+  @Test
+  void recentLoginAloneCannotWithdrawAndReauthenticationRequiresCsrf() throws Exception {
+    var anonymous = new Browser();
+    assertThat(anonymous.get("/api/v1/me/withdrawal-confirmation").statusCode()).isEqualTo(401);
+    assertThat(
+            anonymous.mutate("POST", "/api/v1/me/reauthentications", anonymous.csrf()).statusCode())
+        .isEqualTo(401);
+    var browser = login(UUID.randomUUID().toString(), "reauth@example.invalid");
+    assertThat(browser.mutate("POST", "/api/v1/me/reauthentications", null).statusCode())
+        .isEqualTo(403);
+    assertThat(browser.mutate("DELETE", "/api/v1/me", null).statusCode()).isEqualTo(403);
+    var delete = browser.mutate("DELETE", "/api/v1/me", browser.csrf());
+    assertThat(delete.statusCode()).isEqualTo(409);
+    assertThat(delete.body()).contains("REAUTHENTICATION_REQUIRED");
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+  }
+
+  @Test
+  void sameGoogleAccountConfirmsForFiveMinutesWithoutExtendingLoginAndWithdrawsAllSessions()
+      throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "withdraw@example.invalid");
+    UUID id = accountId(browser);
+    SessionUser previous = sessionUser(id);
+    var other = login(subject, "withdraw@example.invalid");
+    String oldCookie = browser.cookie(), oldCsrf = browser.csrf();
+    var authorization = reauthenticate(browser);
+    tokens(authorization, subject, "changed@example.invalid", "none");
+    var result = callback(browser, authorization);
+    assertThat(result.statusCode()).isEqualTo(302);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue("http://localhost:" + port + "/api/v1/me/withdrawal-confirmation");
+    assertThat(browser.cookie()).isNotEqualTo(oldCookie);
+    assertThat(sessions.findByPrincipalName(id.toString()).values())
+        .allSatisfy(
+            session -> {
+              SecurityContext context =
+                  session.getAttribute(
+                      HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+              assertThat(context.getAuthentication().getPrincipal())
+                  .isInstanceOf(SessionUser.class);
+            });
+    assertThat(
+            sessions.findByPrincipalName(id.toString()).values().stream()
+                .anyMatch(
+                    s -> {
+                      SecurityContext context =
+                          s.getAttribute(
+                              HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+                      return previous.equals(context.getAuthentication().getPrincipal());
+                    }))
+        .isTrue();
+    assertThat(browser.get("/api/v1/me").body()).contains("withdraw@example.invalid");
+    var proof = mapper.readTree(browser.get("/api/v1/me/withdrawal-confirmation").body());
+    assertThat(proof.get("reauthenticated").asBoolean()).isTrue();
+    assertThat(Instant.parse(proof.get("expiresAt").asText()))
+        .isBetween(Instant.now().plusSeconds(290), Instant.now().plusSeconds(301));
+    assertThat(
+            mapper
+                .readTree(other.get("/api/v1/me/withdrawal-confirmation").body())
+                .get("reauthenticated")
+                .asBoolean())
+        .isFalse();
+    assertThat(other.mutate("DELETE", "/api/v1/me", other.csrf()).statusCode()).isEqualTo(409);
+    assertThat(browser.mutate("DELETE", "/api/v1/me", oldCsrf).statusCode()).isEqualTo(403);
+    var withdrawn = browser.mutate("DELETE", "/api/v1/me", browser.csrf());
+    assertThat(withdrawn.statusCode()).isEqualTo(204);
+    assertThat(withdrawn.headers().allValues("Set-Cookie"))
+        .anySatisfy(c -> assertThat(c).contains("SESSION=", "Max-Age=0"));
+    assertThat(sessions.findByPrincipalName(id.toString())).isEmpty();
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(other.get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(
+            jdbc.queryForObject("select count(*) from app.app_user where id=?", Integer.class, id))
+        .isZero();
+    assertThat(accountId(login(subject, "withdraw@example.invalid"))).isNotEqualTo(id);
+  }
+
+  @Test
+  void differentGoogleSubjectWithSameEmailDoesNotSwitchOrCreateAccount() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "same@example.invalid");
+    var original = browser.get("/api/v1/me").body();
+    var id = accountId(browser);
+    var previous = sessionUser(id);
+    var authorization = reauthenticate(browser);
+    String different = UUID.randomUUID().toString(), cookie = browser.cookie();
+    tokens(authorization, different, "same@example.invalid", "none");
+    assertThat(callback(browser, authorization).statusCode()).isEqualTo(401);
+    assertThat(browser.cookie()).isEqualTo(cookie);
+    assertThat(browser.get("/api/v1/me").body()).isEqualTo(original);
+    assertThat(sessionUser(id)).isEqualTo(previous);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from app.app_user where google_subject=?",
+                Integer.class,
+                different))
+        .isZero();
+    assertThat(browser.mutate("DELETE", "/api/v1/me", browser.csrf()).statusCode()).isEqualTo(409);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"issuer", "audience", "nonce", "expired", "signature", "unverified"})
+  void invalidReauthenticationNeverGrantsWithdrawal(String defect) throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "invalid-reauth@example.invalid");
+    String original = browser.get("/api/v1/me").body();
+    var auth = reauthenticate(browser);
+    tokens(auth, subject, "invalid-reauth@example.invalid", defect);
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+    assertThat(browser.get("/api/v1/me").body()).isEqualTo(original);
+    assertThat(browser.mutate("DELETE", "/api/v1/me", browser.csrf()).statusCode()).isEqualTo(409);
+  }
+
+  @Test
+  void expiredReauthenticationCannotExchangeTokensAndReplayCannotGrantAgain() throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "expired-reauth@example.invalid");
+    UUID id = accountId(browser);
+    var auth = reauthenticate(browser);
+    owner()
+        .update(
+            "update app.account_reauthentication set expires_at=clock_timestamp()-interval '1 second' where user_id=?",
+            id);
+    google.resetRequests();
+    tokens(auth, subject, "expired-reauth@example.invalid", "none");
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    auth = reauthenticate(browser);
+    tokens(auth, subject, "expired-reauth@example.invalid", "none");
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(302);
+    google.resetRequests();
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    owner()
+        .update(
+            "update app.account_reauthentication set expires_at=clock_timestamp()-interval '1 second' where user_id=?",
+            id);
+    assertThat(
+            mapper
+                .readTree(browser.get("/api/v1/me/withdrawal-confirmation").body())
+                .get("reauthenticated")
+                .asBoolean())
+        .isFalse();
+    assertThat(browser.mutate("DELETE", "/api/v1/me", browser.csrf()).statusCode()).isEqualTo(409);
+  }
+
+  @Test
+  void cancelledWrongStateOtherBrowserAndSupersededRequestsCannotConfirm() throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "state-reauth@example.invalid");
+    var other = login(subject, "state-reauth@example.invalid");
+    var old = reauthenticate(browser);
+    var current = reauthenticate(browser);
+    google.resetRequests();
+    assertThat(callback(browser, old).statusCode()).isEqualTo(401);
+    assertThat(callback(other, current).statusCode()).isEqualTo(401);
+    assertThat(browser.get("/api/v1/auth/callback/google?code=test-code&state=wrong").statusCode())
+        .isEqualTo(401);
+    assertThat(
+            browser
+                .get("/api/v1/auth/callback/google?error=access_denied&state=" + current.state())
+                .statusCode())
+        .isEqualTo(401);
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+    assertThat(browser.mutate("DELETE", "/api/v1/me", browser.csrf()).statusCode()).isEqualTo(409);
+  }
+
+  @Test
+  void concurrentCallbacksExchangeTokensOnlyOnce() throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "parallel-reauth@example.invalid");
+    var auth = reauthenticate(browser);
+    tokens(auth, subject, "parallel-reauth@example.invalid", "none");
+    google.resetRequests();
+    var first = CompletableFuture.supplyAsync(() -> callbackStatus(browser, auth));
+    var second = CompletableFuture.supplyAsync(() -> callbackStatus(browser, auth));
+    assertThat(java.util.List.of(first.join(), second.join())).containsExactlyInAnyOrder(302, 401);
+    google.verify(1, postRequestedFor(urlEqualTo("/token")));
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+  }
+
+  int callbackStatus(Browser browser, Authorization authorization) {
+    try {
+      return callback(browser, authorization).statusCode();
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  @Test
+  void confirmationStorageFailureRetainsOnlyLocalIdentityAndCannotGrantWithdrawal()
+      throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "storage-reauth@example.invalid");
+    UUID id = accountId(browser);
+    SessionUser previous = sessionUser(id);
+    var auth = reauthenticate(browser);
+    tokens(auth, subject, "storage-reauth@example.invalid", "none");
+    // Permit consuming PENDING, but fail only the final confirmation write.
+    owner()
+        .execute(
+            """
+        CREATE FUNCTION app.fail_confirmation() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN IF NEW.status='CONFIRMED' THEN RAISE EXCEPTION 'private-storage-detail'; END IF;
+        RETURN NEW; END $$
+        """);
+    owner()
+        .execute(
+            "CREATE TRIGGER fail_confirmation BEFORE UPDATE ON app.account_reauthentication FOR EACH ROW EXECUTE FUNCTION app.fail_confirmation()");
+    try {
+      var result = callback(browser, auth);
+      assertThat(result.statusCode()).isEqualTo(503);
+      assertThat(result.body())
+          .contains("ACCOUNT_STORAGE_UNAVAILABLE")
+          .doesNotContain("private-storage-detail");
+      assertThat(sessionUser(id)).isEqualTo(previous);
+      assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+      assertThat(browser.mutate("DELETE", "/api/v1/me", browser.csrf()).statusCode())
+          .isEqualTo(409);
+      assertThat(
+              jdbc.query(
+                  "select attribute_bytes from session.spring_session_attributes",
+                  (r, n) -> new String(r.getBytes(1), StandardCharsets.ISO_8859_1)))
+          .allSatisfy(
+              value ->
+                  assertThat(value).doesNotContain("test-google-access-token", "LocalOidcUser"));
+    } finally {
+      owner().execute("DROP TRIGGER fail_confirmation ON app.account_reauthentication");
+      owner().execute("DROP FUNCTION app.fail_confirmation()");
+    }
   }
 
   record Authorization(String state, String nonce) {}

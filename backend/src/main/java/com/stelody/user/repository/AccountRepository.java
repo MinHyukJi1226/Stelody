@@ -37,4 +37,12 @@ public class AccountRepository {
         .query(CurrentUser.class)
         .optional();
   }
+
+  public Optional<String> lockGoogleSubject(UUID id) {
+    return jdbc.sql(
+            "SELECT google_subject FROM app.app_user WHERE id=:id AND status='ACTIVE' FOR UPDATE")
+        .param("id", id)
+        .query(String.class)
+        .optional();
+  }
 }

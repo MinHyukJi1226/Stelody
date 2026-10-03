@@ -82,6 +82,9 @@ SPRING_PROFILES_ACTIVE=local,google
 | GET `/api/v1/auth/csrf` | `{headerName, token}` 반환 |
 | GET `/api/v1/me` | `{id, email, role, status}` 반환; 비로그인 401 |
 | POST `/api/v1/auth/logout` | CSRF 검증 후 세션·쿠키 제거, 204 |
+| POST `/api/v1/me/reauthentications` | CSRF 검증 후 같은 Google 계정 재인증 시작 |
+| GET `/api/v1/me/withdrawal-confirmation` | 현재 세션의 탈퇴 확인과 만료 시각 조회 |
+| DELETE `/api/v1/me` | 재인증 완료 후 5분 내 탈퇴 확정; CSRF 필요, 204 |
 
 브라우저에서 `http://localhost:8080/api/v1/auth/google`을 열면 로그인 후 `/api/v1/me`로 이동합니다. 아직 프론트 로그인 화면이 없어 JSON으로 결과를 확인합니다. 임의 returnTo/redirect 주소는 받지 않습니다. 원래 화면 복귀와 저장 의도 복원은 프론트 연동 때 추가합니다.
 
@@ -91,7 +94,9 @@ SPRING_PROFILES_ACTIVE=local,google
 
 Spring Security의 authorization code + PKCE, state·nonce와 ID 토큰 서명/발급자/대상/만료 검증을 사용합니다. 이메일 검증 여부가 확인된 Google 계정만 가입합니다. DB 역할은 기본 USER이며 Google의 임의 역할 claim으로 관리자 권한을 부여하지 않습니다. 세션 ID는 인증 성공 시 교체되고 JDBC 세션에는 내부 회원 ID와 로그인 시각을 저장합니다. Google access/refresh/ID 토큰을 세션에 보관하지 않습니다.
 
-idle 30분과 로그인 후 절대 12시간 만료를 적용하고, 인증 요청마다 DB 상태·역할을 확인합니다. 정지·삭제된 계정의 접근을 발견하면 해당 계정의 모든 JDBC 세션을 무효화합니다. 관리자 지정 명령·정지/탈퇴 API는 아직 제공하지 않습니다.
+idle 30분과 로그인 후 절대 12시간 만료를 적용하고, 인증 요청마다 DB 상태·역할을 확인합니다. 정지·삭제된 계정의 접근을 발견하면 해당 계정의 모든 JDBC 세션을 무효화합니다. 관리자 지정은 아래 운영용 명령으로 처리하며 정지 API는 아직 제공하지 않습니다.
+
+탈퇴는 같은 Google 계정 재인증 완료 후 5분 안에 확정합니다. V18이 확인 기록과 제한된 삭제 함수를 추가합니다. 기존 Google 클라이언트·콜백을 재사용하며 추가 환경 설정은 없습니다. 재인증 후 새 CSRF 토큰을 받아야 합니다. YouTube 권한 철회가 실패하면 계정을 유지하고 재시도를 안내합니다. 삭제·감사 익명화·오류 응답·검증 범위는 [회원 탈퇴 API](../docs/account-withdrawal-api.md)를 참고하세요.
 
 ```sh
 ./gradlew integrationTest --tests '*GoogleLoginIntegrationTest' --no-daemon

@@ -1,8 +1,11 @@
 package com.stelody.auth.service;
 
+import com.stelody.auth.domain.ReauthenticationContext;
 import com.stelody.user.dto.CurrentUser;
 import com.stelody.user.service.AccountService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
@@ -15,9 +18,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class GoogleOidcUserService extends OidcUserService {
   private final AccountService accounts;
+  private final ObjectProvider<HttpServletRequest> requests;
 
-  public GoogleOidcUserService(AccountService accounts) {
+  public GoogleOidcUserService(
+      AccountService accounts, ObjectProvider<HttpServletRequest> requests) {
     this.accounts = accounts;
+    this.requests = requests;
   }
 
   @Override
@@ -29,7 +35,14 @@ public class GoogleOidcUserService extends OidcUserService {
       throw new OAuth2AuthenticationException("invalid_identity");
     }
     try {
-      return new LocalOidcUser(google, accounts.signIn(google.getSubject(), google.getEmail()));
+      ReauthenticationContext context =
+          (ReauthenticationContext)
+              requests.getObject().getAttribute(ReauthenticationContext.ATTRIBUTE);
+      var account =
+          context == null
+              ? accounts.signIn(google.getSubject(), google.getEmail())
+              : accounts.reauthenticate(context.user().id(), google.getSubject());
+      return new LocalOidcUser(google, account, context);
     } catch (DataAccessException exception) {
       throw new OAuth2AuthenticationException("account_storage_unavailable");
     }
@@ -37,14 +50,20 @@ public class GoogleOidcUserService extends OidcUserService {
 
   public static class LocalOidcUser extends DefaultOidcUser {
     private final CurrentUser account;
+    private final ReauthenticationContext reauthentication;
 
-    LocalOidcUser(OidcUser google, CurrentUser account) {
+    LocalOidcUser(OidcUser google, CurrentUser account, ReauthenticationContext reauthentication) {
       super(List.of(new SimpleGrantedAuthority("ROLE_" + account.role())), google.getIdToken());
       this.account = account;
+      this.reauthentication = reauthentication;
     }
 
     public CurrentUser account() {
       return account;
+    }
+
+    public ReauthenticationContext reauthentication() {
+      return reauthentication;
     }
   }
 }
