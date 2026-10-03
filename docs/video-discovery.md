@@ -97,6 +97,8 @@ YouTube 원본은 마지막 관측 후 30일이 지나면 다음 탐색 실행�
 
 기존 workflow는 매시간 UTC `:17`에 등록 영상을 갱신한다. 짝수 UTC 시간에는 저장소 Variable `DISCOVERY_ENABLED=true`일 때 탐색도 실행한다. 수동 실행의 `discover=true`도 같은 Variable을 요구한다. `DISCOVERY_CLASSIFICATION_ALLOWED`는 별도 Variable이며 기본 비활성이다. 실제 GitHub 활성화·운영 DB 적용은 이번 로컬 검증과 별개다.
 
+탐색 상태·진행과 실패 후 수동 재시도 접수는 [수집 운영 API](collection-operations-api.md)를 사용한다. NEW와 BACKFILL을 구분해 기존 체크포인트에서 새 실행을 만들며, BACKFILL의 채널·과거 페이지 커서를 유지한다. V15와 추가 권한, 웹·수집 환경의 `COLLECTION_RETRY_ENABLED=true`가 필요하다. 요청은 다음 수집기 실행에서 처리하고 `DISCOVERY_ENABLED`·분류 허용 설정은 그대로 적용한다.
+
 ```sh
 ./gradlew test --tests '*DiscoveryRulesTest' --tests '*DiscoveryOptionsTest' --tests '*YouTubeUploadsClientTest' --no-daemon
 ./gradlew integrationTest --tests '*DiscoveryCollectorIntegrationTest' --tests '*DiscoveryMigrationIntegrationTest' --tests '*ReviewIntegrationTest' --no-daemon

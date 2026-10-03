@@ -92,6 +92,7 @@ jobs:
           COLLECTOR_DB_PASSWORD: ${{ secrets.COLLECTOR_DB_PASSWORD }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           SPRING_PROFILES_ACTIVE: prod
+          COLLECTION_RETRY_ENABLED: ${{ vars.COLLECTION_RETRY_ENABLED }}
           DISCOVERY_ENABLED: ${{ vars.DISCOVERY_ENABLED }}
           DISCOVERY_CLASSIFICATION_ALLOWED: ${{ vars.DISCOVERY_CLASSIFICATION_ALLOWED }}
           DISCOVER_THIS_RUN: ${{ vars.DISCOVERY_ENABLED == 'true' && (github.event.schedule == '17 */2 * * *' || inputs.discover == true) }}

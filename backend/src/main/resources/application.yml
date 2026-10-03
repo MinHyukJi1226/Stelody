@@ -51,6 +51,8 @@ management:
       show-details: never
 
 stelody:
+  collection:
+    retry-enabled: ${COLLECTION_RETRY_ENABLED:false}
   export:
     enabled: ${YOUTUBE_EXPORT_ENABLED:false}
     redirect-uri: ${YOUTUBE_EXPORT_REDIRECT_URI:}

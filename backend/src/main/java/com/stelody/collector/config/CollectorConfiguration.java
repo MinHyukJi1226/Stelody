@@ -1,6 +1,7 @@
 package com.stelody.collector.config;
 
 import com.stelody.collector.domain.CollectionBudget;
+import com.stelody.collector.service.CollectionRetryWorker;
 import com.stelody.collector.service.DiscoveryCollector;
 import com.stelody.collector.service.VideoCollector;
 import com.zaxxer.hikari.HikariConfig;
@@ -63,6 +64,26 @@ public class CollectorConfiguration {
         config.addDataSourceProperty("socketTimeout", "10");
         try (var source = new HikariDataSource(config)) {
           var budget = new CollectionBudget(settings.maxRuntime());
+          if (environment.getProperty("stelody.collection.retry-enabled", Boolean.class, false)) {
+            var retried =
+                new CollectionRetryWorker(
+                        source, settings, Clock.systemUTC(), duration -> Thread.sleep(duration))
+                    .collect(
+                        budget,
+                        environment.getProperty("DISCOVERY_ENABLED", Boolean.class, false),
+                        environment.getProperty(
+                            "DISCOVERY_CLASSIFICATION_ALLOWED", Boolean.class, false));
+            if (retried.isPresent()) {
+              var result = retried.get();
+              exitCode = result.exitCode();
+              LOG.info(
+                  "collector retry runId={} status={} code={}",
+                  result.runId(),
+                  result.status(),
+                  result.code());
+              return;
+            }
+          }
           var collector =
               new VideoCollector(
                   source, settings, Clock.systemUTC(), duration -> Thread.sleep(duration));
