@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import javax.sql.DataSource;
 
 public final class DiscoveryCollector {
@@ -48,17 +49,28 @@ public final class DiscoveryCollector {
   }
 
   public VideoCollector.Result collect(CollectionBudget budget) {
+    return collect(budget, false, id -> {});
+  }
+
+  VideoCollector.Result retry(CollectionBudget budget, Consumer<UUID> started) {
+    return collect(budget, true, started);
+  }
+
+  private VideoCollector.Result collect(
+      CollectionBudget budget, boolean lockHeld, Consumer<UUID> started) {
     if (!settings.enabled()) return new VideoCollector.Result(null, "SKIPPED_DISABLED", null);
     UUID token = UUID.randomUUID(), run = null;
     try {
       settings.validate();
       new CollectionRepository(source).checkPrivileges();
-      try (var lock = CollectionLock.acquire(source)) {
-        if (lock == null) return new VideoCollector.Result(null, "SKIPPED_LOCKED", null);
+      try (var lock = lockHeld ? null : CollectionLock.acquire(source)) {
+        if (!lockHeld && lock == null)
+          return new VideoCollector.Result(null, "SKIPPED_LOCKED", null);
         var channels = repository.channels(options.channelId());
         if (options.channelId() != null && channels.isEmpty())
           throw new CollectionFailure("CHANNEL_NOT_ALLOWED", false);
         run = repository.begin(token, options.channelId(), options.backfill(), clock.instant());
+        started.accept(run);
         try {
           repository.cleanup(token, clock.instant());
           for (var channel : channels) {

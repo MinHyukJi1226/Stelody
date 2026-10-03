@@ -8,6 +8,7 @@ import com.stelody.collector.youtube.YouTubeVideoClient;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.function.Consumer;
 import javax.sql.DataSource;
 
 public final class VideoCollector {
@@ -40,16 +41,26 @@ public final class VideoCollector {
   }
 
   public Result collect(CollectionBudget budget) {
+    return collect(budget, false, null, id -> {});
+  }
+
+  Result retry(CollectionBudget budget, UUID run, Consumer<UUID> started) {
+    return collect(budget, true, run, started);
+  }
+
+  private Result collect(
+      CollectionBudget budget, boolean lockHeld, UUID requestedRun, Consumer<UUID> started) {
     if (!settings.enabled()) return new Result(null, "SKIPPED_DISABLED", null);
     UUID token = UUID.randomUUID();
     CollectionRepository.Run run = null;
     try {
       settings.validate();
       repository.checkPrivileges();
-      try (var lock = CollectionLock.acquire(source)) {
-        if (lock == null) return new Result(null, "SKIPPED_LOCKED", null);
+      try (var lock = lockHeld ? null : CollectionLock.acquire(source)) {
+        if (!lockHeld && lock == null) return new Result(null, "SKIPPED_LOCKED", null);
         var now = clock.instant();
-        run = repository.begin(token, now.truncatedTo(ChronoUnit.HOURS), now);
+        run = repository.begin(token, now.truncatedTo(ChronoUnit.HOURS), now, requestedRun);
+        started.accept(run.id());
         repository.cleanup(token, now);
         if (run.completed()) return new Result(run.id(), "SKIPPED_COMPLETED", null);
         try {

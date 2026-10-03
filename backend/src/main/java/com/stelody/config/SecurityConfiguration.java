@@ -76,6 +76,16 @@ public class SecurityConfiguration {
                     .hasRole("ADMIN")
                     .requestMatchers(
                         HttpMethod.GET,
+                        "/api/v1/admin/collection-status",
+                        "/api/v1/admin/collection-runs",
+                        "/api/v1/admin/collection-runs/{kind}/{id}",
+                        "/api/v1/admin/collection-retries/{id}")
+                    .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.POST, "/api/v1/admin/collection-runs/{kind}/{id}/retries")
+                    .hasRole("ADMIN")
+                    .requestMatchers(
+                        HttpMethod.GET,
                         "/api/v1/admin/members",
                         "/api/v1/admin/members/{id}",
                         "/api/v1/admin/members/{id}/audit",

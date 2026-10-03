@@ -165,3 +165,9 @@ V9·V10 적용 후 [탐색 권한](../infra/sql/discovery-grants.sql)과 [공식
 ## YouTube 플레이리스트 내보내기
 
 기존 Google 로그인과 별도로 YouTube 추가 동의를 받아 새 비공개 재생목록으로 복사합니다. 이용 불가 곡은 제외하고 진행·제외·실패 결과를 확인하며 같은 작업을 재시도할 수 있습니다. 토큰은 AES-256-GCM으로 암호화하고 기본 활성화 설정은 false입니다. V14와 추가 콜백 주소·암호화 키·OAuth scope 설정, 엔드포인트 및 실제 계정 검증 절차는 [내보내기 API 문서](../docs/youtube-export-api.md)를 참고합니다.
+
+## 관리자 수집 운영
+
+등록 영상·탐색 실행의 최근 상태, 처리 수, 실패 이력과 3슬롯 이상 지연 경고를 관리자 API로 조회합니다. 실패 작업의 수동 재시도는 DB에 접수하고 다음 수집기 실행에서 처리합니다. 현재 ADMIN 세션과 변경 요청 CSRF 토큰이 필요합니다.
+
+V15 적용 후 스키마 소유자로 [운영 요청 수집 권한](../infra/sql/collection-operations-grants.sql)을 추가 적용하고 웹·수집 실행 환경 모두에 `COLLECTION_RETRY_ENABLED=true`를 설정합니다. 기본 비활성이며 GitHub Actions에서는 같은 이름의 저장소 Variable을 사용합니다. 응답·진행 조회·시간 기준·설정과 제한은 [수집 운영 API 계약](../docs/collection-operations-api.md)을 참고합니다.

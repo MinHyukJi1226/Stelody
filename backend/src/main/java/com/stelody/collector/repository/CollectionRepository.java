@@ -46,6 +46,10 @@ public final class CollectionRepository {
   }
 
   public Run begin(UUID token, Instant slot, Instant now) {
+    return begin(token, slot, now, null);
+  }
+
+  public Run begin(UUID token, Instant slot, Instant now, UUID requestedRun) {
     return transactions.execute(
         status -> {
           jdbc.sql("SET LOCAL statement_timeout = '10s'").update();
@@ -61,13 +65,26 @@ public final class CollectionRepository {
               .update();
           var previous =
               jdbc.sql(
-                      """
+                      requestedRun == null
+                          ? """
           SELECT id, logical_slot FROM app.collection_run
           WHERE status <> 'SUCCEEDED' AND logical_slot >= :oldest AND logical_slot <= :slot
           ORDER BY logical_slot LIMIT 1
+          """
+                          : """
+          SELECT id,logical_slot FROM app.collection_run WHERE id=:requested
+            AND status<>'SUCCEEDED' AND logical_slot>=:oldest AND logical_slot<=:slot
           """)
-                  .param("oldest", ts(now.minusSeconds(172800)))
-                  .param("slot", ts(slot))
+                  .params(
+                      requestedRun == null
+                          ? Map.of("oldest", ts(now.minusSeconds(172800)), "slot", ts(slot))
+                          : Map.of(
+                              "oldest",
+                              ts(now.minusSeconds(172800)),
+                              "slot",
+                              ts(slot),
+                              "requested",
+                              requestedRun))
                   .query(
                       (rs, n) ->
                           new Run(
@@ -85,6 +102,7 @@ public final class CollectionRepository {
                 .update();
             return run;
           }
+          if (requestedRun != null) throw new CollectionFailure("RETRY_RUN_CHANGED", false);
           var done =
               jdbc.sql("SELECT id, logical_slot FROM app.collection_run WHERE logical_slot = :slot")
                   .param("slot", ts(slot))

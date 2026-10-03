@@ -38,4 +38,11 @@ public final class CollectionLock implements AutoCloseable {
       connection.close();
     }
   }
+
+  public void check() throws SQLException {
+    try (var statement = connection.prepareStatement("SELECT 1")) {
+      statement.setQueryTimeout(5);
+      statement.executeQuery().close();
+    }
+  }
 }
