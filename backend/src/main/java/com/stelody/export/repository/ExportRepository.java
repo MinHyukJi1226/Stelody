@@ -87,7 +87,7 @@ public class ExportRepository {
     jdbc.sql(
             """
         INSERT INTO app.youtube_connection(user_id,generation,status) VALUES(:user,:gen,'DISCONNECTED')
-        ON CONFLICT(user_id) DO UPDATE SET generation=:gen
+        ON CONFLICT(user_id) DO UPDATE SET generation=:gen,updated_at=CURRENT_TIMESTAMP
         """)
         .param("user", user)
         .param("gen", generation)

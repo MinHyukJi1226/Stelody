@@ -372,6 +372,47 @@ class YouTubeExportIntegrationTest {
         .isZero();
   }
 
+  @Test
+  void reauthorizationSurvivesCleanupOfPreviouslyStaleConnection() throws Exception {
+    connected(U1);
+    owner.update(
+        "UPDATE app.youtube_connection SET updated_at=now()-interval '31 days' WHERE user_id=?",
+        U1);
+    Flow flow = flow(first);
+    UUID generation =
+        runtime.queryForObject(
+            "SELECT generation FROM app.youtube_connection WHERE user_id=?", UUID.class, U1);
+    token(
+        identity(
+            U1.toString(),
+            flow.nonce(),
+            "export-client",
+            "https://accounts.google.com",
+            Instant.now().plusSeconds(600)),
+        "openid email " + ExportSettings.SCOPE);
+
+    worker.tick();
+
+    assertThat(connections.status(U1).status()).isEqualTo("CONNECTED");
+    assertThat(
+            runtime.queryForObject(
+                "SELECT generation FROM app.youtube_connection WHERE user_id=?", UUID.class, U1))
+        .isEqualTo(generation);
+    provider.verify(0, postRequestedFor(urlEqualTo("/revoke")));
+    assertThat(
+            json(get(CALLBACK).param("state", flow.state()).param("code", "test-code"), first, 303)
+                .path("status")
+                .asText())
+        .isEqualTo("CONNECTED");
+    String encrypted =
+        runtime.queryForObject(
+            "SELECT refresh_token FROM app.youtube_connection WHERE user_id=?", String.class, U1);
+    assertThat(cipher.decrypt(U1, "refresh", encrypted)).isEqualTo("issued-refresh");
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_authorization", Long.class))
+        .isZero();
+    provider.verify(1, postRequestedFor(urlEqualTo("/token")));
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"subject", "nonce", "audience", "issuer", "expired", "scope"})
   void rejectsWrongIdentityAndPartialConsent(String fault) throws Exception {

@@ -111,4 +111,6 @@ WireMock의 서명된 모의 Google ID 토큰·토큰 API와 YouTube API, 역할
 
 보완 후 `GRADLE_USER_HOME=/tmp/stelody-gradle ./gradlew check bootJar --no-daemon`도 성공했다. 단위 90개·통합 241개, 총 331개가 실패·오류·건너뛴 테스트 없이 통과했다. IntelliJ의 기존 StelodyApplication 실행 설정으로 재실행하고 로컬 health 응답 HTTP 200 / UP을 확인했다.
 
+PR #11의 P2 리뷰를 반영해 재인증 시작 시 연결의 `updated_at`도 갱신한다. 31일 지난 연결에서 재인증을 시작하고 정리 작업을 실행하는 통합 테스트를 추가했다. 수정 전에는 예상 `CONNECTED`와 달리 `DISCONNECTED`가 되어 실패했다. 수정 후에는 연결 상태·인증 generation이 유지되고 철회 요청 없이 콜백이 성공해 새 암호화 토큰이 저장된다. 기존의 미사용 연결 정리와 정지 계정 철회 테스트도 통과했다. `GRADLE_USER_HOME=/tmp/stelody-gradle ./gradlew spotlessApply check bootJar --no-daemon` 성공, 단위 90개·통합 242개로 총 332개가 실패·오류·건너뛴 테스트 없이 통과했다. 이 재현에는 모의 OAuth API를 사용했으며 실제 Google 계정에서 31일 미사용 상황을 재현하지 않았다.
+
 공식 근거: [Google 서버 OAuth·점진적 권한 요청·갱신·철회](https://developers.google.com/identity/protocols/oauth2/web-server), [재생목록 조회](https://developers.google.com/youtube/v3/docs/playlists/list), [곡 목록 조회](https://developers.google.com/youtube/v3/docs/playlistItems/list).
