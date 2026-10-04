@@ -68,6 +68,7 @@ Spring Boot는 `.env`를 자동으로 읽지 않는다. IntelliJ 환경변수 �
 - 잠금을 얻지 못하면 `SKIPPED_LOCKED`로 종료한다.
 - 매 쓰기 트랜잭션은 DB의 소유 토큰도 확인한다. 잠금 연결이 끊겨 새 실행이 시작되면 이전 실행은 `LOCK_LOST`로 쓰기를 거절당한다.
 - API 호출 중에는 DB 트랜잭션을 열어두지 않는다. 각 배치 반영과 최종 게시는 별도의 짧은 트랜잭션이다.
+- 최대 50개 영상의 메타데이터·처리 결과·수집 시작 시각·시간별/일별 관측을 SQL별 JDBC 배치로 저장한다. 원격 DB와 영상마다 왕복하지 않으며, 기존 10초 트랜잭션 제한·소유 토큰·영상별 갱신 조건을 유지한다. 배치 도중 오류가 나면 해당 50개 전체를 롤백한다.
 - 동결 후 허용 채널이 비활성화되거나 관계가 바뀐 영상은 `SKIPPED`로 기록한다. 요청 채널과 응답 채널이 다르면 배치 전체를 반영하지 않는다.
 
 작업 상태는 `RUNNING`, `SUCCEEDED`, `FAILED`, `QUOTA_EXHAUSTED`, `TIMED_OUT`이다. 시도 횟수와 시작·종료 시각, 정규화된 오류 코드만 보관한다. 원문 API 오류·응답·키를 로그나 실패 테이블에 저장하지 않는다. 실패는 종료 코드 1이며 workflow도 실패한다. 비활성·중복·완료 재실행은 0이다.
@@ -98,6 +99,9 @@ Spring Boot는 `.env`를 자동으로 읽지 않는다. IntelliJ 환경변수 �
 - `COLLECTOR_DB_USERNAME`
 - `COLLECTOR_DB_PASSWORD`
 - `YOUTUBE_API_KEY`
+- `COLLECTOR_DB_CA_CERTIFICATE_BASE64`: 별도 CA 파일이 필요한 DB의 공개 인증서를 한 줄 base64로 인코딩한 값. Supabase에서는 필수이며 개인키가 아니다.
+
+Supabase Session pooler를 사용하면 JDBC URL에 `sslmode=verify-full&sslrootcert=/tmp/stelody-collector-db-ca.crt`를 지정한다. workflow는 수집 전에 인증서의 형식·만료를 검사하고 권한 600으로 해당 파일을 만든 뒤 종료 시 삭제한다. 인증서가 잘못되면 수집을 시작하지 않는다. 별도 CA 파일을 요구하지 않는 기존 연결은 인증서 Secret을 생략할 수 있다. Render 웹의 인증서 파일 경로와 수집 runner의 경로를 혼용하지 않는다.
 
 Backend CI를 통과한 최신 main 커밋을 선택하고 그 커밋의 실행 jar를 사용한다. CI가 성공한 main 빌드는 jar를 7일간 artifact로 보관한다. 이후 수집 실행은 같은 SHA의 cache·artifact를 재사용한다. artifact와 cache가 없으면 검증된 커밋을 한 번 빌드하여 외부 수집 전에 cache에 저장한다. 정기 실행에서 전체 테스트를 반복하지 않는다. 배포 DB에는 선택된 실행 파일의 V8 스키마가 먼저 적용되어 있어야 한다. 탐색 활성화 시에는 V9·V10 및 탐색 권한·채널 등록도 먼저 적용한다.
 
@@ -113,6 +117,8 @@ Backend CI를 통과한 최신 main 커밋을 선택하고 그 커밋의 실행 
 ```
 
 WireMock의 정상·누락·잘못된 응답·429·5xx·할당량·지연 응답과, PostgreSQL의 역할 분리·부분 실패 재개·중복 슬롯·잠금·소유 토큰·KST 일별 값·보관 정리·V7 업그레이드를 검증한다. 실제 YouTube 호출, 운영 DB 권한 적용, GitHub 예약 실행은 외부 설정 후 확인한다.
+
+2026-10-04에는 실제 Supabase의 360개 등록 영상 수집과 13채널 신규 탐색을 일회성으로 완료했다. 원격 DB 지연 수정·관측 결과·정기 실행 준비 상태는 [운영 적용 기록](production-catalog-20261004.md)에 있다. 일회성 성공과 GitHub 예약 실행 활성화는 별도로 확인한다.
 
 ## V13 통계 연동
 

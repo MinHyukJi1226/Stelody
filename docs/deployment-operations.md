@@ -99,7 +99,7 @@ Google에 운영 HTTPS 주소 두 개를 정확히 등록한다.
 기존 workflow는 매시간 UTC :17에 등록 영상을 관측하고, 짝수 UTC 시간에는 신규 영상 탐색을 함께 수행한다. 예약 실행은 지연될 수 있다.
 
 1. 운영 DB 마이그레이션·수집 권한·공식 채널을 준비한다.
-2. GitHub Secrets에 `COLLECTOR_DB_URL`, `COLLECTOR_DB_USERNAME`, `COLLECTOR_DB_PASSWORD`, `YOUTUBE_API_KEY`를 저장한다. 이 단계에서 로컬 비밀값을 출력하거나 대신 업로드하지 않는다.
+2. GitHub Secrets에 `COLLECTOR_DB_URL`, `COLLECTOR_DB_USERNAME`, `COLLECTOR_DB_PASSWORD`, `YOUTUBE_API_KEY`를 저장한다. Supabase는 공개 CA의 `COLLECTOR_DB_CA_CERTIFICATE_BASE64`도 저장하고 JDBC URL에 `sslrootcert=/tmp/stelody-collector-db-ca.crt`를 지정한다. 웹·관리자·마이그레이션 자격 증명은 전달하지 않는다. 비밀값을 로그나 채팅에 출력하지 않으며 대리 등록은 대상과 전달할 값을 명시적으로 승인받은 뒤 진행한다.
 3. `COLLECTOR_ENABLED=true`를 설정하고 수동 실행 한 번으로 완료·공개 조회수·최종 성공 시각을 확인한다.
 4. 신규 탐색은 `DISCOVERY_ENABLED=true`, 합의한 분류는 `DISCOVERY_CLASSIFICATION_ALLOWED=true`를 별도로 적용해 수동 시험한다.
 5. 수동 재시도는 웹·수집 양쪽 `COLLECTION_RETRY_ENABLED=true`를 설정한다.

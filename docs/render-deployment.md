@@ -61,7 +61,7 @@ docker build --platform linux/amd64 -f backend/Dockerfile.render -t stelody:rend
 
 운영 env와 CA는 이미지 빌드에 넣지 않는다. 초기 기동에는 웹·마이그레이션 두 계정이 필요하다. 마이그레이션 자격 증명을 웹에서 제거하려면 V19 검증 후 `SPRING_FLYWAY_ENABLED=false`를 설정하고 migration 이름·비밀번호를 제거하여 재기동한다. 다음 스키마 변경 때에는 마이그레이션을 다시 수행하는 절차가 필요하다.
 
-이번 프로젝트의 Supabase에는 로컬 배포 시험으로 V19와 수집·운영 역할 권한을 적용했다. 비공개 `backend/.env.render.local`은 `SPRING_FLYWAY_ENABLED=false`인 웹 계정 전용 파일이며, 초기 마이그레이션 설정은 별도 비공개 파일에 보관했다. 설정 예시는 신규 DB에 대한 초기 기동용이므로 기존 프로젝트에 그대로 덮어쓰지 않는다. 운영 DB의 카탈로그는 아직 비어 있으며 로컬 곡·회원 자료를 자동으로 복사하지 않았다.
+이번 프로젝트의 Supabase에는 V19와 수집·운영 역할 권한을 적용했다. 비공개 `backend/.env.render.local`은 `SPRING_FLYWAY_ENABLED=false`인 웹 계정 전용 파일이며, 초기 마이그레이션 설정은 별도 비공개 파일에 보관했다. 설정 예시는 신규 DB에 대한 초기 기동용이므로 기존 프로젝트에 그대로 덮어쓰지 않는다. 2026-10-04에는 검수한 카탈로그 360곡·11명을 운영 DB에 이관했다. 회원·개인 목록·세션·OAuth 자료와 과거 조회수는 복사하지 않았다. [운영 적용 기록](production-catalog-20261004.md)을 참고한다.
 
 ## 4. 첫 배포 검증
 
@@ -81,7 +81,13 @@ Render가 표시한 실제 HTTPS 주소를 기록한 뒤 Google OAuth 클라이�
 - 실제 Supabase에 연결한 로컬 서버에서 공개 API 200, 개인·관리 API와 운영 문서 401, CSRF 누락 403, Google HTTPS 콜백과 Secure·HttpOnly·SameSite=Lax 쿠키를 확인했다.
 - Mac의 native arm64 컨테이너에서 512MB·0.1 CPU 제한과 마이그레이션 자격 증명 제거를 적용하여 재시험했다. 기본 연결 설정의 첫 TLS 연결 실패를 재현했으며, C1 컴파일과 초기 연결 재시도 설정으로 약 4분 만에 기동하고 health UP을 확인했다. 기동 후 메모리는 약 250MB였다. 실제 Render의 하드웨어·네트워크와 기동 시간은 다를 수 있다.
 - 보완 후 소스에서 amd64 이미지를 다시 빌드했다. 최종 이미지의 동일 jar·기동 스크립트를 native arm64 실행 환경에서 마이그레이션 설정을 포함해 확인했으며, 기존 V19의 검증과 health UP을 통과했다. 이 최종 확인은 512MB·1 CPU 조건이다.
-- Render의 실제 HTTPS 주소에서 로그인·콜백·최초 기동 시간은 첫 외부 배포 후 확인해야 한다. Mac에서 amd64를 에뮬레이션한 0.1 CPU 시험은 8분 안에 기동되지 않았으며 OOM은 없었다. 실제 Render 기동 성공으로 기록하지 않는다.
+- Mac에서 amd64를 에뮬레이션한 0.1 CPU 시험은 8분 안에 기동되지 않았으며 OOM은 없었다. 이 로컬 시험을 실제 Render 기동 성공으로 기록하지 않는다.
+
+## 실제 배포 확인 (2026-10-04)
+
+`428be5bf32336a16a85eb6cd8e3fd665a3f4f01b`를 Render에 배포했다. 실제 주소는 [stelody-backend.onrender.com](https://stelody-backend.onrender.com)이며 첫 배포가 Live로 완료됐다. Render 표시 배포 소요 시간은 약 3분 30초, 앱 로그의 Spring 기동 시간은 약 83.5초였다.
+
+운영 HTTPS에서 health UP·공개 API 200·개인/관리/문서 비로그인 401과 Google 로그인 콜백 주소를 확인했다. 사용자가 승인된 로그인 콜백을 등록하고 실제 로그인 후 `/api/v1/me`의 USER·ACTIVE 응답을 확인했다. YouTube 추가 동의·내보내기, 외부 백업·탈퇴 기록 확보, GitHub 예약 실행까지 완료한 것으로 기록하지 않는다.
 
 ## 공식 문서
 
