@@ -84,6 +84,19 @@ jobs:
         with:
           path: collector-artifact
           key: collector-executable-${{ steps.ci.outputs.sha }}
+      - name: Prepare database TLS certificate
+        env:
+          COLLECTOR_DB_CA_CERTIFICATE_BASE64: ${{ secrets.COLLECTOR_DB_CA_CERTIFICATE_BASE64 }}
+        run: |
+          if test -n "$COLLECTOR_DB_CA_CERTIFICATE_BASE64"; then
+            umask 077
+            ca_file=$(mktemp)
+            trap 'rm -f "$ca_file"' EXIT
+            printf '%s' "$COLLECTOR_DB_CA_CERTIFICATE_BASE64" | base64 --decode > "$ca_file"
+            openssl x509 -in "$ca_file" -noout -checkend 0
+            mv -f "$ca_file" /tmp/stelody-collector-db-ca.crt
+            trap - EXIT
+          fi
       - name: Collect registered videos
         env:
           COLLECTOR_ENABLED: 'true'
@@ -114,3 +127,6 @@ jobs:
           else
             timeout --signal=TERM 11m java -jar "$jar" --collector
           fi
+      - name: Remove database TLS certificate
+        if: always()
+        run: rm -f /tmp/stelody-collector-db-ca.crt

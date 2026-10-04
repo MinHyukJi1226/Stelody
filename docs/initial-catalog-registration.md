@@ -53,7 +53,7 @@
 
 확인 경로: `/api/v1/members?status=ALL&size=50`, `/api/v1/songs?size=50`, `/api/v1/songs?collaboration=true&size=50`, `/api/v1/songs?type=ORIGINAL&size=50`. `hasNext=true`인 경우 응답의 `nextCursor`로 다음 페이지를 조회한다.
 
-이번 변경은 등록 명세와 검수 기록이다. 백엔드 기능이나 프론트 화면을 추가하지 않았다. 작업용 등록 절차·검증 결과·백업은 로컬 임시 경로에 있으며, 운영 DB 적용 완료를 의미하지 않는다.
+이 최초 등록 작업은 등록 명세와 로컬 검수 기록이다. 백엔드 기능이나 프론트 화면을 추가하지 않았다. 이후 2026-10-04에 수행한 실제 Supabase 이관과 운영 API 검증은 [운영 적용 기록](production-catalog-20261004.md)에 별도로 기록한다.
 
 ## 추가 후보에 대한 사용자 검수 결정
 
