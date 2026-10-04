@@ -10,6 +10,8 @@ Supabase 프로젝트 생성 시 Data API와 새 테이블 자동 노출을 끈�
 
 Connect → Direct → **Session pooler**의 주소를 사용한다. 포트는 5432이며 Transaction pooler 6543은 세션 잠금이 필요한 수집·마이그레이션에 사용하지 않는다. Database → Settings의 SSL Configuration에서 CA 인증서를 받는다. 인증서와 서버 주소를 검사하는 `sslmode=verify-full`을 유지한다.
 
+연결 문자열에서 **프로젝트에 배정된 전체 호스트**를 복사한다. `aws-[INDEX]-[REGION].pooler.supabase.com`의 클러스터 번호는 지역만으로 알 수 없다. Singapore여도 `aws-0`으로 가정하지 않는다. 환경변수 예시의 `SESSION_POOLER_HOST`를 복사한 전체 호스트로 바꾸고, 사용자 이름의 `PROJECT_REF`도 같은 프로젝트 식별자로 바꾼다.
+
 신규 빈 프로젝트의 관리자 접속으로 `infra/deploy/prepare-supabase-roles.sql`을 실행한다. 앱 스키마나 같은 역할이 이미 있으면 멈춘다. 일반 서버용 역할 준비 SQL의 전역 PUBLIC 권한 철회는 관리형 DB 제공자의 다른 서비스에 영향을 줄 수 있어 Supabase용 절차에서는 수행하지 않는다. 제공자 역할·스키마·기본 권한은 유지하고 새 역할에 필요한 DB 권한만 부여한다.
 
 각 역할에 서로 다른 비밀번호를 대화형 `\password`로 설정하고 `ALTER ROLE <역할> LOGIN;`을 적용한다. 비밀번호를 SQL 파일·명령 인수·Git에 넣지 않는다. 웹에 관리자·collector·operator 자격 증명을 전달하지 않는다.
@@ -47,11 +49,11 @@ docker build --platform linux/amd64 -f backend/Dockerfile.render -t stelody:rend
 | Instance Type | Free, $0 |
 | Health Check Path | `/actuator/health` |
 
-`infra/deploy/render.env.example`의 필수 값을 준비한 뒤 Add from .env로 넣는다. 비공개 실제 설정 파일은 Git에서 제외하고 로컬 권한을 600으로 유지한다. 이 파일 전체·Render 환경변수 화면을 채팅이나 PR에 게시하지 않는다.
+`infra/deploy/render.env.example`의 `SESSION_POOLER_HOST`, `PROJECT_REF`와 비밀번호·인증서·Google 클라이언트 입력 표시를 모두 실제 값으로 바꾼 뒤 Add from .env로 넣는다. 비공개 실제 설정 파일은 Git에서 제외하고 로컬 권한을 600으로 유지한다. 이 파일 전체·Render 환경변수 화면을 채팅이나 PR에 게시하지 않는다.
 
 - 실행 프로필은 **`prod,google,render`**이다. render만 활성화해서 운영 쿠키·문서 차단을 빠뜨리지 않는다.
 - `PORT=10000`을 사용하고 앱은 Render에 전달된 PORT에 바인딩한다.
-- `DB_URL`에는 pooler 호스트·5432·DB 이름, `sslmode=verify-full&sslrootcert=/tmp/stelody-db-ca.crt`를 넣는다. 비밀번호는 URL에서 분리한다.
+- `DB_URL`에는 해당 프로젝트의 Connect → Session pooler에서 복사한 전체 호스트·5432·DB 이름, `sslmode=verify-full&sslrootcert=/tmp/stelody-db-ca.crt`를 넣는다. 비밀번호는 URL에서 분리한다.
 - `DB_CA_CERTIFICATE_BASE64`는 다운로드한 **공개 CA 인증서**를 한 줄 base64로 인코딩한 값이다. 개인키가 아니다. 기동 스크립트가 임시 파일을 권한 600으로 생성한 뒤 고정 경로에 교체한다. 재시작 시 인증서를 다시 적용하며 유효하지 않은 base64·필수 설정 누락은 기동을 실패시킨다.
 - Google 클라이언트 값은 호스팅의 환경변수에만 저장한다. 서버의 `RENDER_EXTERNAL_URL`을 Spring의 render 프로필에서 사용하여 배정된 실제 주소로 두 콜백을 구성한다. 환경변수 값의 문자열 치환을 Render에 맡기지 않는다.
 - 별도 도메인이 생기면 `GOOGLE_REDIRECT_URI`, `YOUTUBE_EXPORT_REDIRECT_URI`에 정확한 HTTPS 콜백을 명시해 기본값을 덮어쓸 수 있다.
