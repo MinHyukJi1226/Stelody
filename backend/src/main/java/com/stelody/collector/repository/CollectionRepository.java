@@ -6,11 +6,15 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.JdbcTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -21,10 +25,12 @@ public final class CollectionRepository {
   public record Target(UUID videoId, String youtubeId, String channelId) {}
 
   private final JdbcClient jdbc;
+  private final NamedParameterJdbcTemplate batches;
   private final TransactionTemplate transactions;
 
   public CollectionRepository(DataSource source) {
     jdbc = JdbcClient.create(source);
+    batches = new NamedParameterJdbcTemplate(source);
     transactions = new TransactionTemplate(new JdbcTransactionManager(source));
     transactions.setTimeout(10);
   }
@@ -162,69 +168,73 @@ public final class CollectionRepository {
                 || (value.channelId() != null && !target.channelId().equals(value.channelId())))
               throw new CollectionFailure("INVALID_RESPONSE", false);
           }
+          var parameters = new ArrayList<MapSqlParameterSource>();
           for (Target target : batch) {
             var value = observations.get(target.youtubeId());
-            int updated =
-                jdbc.sql(CollectionSql.UPDATE_VIDEO)
-                    .param("videoId", target.videoId())
-                    .param("youtubeId", target.youtubeId())
-                    .param("channelId", target.channelId())
-                    .param("availability", value.availability())
-                    .param("title", value.title())
-                    .param("publishedAt", ts(value.publishedAt()))
-                    .param("thumbnail", value.thumbnailUrl())
-                    .param("duration", value.durationSeconds())
-                    .param("embeddable", value.embeddable())
-                    .param("observedAt", ts(observedAt))
-                    .update();
-            jdbc.sql(
-                    """
+            parameters.add(
+                new MapSqlParameterSource()
+                    .addValue("videoId", target.videoId())
+                    .addValue("youtubeId", target.youtubeId())
+                    .addValue("channelId", target.channelId())
+                    .addValue("availability", value.availability())
+                    .addValue("title", value.title())
+                    .addValue("publishedAt", ts(value.publishedAt()))
+                    .addValue("thumbnail", value.thumbnailUrl())
+                    .addValue("duration", value.durationSeconds())
+                    .addValue("embeddable", value.embeddable())
+                    .addValue("observedAt", ts(observedAt))
+                    .addValue("views", value.viewCount())
+                    .addValue("runId", run.id())
+                    .addValue("slot", ts(run.slot()))
+                    .addValue("day", LocalDate.ofInstant(observedAt, ZoneId.of("Asia/Seoul"))));
+          }
+          // PostgreSQL pipelines each JDBC batch rather than waiting for every video's statement.
+          // Keep the same guarded transaction and the per-video eligibility/update count checks.
+          int[] updated = batchUpdate(CollectionSql.UPDATE_VIDEO, parameters);
+          var measured = new ArrayList<MapSqlParameterSource>();
+          for (int i = 0; i < parameters.size(); i++) {
+            if (updated[i] != 0 && updated[i] != 1)
+              throw new IllegalStateException("VIDEO_UPDATE_COUNT_UNKNOWN");
+            var parameter = parameters.get(i);
+            parameter.addValue("outcome", updated[i] == 1 ? "OBSERVED" : "SKIPPED");
+            if (updated[i] == 0) parameter.addValue("views", null);
+            if (parameter.getValue("views") != null) measured.add(parameter);
+          }
+          batchUpdate(
+              """
             UPDATE app.collection_target SET outcome = :outcome, observed_at = :observedAt,
               view_count = :views WHERE run_id = :runId AND video_id = :videoId AND outcome = 'PENDING'
-            """)
-                .param("outcome", updated == 1 ? "OBSERVED" : "SKIPPED")
-                .param("observedAt", ts(observedAt))
-                .param("views", updated == 1 ? value.viewCount() : null)
-                .param("runId", run.id())
-                .param("videoId", target.videoId())
-                .update();
-            if (updated == 1 && value.viewCount() != null) {
-              jdbc.sql(
-                      """
+            """,
+              parameters);
+          batchUpdate(
+              """
                   UPDATE app.video SET view_collection_started_at=:observedAt
-                  WHERE id=:id AND (view_collection_started_at IS NULL
+                  WHERE id=:videoId AND (view_collection_started_at IS NULL
                     OR view_collection_started_at>:observedAt)
-                  """)
-                  .param("id", target.videoId())
-                  .param("observedAt", ts(observedAt))
-                  .update();
-              jdbc.sql(
-                      """
+                  """,
+              measured);
+          batchUpdate(
+              """
               INSERT INTO app.view_snapshot(video_id, logical_slot, observed_at, view_count)
               VALUES (:videoId, :slot, :observedAt, :views) ON CONFLICT DO NOTHING
-              """)
-                  .param("videoId", target.videoId())
-                  .param("slot", ts(run.slot()))
-                  .param("observedAt", ts(observedAt))
-                  .param("views", value.viewCount())
-                  .update();
-              jdbc.sql(
-                      """
+              """,
+              measured);
+          batchUpdate(
+              """
               INSERT INTO app.daily_video_view(video_id, day, observed_at, view_count)
               VALUES (:videoId, :day, :observedAt, :views)
               ON CONFLICT (video_id, day) DO UPDATE SET observed_at = EXCLUDED.observed_at,
                 view_count = EXCLUDED.view_count
               WHERE app.daily_video_view.observed_at < EXCLUDED.observed_at
-              """)
-                  .param("videoId", target.videoId())
-                  .param("day", LocalDate.ofInstant(observedAt, ZoneId.of("Asia/Seoul")))
-                  .param("observedAt", ts(observedAt))
-                  .param("views", value.viewCount())
-                  .update();
-            }
-          }
+              """,
+              measured);
           return null;
         });
+  }
+
+  private int[] batchUpdate(String sql, List<MapSqlParameterSource> parameters) {
+    if (parameters.isEmpty()) return new int[0];
+    return batches.batchUpdate(sql, parameters.toArray(SqlParameterSource[]::new));
   }
 
   public void publish(UUID token, Run run, Instant now) {

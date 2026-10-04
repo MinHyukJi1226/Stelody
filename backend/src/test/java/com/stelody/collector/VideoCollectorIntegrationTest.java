@@ -34,6 +34,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DelegatingDataSource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.context.ActiveProfiles;
@@ -255,6 +256,90 @@ class VideoCollectorIntegrationTest {
     assertThat(collector(NOW.plusSeconds(300)).collect().status()).isEqualTo("SKIPPED_COMPLETED");
     assertThat(count("view_snapshot")).isEqualTo(2);
     server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
+  void fullBatchFitsTransactionBudgetWithRemoteDatabaseLatency() throws Exception {
+    seed(50);
+    var repo = new CollectionRepository(source);
+    UUID token = UUID.randomUUID();
+    var run = repo.begin(token, NOW.truncatedTo(java.time.temporal.ChronoUnit.HOURS), NOW);
+    var batch = repo.pending(run.id());
+    var observations = new java.util.HashMap<String, VideoObservation>();
+    for (int n = 1; n <= 50; n++)
+      observations.put(
+          youtube(n),
+          new VideoObservation(
+              youtube(n), CHANNEL, "PUBLIC", "fresh", NOW, null, 240L, true, 100L));
+    var delayed =
+        new DelegatingDataSource(source) {
+          @Override
+          public java.sql.Connection getConnection() throws java.sql.SQLException {
+            var connection = source.getConnection();
+            return (java.sql.Connection)
+                java.lang.reflect.Proxy.newProxyInstance(
+                    getClass().getClassLoader(),
+                    new Class<?>[] {java.sql.Connection.class},
+                    (proxy, method, args) -> {
+                      try {
+                        var result = method.invoke(connection, args);
+                        if (method.getName().equals("prepareStatement")) {
+                          return java.lang.reflect.Proxy.newProxyInstance(
+                              getClass().getClassLoader(),
+                              new Class<?>[] {java.sql.PreparedStatement.class},
+                              (statementProxy, statementMethod, statementArgs) -> {
+                                if (statementMethod.getName().startsWith("execute"))
+                                  Thread.sleep(200);
+                                try {
+                                  return statementMethod.invoke(result, statementArgs);
+                                } catch (java.lang.reflect.InvocationTargetException e) {
+                                  throw e.getCause();
+                                }
+                              });
+                        }
+                        return result;
+                      } catch (java.lang.reflect.InvocationTargetException e) {
+                        throw e.getCause();
+                      }
+                    });
+          }
+        };
+    new CollectionRepository(delayed).save(token, run, batch, observations, NOW);
+    repo.publish(token, run, NOW);
+    assertThat(count("view_snapshot")).isEqualTo(50);
+    assertThat(count("daily_video_view")).isEqualTo(50);
+    assertThat(writer.queryForObject("SELECT status FROM app.collection_run", String.class))
+        .isEqualTo("SUCCEEDED");
+  }
+
+  @Test
+  void databaseFailureLateInFullBatchRollsBackEveryObservationAndPreservesPublication() {
+    seed(50);
+    oldPublication();
+    success(numbers(1, 50), 100);
+    writer.execute(
+        "ALTER TABLE app.daily_video_view ADD CONSTRAINT collector_test_failure CHECK (video_id <> '"
+            + video(50)
+            + "')");
+    try {
+      var result = collector(NOW).collect();
+      assertThat(result.code()).isEqualTo("DATABASE_ERROR");
+      assertThat(publication()).isEqualTo(new UUID(3, 1));
+      assertThat(count("view_snapshot")).isZero();
+      assertThat(count("daily_video_view")).isZero();
+      assertThat(
+              writer.queryForObject(
+                  "SELECT count(*) FROM app.collection_target WHERE outcome = 'PENDING'",
+                  Long.class))
+          .isEqualTo(50);
+      assertThat(
+              writer.queryForObject(
+                  "SELECT count(*) FROM app.video WHERE source_title = 'previous source' AND view_collection_started_at IS NULL",
+                  Long.class))
+          .isEqualTo(50);
+    } finally {
+      writer.execute("ALTER TABLE app.daily_video_view DROP CONSTRAINT collector_test_failure");
+    }
   }
 
   @Test
