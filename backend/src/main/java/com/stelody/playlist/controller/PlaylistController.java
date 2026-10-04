@@ -4,6 +4,7 @@ import com.stelody.auth.domain.SessionUser;
 import com.stelody.playlist.dto.PlaylistDtos;
 import com.stelody.playlist.service.PlaylistItemService;
 import com.stelody.playlist.service.PlaylistService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -32,6 +33,7 @@ public class PlaylistController {
   }
 
   @PostMapping("/api/v1/me/playlists")
+  @Operation(summary = "개인 플레이리스트 생성")
   public ResponseEntity<PlaylistDtos.Summary> create(
       @AuthenticationPrincipal SessionUser user, @Valid @RequestBody PlaylistDtos.Create body) {
     var playlist = playlists.create(user.id(), body.name());
@@ -40,6 +42,7 @@ public class PlaylistController {
   }
 
   @GetMapping("/api/v1/me/playlists")
+  @Operation(summary = "개인 플레이리스트 목록")
   public PlaylistDtos.Page list(
       @AuthenticationPrincipal SessionUser user,
       @RequestParam(defaultValue = "20") int size,
@@ -48,12 +51,14 @@ public class PlaylistController {
   }
 
   @GetMapping("/api/v1/me/playlists/{id}")
+  @Operation(summary = "개인 플레이리스트 상세")
   public PlaylistDtos.Summary detail(
       @AuthenticationPrincipal SessionUser user, @PathVariable UUID id) {
     return playlists.detail(user.id(), id);
   }
 
   @PatchMapping("/api/v1/me/playlists/{id}")
+  @Operation(summary = "플레이리스트 이름 변경")
   public PlaylistDtos.Summary rename(
       @AuthenticationPrincipal SessionUser user,
       @PathVariable UUID id,
@@ -63,6 +68,7 @@ public class PlaylistController {
 
   @DeleteMapping("/api/v1/me/playlists/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(summary = "플레이리스트 삭제")
   public void delete(
       @AuthenticationPrincipal SessionUser user,
       @PathVariable UUID id,
@@ -71,6 +77,7 @@ public class PlaylistController {
   }
 
   @GetMapping("/api/v1/me/playlists/{id}/items")
+  @Operation(summary = "플레이리스트 곡 목록")
   public PlaylistDtos.Items items(
       @AuthenticationPrincipal SessionUser user,
       @PathVariable UUID id,
@@ -81,6 +88,7 @@ public class PlaylistController {
 
   @PostMapping("/api/v1/me/playlists/{id}/items")
   @ResponseStatus(HttpStatus.CREATED)
+  @Operation(summary = "플레이리스트에 곡 추가")
   public PlaylistDtos.Added add(
       @AuthenticationPrincipal SessionUser user,
       @PathVariable UUID id,
@@ -89,6 +97,7 @@ public class PlaylistController {
   }
 
   @DeleteMapping("/api/v1/me/playlists/{id}/items/{itemId}")
+  @Operation(summary = "플레이리스트에서 곡 제거")
   public PlaylistDtos.Summary remove(
       @AuthenticationPrincipal SessionUser user,
       @PathVariable UUID id,
@@ -98,6 +107,7 @@ public class PlaylistController {
   }
 
   @PutMapping("/api/v1/me/playlists/{id}/order")
+  @Operation(summary = "플레이리스트 곡 순서 변경")
   public PlaylistDtos.Summary reorder(
       @AuthenticationPrincipal SessionUser user,
       @PathVariable UUID id,

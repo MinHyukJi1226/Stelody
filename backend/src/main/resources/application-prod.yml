@@ -2,3 +2,8 @@ logging:
   structured:
     format:
       console: logstash
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

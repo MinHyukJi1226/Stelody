@@ -5,6 +5,8 @@ import com.stelody.auth.domain.SessionUser;
 import com.stelody.auth.web.ApiProblems;
 import com.stelody.user.dto.CurrentUser;
 import com.stelody.user.service.AccountService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -33,11 +35,13 @@ public class AuthController {
   }
 
   @GetMapping("/api/v1/auth/csrf")
-  public CsrfResponse csrf(CsrfToken csrf) {
+  @Operation(summary = "CSRF 토큰 조회")
+  public CsrfResponse csrf(@io.swagger.v3.oas.annotations.Parameter(hidden = true) CsrfToken csrf) {
     return new CsrfResponse(csrf.getHeaderName(), csrf.getToken());
   }
 
   @GetMapping("/api/v1/auth/google")
+  @Operation(summary = "Google 로그인 시작")
   public void google(HttpServletRequest request, HttpServletResponse response) throws IOException {
     if (clients.getIfAvailable() == null) {
       problems.write(request, response, 503, "GOOGLE_LOGIN_UNAVAILABLE", "Google 로그인 설정이 필요합니다");
@@ -52,9 +56,11 @@ public class AuthController {
   }
 
   @GetMapping("/api/v1/me")
+  @Operation(summary = "현재 로그인 계정 조회")
   public CurrentUser me(@AuthenticationPrincipal SessionUser user) {
     return accounts.find(user.id()).orElseThrow();
   }
 
+  @Schema(requiredProperties = {"headerName", "token"})
   public record CsrfResponse(String headerName, String token) {}
 }

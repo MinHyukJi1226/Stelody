@@ -3,6 +3,7 @@ package com.stelody.favorite.controller;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.favorite.dto.FavoriteDtos;
 import com.stelody.favorite.service.FavoriteService;
+import io.swagger.v3.oas.annotations.Operation;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,6 +24,7 @@ public class FavoriteController {
   }
 
   @GetMapping("/api/v1/me/favorites")
+  @Operation(summary = "즐겨찾기 목록")
   public FavoriteDtos.Page list(
       @AuthenticationPrincipal SessionUser user,
       @RequestParam(defaultValue = "20") int size,
@@ -31,6 +33,7 @@ public class FavoriteController {
   }
 
   @GetMapping("/api/v1/me/favorites/{songId}")
+  @Operation(summary = "곡의 즐겨찾기 여부")
   public FavoriteDtos.State state(
       @AuthenticationPrincipal SessionUser user, @PathVariable UUID songId) {
     return favorites.state(user.id(), songId);
@@ -38,12 +41,14 @@ public class FavoriteController {
 
   @PutMapping("/api/v1/me/favorites/{songId}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(summary = "즐겨찾기 저장")
   public void save(@AuthenticationPrincipal SessionUser user, @PathVariable UUID songId) {
     favorites.save(user.id(), songId);
   }
 
   @DeleteMapping("/api/v1/me/favorites/{songId}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(summary = "즐겨찾기 해제")
   public void delete(@AuthenticationPrincipal SessionUser user, @PathVariable UUID songId) {
     favorites.delete(user.id(), songId);
   }

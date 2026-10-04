@@ -1,6 +1,7 @@
 package com.stelody.playlist.dto;
 
 import com.stelody.song.dto.SongDtos;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -19,6 +20,16 @@ public final class PlaylistDtos {
 
   public record Order(@NotNull List<@NotNull UUID> itemIds, @NotNull @Min(0) Long version) {}
 
+  @Schema(
+      requiredProperties = {
+        "id",
+        "name",
+        "version",
+        "createdAt",
+        "updatedAt",
+        "totalCount",
+        "availableCount"
+      })
   public record Summary(
       UUID id,
       String name,
@@ -28,24 +39,49 @@ public final class PlaylistDtos {
       long totalCount,
       long availableCount) {}
 
-  public record Page(List<Summary> items, String nextCursor, boolean hasNext, long totalCount) {}
+  @Schema(requiredProperties = {"items", "nextCursor", "hasNext", "totalCount"})
+  public record Page(
+      List<Summary> items,
+      @Schema(nullable = true) String nextCursor,
+      boolean hasNext,
+      long totalCount) {}
 
+  @Schema(
+      requiredProperties = {
+        "id",
+        "songId",
+        "position",
+        "addedAt",
+        "available",
+        "unavailableMessage",
+        "song"
+      })
   public record Item(
       UUID id,
       UUID songId,
       int position,
       Instant addedAt,
       boolean available,
-      String unavailableMessage,
-      SongDtos.Card song) {}
+      @Schema(nullable = true) String unavailableMessage,
+      @Schema(nullable = true) SongDtos.Card song) {}
 
+  @Schema(
+      requiredProperties = {
+        "version",
+        "items",
+        "nextCursor",
+        "hasNext",
+        "totalCount",
+        "availableCount"
+      })
   public record Items(
       long version,
       List<Item> items,
-      String nextCursor,
+      @Schema(nullable = true) String nextCursor,
       boolean hasNext,
       long totalCount,
       long availableCount) {}
 
+  @Schema(requiredProperties = {"playlist", "itemId"})
   public record Added(Summary playlist, UUID itemId) {}
 }

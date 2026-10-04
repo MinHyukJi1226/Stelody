@@ -3,6 +3,7 @@ package com.stelody.admin.controller;
 import com.stelody.admin.dto.CatalogAdminDtos.*;
 import com.stelody.admin.service.CatalogManagementService;
 import com.stelody.auth.domain.SessionUser;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.*;
 import org.springframework.http.*;
@@ -25,6 +26,7 @@ public class CatalogAdminController {
   }
 
   @GetMapping({"/members", "/artists", "/works", "/songs", "/channels"})
+  @Operation(summary = "카탈로그 관리 목록")
   public ResponseEntity<Page> list(
       jakarta.servlet.http.HttpServletRequest request,
       @RequestParam(defaultValue = "0") int page,
@@ -35,6 +37,7 @@ public class CatalogAdminController {
   }
 
   @GetMapping({"/members/{id}", "/artists/{id}", "/works/{id}", "/songs/{id}", "/channels/{id}"})
+  @Operation(summary = "카탈로그 관리 상세")
   public ResponseEntity<Object> detail(
       jakarta.servlet.http.HttpServletRequest request, @PathVariable UUID id) {
     String[] path = request.getRequestURI().split("/");
@@ -50,6 +53,7 @@ public class CatalogAdminController {
     "/videos/{id}/audit",
     "/reviews/{id}/audit"
   })
+  @Operation(summary = "카탈로그 변경 이력")
   public ResponseEntity<AuditPage> audit(
       jakarta.servlet.http.HttpServletRequest request,
       @PathVariable UUID id,
@@ -60,12 +64,14 @@ public class CatalogAdminController {
   }
 
   @PostMapping("/members")
+  @Operation(summary = "멤버 등록")
   public ResponseEntity<Saved<Member>> createMember(
       @Valid @RequestBody MemberInput body, @AuthenticationPrincipal SessionUser user) {
     return response(service.member(null, body, user.id()), true);
   }
 
   @PutMapping("/members/{id}")
+  @Operation(summary = "멤버 수정")
   public ResponseEntity<Saved<Member>> updateMember(
       @PathVariable UUID id,
       @Valid @RequestBody MemberInput body,
@@ -74,12 +80,14 @@ public class CatalogAdminController {
   }
 
   @PostMapping("/artists")
+  @Operation(summary = "외부 아티스트 등록")
   public ResponseEntity<Saved<Artist>> createArtist(
       @Valid @RequestBody ArtistInput body, @AuthenticationPrincipal SessionUser user) {
     return response(service.artist(null, body, user.id()), true);
   }
 
   @PutMapping("/artists/{id}")
+  @Operation(summary = "외부 아티스트 수정")
   public ResponseEntity<Saved<Artist>> updateArtist(
       @PathVariable UUID id,
       @Valid @RequestBody ArtistInput body,
@@ -88,12 +96,14 @@ public class CatalogAdminController {
   }
 
   @PostMapping("/works")
+  @Operation(summary = "원곡 등록")
   public ResponseEntity<Saved<Work>> createWork(
       @Valid @RequestBody WorkInput body, @AuthenticationPrincipal SessionUser user) {
     return response(service.work(null, body, user.id()), true);
   }
 
   @PutMapping("/works/{id}")
+  @Operation(summary = "원곡 수정")
   public ResponseEntity<Saved<Work>> updateWork(
       @PathVariable UUID id,
       @Valid @RequestBody WorkInput body,
@@ -102,12 +112,14 @@ public class CatalogAdminController {
   }
 
   @PostMapping("/channels")
+  @Operation(summary = "수집 채널 등록")
   public ResponseEntity<Channel> createChannel(
       @Valid @RequestBody ChannelInput body, @AuthenticationPrincipal SessionUser user) {
     return response(service.channel(null, body, user.id()), true);
   }
 
   @PutMapping("/channels/{id}")
+  @Operation(summary = "수집 채널 수정")
   public ResponseEntity<Channel> updateChannel(
       @PathVariable UUID id,
       @Valid @RequestBody ChannelInput body,
@@ -116,12 +128,14 @@ public class CatalogAdminController {
   }
 
   @PostMapping("/songs")
+  @Operation(summary = "곡 등록")
   public ResponseEntity<Saved<Song>> createSong(
       @Valid @RequestBody SongInput body, @AuthenticationPrincipal SessionUser user) {
     return response(service.song(null, body, user.id()), true);
   }
 
   @PutMapping("/songs/{id}")
+  @Operation(summary = "곡 수정")
   public ResponseEntity<Saved<Song>> updateSong(
       @PathVariable UUID id,
       @Valid @RequestBody SongInput body,
@@ -130,6 +144,7 @@ public class CatalogAdminController {
   }
 
   @PostMapping("/reviews/{id}/registration")
+  @Operation(summary = "수집 후보를 곡 영상으로 등록")
   public ResponseEntity<Video> register(
       @PathVariable UUID id,
       @Valid @RequestBody Registration body,
@@ -138,6 +153,7 @@ public class CatalogAdminController {
   }
 
   @PostMapping("/songs/{id}/videos")
+  @Operation(summary = "곡의 추가 영상 등록")
   public ResponseEntity<Video> registerUrl(
       @PathVariable UUID id,
       @Valid @RequestBody VideoRegistration body,
@@ -146,6 +162,7 @@ public class CatalogAdminController {
   }
 
   @PutMapping("/songs/{id}/videos/{videoId}")
+  @Operation(summary = "곡 영상 정보 수정")
   public ResponseEntity<Video> video(
       @PathVariable UUID id,
       @PathVariable UUID videoId,
