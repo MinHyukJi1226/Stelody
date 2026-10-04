@@ -3,6 +3,7 @@ package com.stelody.export.controller;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.export.dto.ExportDtos;
 import com.stelody.export.service.*;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -22,17 +23,20 @@ public class ExportController {
   }
 
   @GetMapping("/api/v1/me/youtube/connection")
+  @Operation(summary = "YouTube 연결 상태")
   public ExportDtos.Connection connection(@AuthenticationPrincipal SessionUser user) {
     return connections.status(user.id());
   }
 
   @PostMapping("/api/v1/me/youtube/authorizations")
+  @Operation(summary = "YouTube 추가 동의 시작")
   public ExportDtos.Authorization authorize(
       @AuthenticationPrincipal SessionUser user, HttpServletRequest request) {
     return connections.authorize(user.id(), request.getSession().getId());
   }
 
   @GetMapping("/api/v1/me/youtube/callback")
+  @Operation(summary = "YouTube 추가 동의 콜백")
   public ResponseEntity<Void> callback(
       @AuthenticationPrincipal SessionUser user,
       HttpServletRequest request,
@@ -48,11 +52,13 @@ public class ExportController {
   }
 
   @DeleteMapping("/api/v1/me/youtube/connection")
+  @Operation(summary = "YouTube 연결 해제")
   public ExportDtos.Connection disconnect(@AuthenticationPrincipal SessionUser user) {
     return connections.disconnect(user.id());
   }
 
   @PostMapping("/api/v1/me/playlists/{id}/youtube-exports")
+  @Operation(summary = "새 비공개 YouTube 목록으로 내보내기 접수")
   public ResponseEntity<ExportDtos.Job> create(
       @AuthenticationPrincipal SessionUser user,
       @PathVariable UUID id,
@@ -64,16 +70,19 @@ public class ExportController {
   }
 
   @GetMapping("/api/v1/me/youtube-exports/{id}")
+  @Operation(summary = "내보내기 진행 상태")
   public ExportDtos.Job job(@AuthenticationPrincipal SessionUser user, @PathVariable UUID id) {
     return exports.job(user.id(), id);
   }
 
   @PostMapping("/api/v1/me/youtube-exports/{id}/retry")
+  @Operation(summary = "실패한 내보내기 재시도")
   public ExportDtos.Job retry(@AuthenticationPrincipal SessionUser user, @PathVariable UUID id) {
     return exports.retry(user.id(), id);
   }
 
   @PostMapping("/api/v1/me/youtube-exports/{id}/cancel")
+  @Operation(summary = "내보내기 취소")
   public ExportDtos.Job cancel(@AuthenticationPrincipal SessionUser user, @PathVariable UUID id) {
     return exports.cancel(user.id(), id);
   }

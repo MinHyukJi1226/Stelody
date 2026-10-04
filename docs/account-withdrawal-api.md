@@ -47,7 +47,7 @@
 
 ## 실패와 재시도
 
-오류 응답은 기존 Problem JSON의 `code`, `status`, `detail`, `traceId`를 사용한다.
+오류 응답은 기존 Problem JSON의 `code`, `status`, `title`, `traceId`를 사용한다.
 
 | HTTP | code | 처리 |
 |---|---|---|

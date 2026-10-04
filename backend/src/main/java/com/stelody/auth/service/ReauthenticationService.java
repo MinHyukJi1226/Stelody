@@ -4,6 +4,7 @@ import com.stelody.auth.domain.*;
 import com.stelody.export.service.YouTubeConnectionService;
 import com.stelody.user.repository.WithdrawalRepository;
 import com.stelody.user.web.AccountException;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.servlet.http.*;
 import java.time.Instant;
 import java.util.*;
@@ -24,7 +25,8 @@ public class ReauthenticationService {
 
   public record Authorization(OAuth2AuthorizationRequest request, Instant expiresAt) {}
 
-  public record Confirmation(boolean reauthenticated, Instant expiresAt) {}
+  @Schema(requiredProperties = {"reauthenticated", "expiresAt"})
+  public record Confirmation(boolean reauthenticated, @Schema(nullable = true) Instant expiresAt) {}
 
   public ReauthenticationService(
       WithdrawalRepository store,

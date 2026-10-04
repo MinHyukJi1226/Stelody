@@ -1,5 +1,6 @@
 package com.stelody.admin.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.Instant;
@@ -143,26 +144,45 @@ public final class CatalogAdminDtos {
       @NotNull VideoKind kind,
       @NotBlank @Size(max = 500) String reason) {}
 
+  @Schema(requiredProperties = {"id", "name", "version", "status"})
   public record Summary(UUID id, String name, long version, String status) {}
 
+  @Schema(requiredProperties = {"items", "page", "size", "hasNext"})
   public record Page(List<Summary> items, int page, int size, boolean hasNext) {}
 
+  @Schema(requiredProperties = {"item", "possibleDuplicateIds"})
   public record Saved<T>(T item, List<UUID> possibleDuplicateIds) {}
 
+  @Schema(
+      requiredProperties = {
+        "id",
+        "version",
+        "name",
+        "generation",
+        "activityStatus",
+        "profileImageUrl",
+        "debutDate",
+        "birthdayMonth",
+        "birthdayDay",
+        "aliases"
+      })
   public record Member(
       UUID id,
       long version,
       String name,
-      Integer generation,
+      @Schema(nullable = true) Integer generation,
       String activityStatus,
-      String profileImageUrl,
-      LocalDate debutDate,
-      Integer birthdayMonth,
-      Integer birthdayDay,
+      @Schema(nullable = true) String profileImageUrl,
+      @Schema(nullable = true) LocalDate debutDate,
+      @Schema(nullable = true) Integer birthdayMonth,
+      @Schema(nullable = true) Integer birthdayDay,
       List<String> aliases) {}
 
+  @Schema(requiredProperties = {"id", "version", "name", "aliases"})
   public record Artist(UUID id, long version, String name, List<String> aliases) {}
 
+  @Schema(
+      requiredProperties = {"id", "version", "title", "aliases", "artistIds", "links", "karaoke"})
   public record Work(
       UUID id,
       long version,
@@ -172,15 +192,41 @@ public final class CatalogAdminDtos {
       List<LinkView> links,
       List<KaraokeView> karaoke) {}
 
+  @Schema(
+      requiredProperties = {
+        "id",
+        "version",
+        "youtubeId",
+        "name",
+        "memberId",
+        "channelType",
+        "collectionEnabled"
+      })
   public record Channel(
       UUID id,
       long version,
       String youtubeId,
       String name,
-      UUID memberId,
+      @Schema(nullable = true) UUID memberId,
       String channelType,
       boolean collectionEnabled) {}
 
+  @Schema(
+      requiredProperties = {
+        "id",
+        "version",
+        "songId",
+        "youtubeId",
+        "kind",
+        "availability",
+        "sourceTitle",
+        "sourcePublishedAt",
+        "sourceThumbnailUrl",
+        "sourceObservedAt",
+        "publishedAt",
+        "thumbnailUrl",
+        "embeddable"
+      })
   public record Video(
       UUID id,
       long version,
@@ -188,56 +234,99 @@ public final class CatalogAdminDtos {
       String youtubeId,
       String kind,
       String availability,
-      String sourceTitle,
-      Instant sourcePublishedAt,
-      String sourceThumbnailUrl,
-      Instant sourceObservedAt,
-      Instant publishedAt,
-      String thumbnailUrl,
+      @Schema(nullable = true) String sourceTitle,
+      @Schema(nullable = true) Instant sourcePublishedAt,
+      @Schema(nullable = true) String sourceThumbnailUrl,
+      @Schema(nullable = true) Instant sourceObservedAt,
+      @Schema(nullable = true) Instant publishedAt,
+      @Schema(nullable = true) String thumbnailUrl,
       boolean embeddable) {}
 
+  @Schema(
+      requiredProperties = {
+        "id",
+        "version",
+        "title",
+        "type",
+        "workId",
+        "visibility",
+        "representativeVideoId",
+        "aliases",
+        "memberIds",
+        "externalArtistIds",
+        "isSpecialEvent",
+        "specialEventLabel",
+        "searchVisibility",
+        "recommendedSearchQuery",
+        "searchCheckedAt",
+        "videos",
+        "links",
+        "karaoke",
+        "missingFields"
+      })
   public record Song(
       UUID id,
       long version,
       String title,
       String type,
-      UUID workId,
+      @Schema(nullable = true) UUID workId,
       String visibility,
-      UUID representativeVideoId,
+      @Schema(nullable = true) UUID representativeVideoId,
       List<String> aliases,
       List<UUID> memberIds,
       List<UUID> externalArtistIds,
       boolean isSpecialEvent,
-      String specialEventLabel,
+      @Schema(nullable = true) String specialEventLabel,
       String searchVisibility,
-      String recommendedSearchQuery,
-      Instant searchCheckedAt,
+      @Schema(nullable = true) String recommendedSearchQuery,
+      @Schema(nullable = true) Instant searchCheckedAt,
       List<Video> videos,
       List<LinkView> links,
       List<KaraokeView> karaoke,
       List<String> missingFields) {}
 
+  @Schema(requiredProperties = {"id", "platform", "url", "sourceUrl", "checkedAt"})
   public record LinkView(
       UUID id, String platform, String url, String sourceUrl, Instant checkedAt) {}
 
+  @Schema(requiredProperties = {"id", "provider", "status", "number", "sourceUrl", "checkedAt"})
   public record KaraokeView(
       UUID id,
       String provider,
       String status,
-      String number,
-      String sourceUrl,
-      Instant checkedAt) {}
+      @Schema(nullable = true) String number,
+      @Schema(nullable = true) String sourceUrl,
+      @Schema(nullable = true) Instant checkedAt) {}
 
+  @Schema(requiredProperties = {"items", "page", "size", "hasNext"})
   public record AuditPage(List<Audit> items, int page, int size, boolean hasNext) {}
 
+  @Schema(
+      requiredProperties = {
+        "id",
+        "targetType",
+        "targetId",
+        "actorId",
+        "action",
+        "before",
+        "after",
+        "reason",
+        "changedAt"
+      })
   public record Audit(
       UUID id,
       String targetType,
       UUID targetId,
-      UUID actorId,
+      @Schema(nullable = true) UUID actorId,
       String action,
-      Object before,
-      Object after,
+      @Schema(
+              types = {"object", "array", "string", "number", "boolean", "null"},
+              description = "대상 유형별 변경 전후 JSON 자료")
+          Object before,
+      @Schema(
+              types = {"object", "array", "string", "number", "boolean", "null"},
+              description = "대상 유형별 변경 전후 JSON 자료")
+          Object after,
       String reason,
       Instant changedAt) {}
 }

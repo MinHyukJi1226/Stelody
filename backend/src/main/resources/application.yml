@@ -72,3 +72,15 @@ stelody:
   auth:
     google:
       redirect-uri: ${GOOGLE_REDIRECT_URI:}
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+    disable-swagger-default-url: true
+    persist-authorization: false
+    supported-submit-methods: [get, post, put, patch, delete]
+  paths-to-match: /api/v1/**
+  use-fqn: true
+  override-with-generic-response: false
+  writer-with-order-by-keys: true

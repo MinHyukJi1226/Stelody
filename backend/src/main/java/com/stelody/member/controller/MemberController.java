@@ -3,6 +3,7 @@ package com.stelody.member.controller;
 import com.stelody.member.dto.MemberDtos;
 import com.stelody.member.service.MemberService;
 import com.stelody.song.dto.SongDtos;
+import io.swagger.v3.oas.annotations.Operation;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +19,7 @@ public class MemberController {
   }
 
   @GetMapping("/api/v1/members")
+  @Operation(summary = "멤버 목록")
   public MemberDtos.Page list(
       @RequestParam(defaultValue = "ALL") String status,
       @RequestParam(defaultValue = "20") int size,
@@ -26,11 +28,13 @@ public class MemberController {
   }
 
   @GetMapping("/api/v1/members/{id}")
+  @Operation(summary = "멤버 상세")
   public MemberDtos.Detail detail(@PathVariable UUID id) {
     return members.detail(id);
   }
 
   @GetMapping("/api/v1/members/{id}/songs")
+  @Operation(summary = "멤버의 공개 곡 목록")
   public SongDtos.Page songs(
       @PathVariable UUID id,
       @RequestParam(required = false) String type,

@@ -3,6 +3,7 @@ package com.stelody.song.controller;
 import com.stelody.song.domain.SongQuery;
 import com.stelody.song.dto.SongDtos;
 import com.stelody.song.service.SongService;
+import io.swagger.v3.oas.annotations.Operation;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +20,7 @@ public class SongController {
   }
 
   @GetMapping("/api/v1/songs")
+  @Operation(summary = "공개 곡 검색·목록")
   public SongDtos.Page list(
       @RequestParam(required = false) String q,
       @RequestParam(required = false) String type,
@@ -34,11 +36,13 @@ public class SongController {
   }
 
   @GetMapping("/api/v1/songs/{id}")
+  @Operation(summary = "공개 곡 상세")
   public SongDtos.Detail detail(@PathVariable UUID id) {
     return songs.detail(id);
   }
 
   @GetMapping("/api/v1/songs/recommendations")
+  @Operation(summary = "중복 없는 무작위 곡 추천")
   public SongDtos.Recommendations recommendations(@RequestParam(defaultValue = "6") int size) {
     return songs.recommendations(size);
   }
