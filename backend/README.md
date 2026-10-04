@@ -20,6 +20,8 @@ docker compose -f ../infra/compose.yml up -d
 
 로컬 PostgreSQL의 기본 계정은 `stelody`, 비밀번호는 `local-only-password`입니다. 로컬 포트는 루프백에만 바인딩합니다. 운영에서는 [환경변수 예시](../.env.example)의 환경변수를 별도 주입하세요. Spring Boot는 루트 `.env`를 자동으로 읽지 않습니다. 운영 DB URL은 TLS 인증서 검증을 사용하고 실행 계정과 마이그레이션 계정을 분리해야 합니다.
 
+운영 실행 구성과 백업·복구·정기 수집 적용 순서는 [배포·운영 문서](../docs/deployment-operations.md)를 참고하세요. 서버·도메인이 정해지기 전에는 로컬 준비·격리된 복구 검증만 진행합니다.
+
 ### DB 역할과 권한
 
 DB 관리자가 로그인 역할 두 개를 먼저 준비합니다. 마이그레이션 역할은 대상 DB의 `CONNECT`, `CREATE` 권한으로 `app`·`session` 스키마를 생성하고 소유합니다. 실행 역할은 `CONNECT`만 사전 부여하며 슈퍼유저·마이그레이션 역할 멤버십을 부여하지 않습니다.

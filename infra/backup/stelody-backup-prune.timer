@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly Stelody backup expiry cleanup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=stelody-backup-prune.service
+
+[Install]
+WantedBy=timers.target

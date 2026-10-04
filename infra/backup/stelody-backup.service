@@ -1,0 +1,18 @@
+[Unit]
+Description=Stelody database backup and expiry cleanup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=stelody-backup
+Group=stelody-backup
+UMask=0077
+EnvironmentFile=/etc/stelody/backup.env
+ExecStartPre=/usr/bin/python3 /opt/stelody/infra/backup/database.py prune --directory=/var/lib/stelody-backups
+ExecStart=/usr/bin/python3 /opt/stelody/infra/backup/database.py backup --directory=/var/lib/stelody-backups
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/stelody-backups
