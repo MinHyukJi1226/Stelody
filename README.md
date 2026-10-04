@@ -29,6 +29,8 @@ React와 TypeScript 기반의 웹 화면, Java와 Spring Boot 기반의 서버, 
 ## 저장소 구성
 
 - `backend/`: Spring Boot 애플리케이션, DB 마이그레이션, 백엔드 테스트
-- `infra/`: 로컬 PostgreSQL·Mailpit 실행을 위한 Docker Compose 설정
+- `infra/`: 로컬 PostgreSQL·Mailpit, 운영 실행 구성과 백업·복구 도구
 - `frontend/`: React 웹 애플리케이션, UI 컴포넌트, 프론트엔드 테스트
 - `AGENTS.md`: 개발 절차, 커밋 및 브랜치 규칙
+
+운영 환경 준비와 실제 적용 범위는 [백엔드 배포·운영](docs/deployment-operations.md)에 정리했습니다.

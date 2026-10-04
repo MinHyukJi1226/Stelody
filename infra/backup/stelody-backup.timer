@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Stelody backup (UTC)
+
+[Timer]
+OnCalendar=*-*-* 03:40:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=stelody-backup.service
+
+[Install]
+WantedBy=timers.target

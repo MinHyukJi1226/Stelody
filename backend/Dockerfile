@@ -1,0 +1,9 @@
+FROM eclipse-temurin:21-jre-jammy@sha256:f04fb34e053148344e83317976114ec3f37e4b830ec8bdab5a2fe3cecd7d010b
+
+WORKDIR /opt/stelody
+RUN groupadd --gid 10001 stelody && useradd --uid 10001 --gid stelody --no-create-home stelody
+COPY --chown=stelody:stelody backend/build/libs/stelody-0.0.1-SNAPSHOT.jar app.jar
+COPY --chmod=755 infra/deploy/healthcheck.sh /opt/stelody/healthcheck.sh
+USER 10001:10001
+EXPOSE 8080
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-XX:+ExitOnOutOfMemoryError", "-jar", "/opt/stelody/app.jar"]
