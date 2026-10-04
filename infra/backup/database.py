@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """PostgreSQL 17 backup/isolated restore. Connection details use libpq environment only."""
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -39,8 +42,9 @@ def instant(value):
     return result
 
 
-def run(command, *, input_text=None, log=None):
-    result = subprocess.run(command, input=input_text, text=True, capture_output=True, check=False)
+def run(command, *, input_text=None, log=None, pass_fds=()):
+    result = subprocess.run(command, input=input_text, text=True, capture_output=True, check=False,
+                            pass_fds=pass_fds)
     if log is not None:
         log.write_text(result.stderr, encoding='utf-8')
         log.chmod(0o600)
@@ -79,8 +83,35 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+@contextmanager
+def backup_lock(root):
+    # Keep this inode permanently: unlinking a lock file can create independent locks.
+    descriptor = os.open(root / '.backup.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
+            raise OperationError('Backup lock must be a private regular file (600)')
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield None
+        else:
+            # Closing (rather than explicitly unlocking) keeps an inherited child lock
+            # alive if Python is killed while pg_dump or pg_restore is still running.
+            yield descriptor
+    finally:
+        os.close(descriptor)
+
+
 def backup(root):
     private_directory(root)
+    with backup_lock(root) as descriptor:
+        if descriptor is None:
+            raise OperationError('Another backup or expiry cleanup is running')
+        create_backup(root, descriptor)
+
+
+def create_backup(root, descriptor):
     info = database_info()
     if info['owners'] != [info['user']]:
         raise OperationError('Connect as the app/session schema owner')
@@ -104,13 +135,26 @@ def backup(root):
     staging = Path(tempfile.mkdtemp(prefix='.partial-', dir=root))
     destination = root / ('stelody-' + created.strftime('%Y%m%dT%H%M%S%fZ'))
     try:
+        # Persist retention before any user data can be written, including when
+        # source metadata requires a shorter lifetime than seven days.
+        retention = staging / 'retention.json'
+        retention.write_text(json.dumps({'format': 1, 'createdAt': created.isoformat(),
+                                         'expiresAt': expires.isoformat()}) + '\n')
+        retention.chmod(0o600)
+        with retention.open('rb') as stream:
+            os.fsync(stream.fileno())
+        directory_descriptor = os.open(staging, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
         dump = staging / 'database.dump'
         command = ['pg_dump', '--no-password', '--format=custom', '--schema=app', '--schema=session',
                    '--extension=pg_trgm', '--no-owner', '--file=' + str(dump)]
         command += ['--exclude-table-data=' + table for table in EXCLUDED_DATA]
-        run(command, log=staging / 'dump.log')
+        run(command, log=staging / 'dump.log', pass_fds=(descriptor,))
         dump.chmod(0o600)
-        run(['pg_restore', '--list', str(dump)], log=staging / 'archive-check.log')
+        run(['pg_restore', '--list', str(dump)], log=staging / 'archive-check.log', pass_fds=(descriptor,))
         manifest = {'format': 1, 'createdAt': created.isoformat(), 'expiresAt': expires.isoformat(), 'schemaVersion': 19,
                     'schemaOwner': info['user'], 'sourceDatabase': info['database'],
                     'sha256': digest(dump), 'excludedData': list(EXCLUDED_DATA)}
@@ -210,8 +254,7 @@ def restore(directory, target, reconciliations):
                       'readyForPublicTraffic': False}))
 
 
-def prune(root):
-    private_directory(root)
+def prune_unlocked(root):
     removed = 0
     for directory in root.glob('stelody-*'):
         if directory.is_symlink() or not directory.is_dir():
@@ -223,7 +266,37 @@ def prune(root):
         if metadata.get('format') == 1 and now() >= min(instant(metadata['createdAt']) + MAX_AGE, instant(metadata['expiresAt'])):
             shutil.rmtree(directory)
             removed += 1
-    print(json.dumps({'expiredBackupsRemoved': removed}))
+    partial_removed = 0
+    for directory in root.glob('.partial-*'):
+        if directory.is_symlink() or not directory.is_dir():
+            continue
+        # Legacy staging folders have no retention record. Their directory mtime
+        # provides a conservative fallback, also used for interrupted record writes.
+        expiry = datetime.fromtimestamp(directory.stat().st_mtime, timezone.utc) + MAX_AGE
+        retention = directory / 'retention.json'
+        if not retention.is_symlink() and retention.is_file():
+            try:
+                metadata = json.loads(retention.read_text())
+                if metadata.get('format') == 1:
+                    expiry = min(expiry, instant(metadata['createdAt']) + MAX_AGE,
+                                 instant(metadata['expiresAt']))
+            except (ValueError, KeyError, TypeError, OperationError):
+                pass
+        if now() >= expiry:
+            shutil.rmtree(directory)
+            partial_removed += 1
+    print(json.dumps({'expiredBackupsRemoved': removed, 'expiredPartialBackupsRemoved': partial_removed,
+                      'skippedActiveBackup': False}))
+
+
+def prune(root):
+    private_directory(root)
+    with backup_lock(root) as descriptor:
+        if descriptor is None:
+            print(json.dumps({'expiredBackupsRemoved': 0, 'expiredPartialBackupsRemoved': 0,
+                              'skippedActiveBackup': True}))
+            return
+        prune_unlocked(root)
 
 
 def main():
