@@ -5415,7 +5415,7 @@
       "work": {
         "title": "톤데모 원더즈",
         "aliases": [],
-        "artist": "sasakure.‌UK"
+        "artist": "sasakure.UK"
       },
       "sourceUrls": [
         "https://stellive.me/music/3357",
@@ -8686,7 +8686,7 @@
         "aliases": [
           "복숭아색 열쇠"
         ],
-        "artist": "いよわ"
+        "artist": "Iyowa"
       },
       "sourceUrls": [
         "https://www.youtube.com/watch?v=QQYjoOGbUSQ"
@@ -9169,5 +9169,10 @@
       "reason": "사용자 검수 결정으로 이번 초기 카탈로그 추가 등록에서 제외; 기존 공개 곡은 유지",
       "previousReviewReason": "이미 등록된 곡의 공식 배급 음원; 동일 녹음 확인 후 기존 곡에 연결, 중복 곡 생성 안 함"
     }
-  ]
+  ],
+  "artistAliases": {
+    "Iyowa": [
+      "いよわ"
+    ]
+  }
 }
