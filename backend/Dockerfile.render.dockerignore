@@ -1,0 +1,20 @@
+**
+!backend/
+!backend/gradlew
+!backend/build.gradle
+!backend/settings.gradle
+!backend/gradle/
+!backend/gradle/wrapper/
+!backend/gradle/wrapper/gradle-wrapper.jar
+!backend/gradle/wrapper/gradle-wrapper.properties
+!backend/src/
+!backend/src/main/
+!backend/src/main/**
+!infra/
+!infra/deploy/
+!infra/deploy/render-start.sh
+# Local settings stay excluded even if placed alongside application resources.
+**/.env
+**/.env.*
+**/*.local
+**/*.local.*
