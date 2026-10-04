@@ -1,0 +1,15 @@
+FROM eclipse-temurin:21-jdk-jammy@sha256:e0c60c487345d1dc9d0fc7b6f0496f3cc941e5132e09296cc17a6decc71b902b AS build
+WORKDIR /build/backend
+COPY backend/gradlew backend/build.gradle backend/settings.gradle ./
+COPY backend/gradle/ gradle/
+COPY backend/src/main/ src/main/
+RUN chmod 755 gradlew && ./gradlew bootJar --no-daemon --max-workers=1
+
+FROM eclipse-temurin:21-jre-jammy@sha256:f04fb34e053148344e83317976114ec3f37e4b830ec8bdab5a2fe3cecd7d010b
+WORKDIR /opt/stelody
+RUN groupadd --gid 10001 stelody && useradd --uid 10001 --gid stelody --no-create-home stelody
+COPY --from=build --chown=stelody:stelody /build/backend/build/libs/stelody-0.0.1-SNAPSHOT.jar app.jar
+COPY --chmod=755 infra/deploy/render-start.sh /opt/stelody/render-start.sh
+USER 10001:10001
+EXPOSE 10000
+ENTRYPOINT ["/opt/stelody/render-start.sh"]

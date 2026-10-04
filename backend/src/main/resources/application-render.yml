@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    hikari:
+      # Allow retrying the first TLS connection after a slow cold start.
+      initialization-fail-timeout: 60000
+  flyway:
+    connect-retries: 2
+    connect-retries-interval: 2s
+server:
+  port: ${PORT:10000}
+  tomcat:
+    threads:
+      max: 30
+      min-spare: 2
+stelody:
+  auth:
+    google:
+      redirect-uri: ${GOOGLE_REDIRECT_URI:${RENDER_EXTERNAL_URL}/api/v1/auth/callback/google}
+  export:
+    redirect-uri: ${YOUTUBE_EXPORT_REDIRECT_URI:${RENDER_EXTERNAL_URL}/api/v1/me/youtube/callback}
