@@ -1,0 +1,21 @@
+# Copy outside the checkout, chmod 600, and grant the container uid 10001 read access.
+# Java properties syntax: escape literal backslashes; do not wrap values in quotes.
+DB_URL=jdbc:postgresql://db.example.invalid:5432/stelody?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt
+DB_USERNAME=stelody_app
+DB_RUNTIME_ROLE=stelody_app
+DB_PASSWORD=replace-me
+DB_MIGRATION_USERNAME=stelody_migrator
+DB_MIGRATION_PASSWORD=replace-me
+GOOGLE_CLIENT_ID=replace-me.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=replace-me
+GOOGLE_REDIRECT_URI=https://stelody.example.invalid/api/v1/auth/callback/google
+YOUTUBE_EXPORT_ENABLED=false
+YOUTUBE_EXPORT_REDIRECT_URI=https://stelody.example.invalid/api/v1/me/youtube/callback
+YOUTUBE_TOKEN_ENCRYPTION_KEY=
+COLLECTION_RETRY_ENABLED=false
+DISCOVERY_CLASSIFICATION_ALLOWED=false
+COVER_AUTO_PUBLICATION_POLICY_ALLOWED=false
+TRENDING_ENABLED=false
+TRENDING_POLICY_ALLOWED=false
+SPECIAL_EVENT_REVIEW_ENABLED=false
+SPECIAL_EVENT_POLICY_ALLOWED=false
