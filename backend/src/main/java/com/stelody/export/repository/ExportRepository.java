@@ -152,6 +152,7 @@ public class ExportRepository {
   }
 
   public void invalidate(UUID user) {
+    deleteAuthorizedData(user);
     jdbc.sql(
             """
         UPDATE app.youtube_connection SET status='RECONNECT_REQUIRED',access_token=NULL,
@@ -163,19 +164,10 @@ public class ExportRepository {
 
   public Connection disconnect(UUID user) {
     lockActive(user);
-    jdbc.sql("DELETE FROM app.youtube_authorization WHERE user_id=:user")
-        .param("user", user)
-        .update();
+    deleteAuthorizedData(user);
     jdbc.sql(
             """
-        UPDATE app.youtube_export SET status='CANCELLED',error_code='YOUTUBE_DISCONNECTED',updated_at=CURRENT_TIMESTAMP
-        WHERE user_id=:user AND status IN ('QUEUED','RUNNING','FAILED','UNCERTAIN')
-        """)
-        .param("user", user)
-        .update();
-    jdbc.sql(
-            """
-        UPDATE app.youtube_connection SET generation=:gen,
+        UPDATE app.youtube_connection SET generation=:gen,access_token=NULL,expires_at=NULL,
           status=CASE WHEN refresh_token IS NULL THEN 'DISCONNECTED' ELSE 'REVOKING' END,
           updated_at=CURRENT_TIMESTAMP WHERE user_id=:user
         """)
@@ -183,6 +175,14 @@ public class ExportRepository {
         .param("gen", UUID.randomUUID())
         .update();
     return connection(user).orElse(null);
+  }
+
+  private void deleteAuthorizedData(UUID user) {
+    jdbc.sql("DELETE FROM app.youtube_authorization WHERE user_id=:user")
+        .param("user", user)
+        .update();
+    // Cascading deletion also removes video IDs and copied item results.
+    jdbc.sql("DELETE FROM app.youtube_export WHERE user_id=:user").param("user", user).update();
   }
 
   public List<Connection> revoking() {
@@ -206,15 +206,17 @@ public class ExportRepository {
   }
 
   public void revoked(Connection value) {
-    jdbc.sql(
-            """
+    int changed =
+        jdbc.sql(
+                """
         UPDATE app.youtube_connection SET status='DISCONNECTED',access_token=NULL,refresh_token=NULL,
           expires_at=NULL,updated_at=CURRENT_TIMESTAMP
         WHERE user_id=:user AND generation=:gen AND status='REVOKING'
         """)
-        .param("user", value.userId())
-        .param("gen", value.generation())
-        .update();
+            .param("user", value.userId())
+            .param("gen", value.generation())
+            .update();
+    if (changed == 1) deleteAuthorizedData(value.userId());
   }
 
   public void cleanup() {

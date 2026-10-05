@@ -330,10 +330,8 @@ class AccountWithdrawalIntegrationTest {
             runtime.queryForObject(
                 "SELECT status FROM app.youtube_connection WHERE user_id=?", String.class, USER))
         .isEqualTo("REVOKING");
-    assertThat(
-            runtime.queryForObject(
-                "SELECT status FROM app.youtube_export WHERE id=?", String.class, JOB))
-        .isEqualTo("CANCELLED");
+    assertThat(count("app.youtube_export", "id", JOB)).isZero();
+    assertThat(count("app.youtube_export_item", "export_id", JOB)).isZero();
     assertThat(count("app.youtube_authorization", "user_id", USER)).isZero();
     assertThat(count("app.account_reauthentication", "user_id", USER)).isEqualTo(1);
     google.stubFor(

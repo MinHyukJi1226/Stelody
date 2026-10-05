@@ -17,13 +17,13 @@ Google 로그인은 기존 `openid email` 권한을 유지한다. 내보내기�
 | GET `/api/v1/me/youtube/connection` | `{status}`: DISABLED / DISCONNECTED / CONNECTED / RECONNECT_REQUIRED / REVOKING |
 | POST `/api/v1/me/youtube/authorizations` | `{authorizationUrl,expiresAt}`. 브라우저를 Google 동의 화면으로 이동한다. 자동으로 내보내지 않는다. |
 | GET `/api/v1/me/youtube/callback?state=...&code=...` | Google 전용 반환 경로. 추가 동의를 검증한 뒤 코드 없는 연결 상태 경로로 303 이동한다. |
-| DELETE `/api/v1/me/youtube/connection` | 미완료 작업 중단 및 Google 권한 철회. 철회 요청이 실패하면 REVOKING 상태를 유지하며 작업자가 다시 요청한다. |
+| DELETE `/api/v1/me/youtube/connection` | 동의 요청·내보내기 기록과 항목을 즉시 삭제하고 Google 권한을 철회한다. 철회 요청이 실패하면 REVOKING 상태를 유지하며 작업자가 다시 요청한다. |
 
 `youtube.force-ssl`과 계정 확인용 `openid email`을 요청한다. OAuth state는 회원·로그인 세션에 바인딩하고 5분 내 한 번만 소비한다. PKCE S256, nonce와 ID 토큰 서명·issuer·audience·만료·sub를 검증한다. 새로운 동의나 연결 해제 후 오래된 콜백은 연결을 다시 활성화할 수 없다. 부분 동의로 YouTube scope가 빠지면 연결하지 않는다.
 
 access/refresh 토큰과 임시 PKCE verifier는 AES-256-GCM으로 암호화한다. 사용자 ID와 데이터 용도를 인증된 추가 데이터로 묶어 다른 계정이나 필드로 옮긴 암호문을 사용할 수 없게 한다. state와 세션 식별자는 해시만 저장한다. Google 토큰 교환·갱신에는 Spring Security OAuth 클라이언트를 사용한다. access 토큰 만료 전 갱신하고 refresh 토큰 교체도 암호화해 저장한다. `invalid_grant`나 철회된 권한은 재연결 상태로 전환한다.
 
-연결 해제는 사이트 인증 세션을 유지한다. Google에서 철회하는 권한은 같은 OAuth 클라이언트의 결합된 grant에 영향을 줄 수 있으므로 다음 Google 로그인·연결에서 재동의가 필요할 수 있다. 이미 생성된 YouTube 목록은 사용자 계정에 남는다.
+연결 해제는 사이트 인증 세션·즐겨찾기·개인 목록을 유지한다. 완료된 작업을 포함해 모든 내보내기 기록과 항목은 삭제되므로 기존 작업 조회·재시도는 404를 반환한다. access 토큰과 만료 시각은 즉시 지우며, 철회 재시도가 필요하면 암호화된 refresh 토큰만 보관하고 철회 완료 후 삭제한다. Google에서 철회하는 권한은 같은 OAuth 클라이언트의 결합된 grant에 영향을 줄 수 있으므로 다음 Google 로그인·연결에서 재동의가 필요할 수 있다. 이미 생성된 YouTube 목록은 사용자 계정에 남는다.
 
 ## 내보내기 작업
 
@@ -84,7 +84,7 @@ POST `/api/v1/me/playlists/{id}/youtube-exports`
 
 ## 보관과 운영
 
-작업 스냅샷·외부 목록 ID는 생성 후 30일 이내에 정리하며, 이후 requestId 멱등 보장도 만료된다. 인증 요청은 5분, 30일 이상 사용하지 않은 YouTube 연결과 정지된 계정의 연결은 작업자가 철회한다. 철회 완료 또는 이미 무효인 토큰 확인 후 암호문을 삭제한다. 철회 중에는 재연결·내보내기를 허용하지 않는다. 기능을 비활성화해도 철회 처리를 이어가려면 암호화 키를 유지해야 한다.
+연결이 유효한 동안 작업 스냅샷·외부 목록 ID는 생성 후 30일 이내에 정리하며, 이후 requestId 멱등 보장도 만료된다. 연결 해제·갱신 시 `invalid_grant` 또는 권한 부족 확인·작업 중 철회된 권한 확인 시에는 동의 요청과 전체 내보내기 기록을 즉시 삭제한다. 인증 요청은 5분, 30일 이상 사용하지 않은 YouTube 연결과 정지된 계정의 연결은 작업자가 철회한다. 철회 완료 또는 이미 무효인 토큰 확인 후 암호문과 남은 내보내기 기록을 삭제한다. 철회 중에는 재연결·내보내기를 허용하지 않는다. 기능을 비활성화해도 철회 처리를 이어가려면 암호화 키를 유지해야 한다.
 
 [회원 탈퇴](account-withdrawal-api.md)는 같은 Google 계정 재인증 후 연결 철회를 확인하고 회원과 개인 작업·연결 자료를 삭제한다. 처리 중인 내보내기와 같은 잠금을 사용하며 철회 실패 시 계정을 유지한다. 백업·복원 운영에서는 임시 OAuth 요청과 토큰을 복구해 다시 활성화하지 않도록 별도 절차가 필요하다. Google scope 외부 검증과 실제 계정 시험은 자동 테스트로 대신 완료 처리하지 않는다.
 
