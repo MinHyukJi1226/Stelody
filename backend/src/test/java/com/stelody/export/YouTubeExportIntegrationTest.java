@@ -16,6 +16,7 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.*;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.export.config.ExportSettings;
+import com.stelody.export.repository.ExportRepository;
 import com.stelody.export.service.*;
 import com.stelody.playlist.service.*;
 import jakarta.servlet.http.Cookie;
@@ -131,6 +132,7 @@ class YouTubeExportIntegrationTest {
   @Autowired PlaylistItemService playlistItems;
   @Autowired ExportWorker worker;
   @Autowired TokenCipher cipher;
+  @Autowired ExportRepository store;
   @Autowired YouTubeConnectionService connections;
   JdbcTemplate owner;
   Browser first, second;
@@ -673,6 +675,9 @@ class YouTubeExportIntegrationTest {
     String encrypted =
         runtime.queryForObject("SELECT refresh_token FROM app.youtube_connection", String.class);
     assertThat(cipher.decrypt(U1, "refresh", encrypted)).isEqualTo("rotated-refresh");
+    UUID completed = UUID.fromString(create(playlist(S1), UUID.randomUUID()).path("id").asText());
+    worker.tick();
+    assertThat(job(completed).path("status").asText()).isEqualTo("SUCCEEDED");
     owner.execute("UPDATE app.youtube_connection SET expires_at=now()-interval '1 minute'");
     provider.stubFor(
         WireMock.post(urlEqualTo("/token"))
@@ -683,6 +688,9 @@ class YouTubeExportIntegrationTest {
                     .withBody("{\"error\":\"invalid_grant\"}")));
     assertThatThrownBy(() -> connections.access(U1)).hasMessage("YouTube 내보내기 상태를 확인해 주세요");
     assertThat(connections.status(U1).status()).isEqualTo("RECONNECT_REQUIRED");
+    json(get(JOBS + completed), first, 404);
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_export_item", Long.class))
+        .isZero();
     assertThat(
             runtime.queryForObject(
                 "SELECT access_token IS NULL AND refresh_token IS NULL FROM app.youtube_connection",
@@ -691,18 +699,92 @@ class YouTubeExportIntegrationTest {
   }
 
   @Test
-  void disconnectCancelsPendingExportAndRetriesRevocationWithoutLoggingOut() throws Exception {
+  void disconnectDeletesExportsAndRetriesRevocationWithoutLoggingOut() throws Exception {
     connected(U1);
     UUID id = UUID.fromString(create(playlist(S1), UUID.randomUUID()).path("id").asText());
     provider.stubFor(WireMock.post(urlEqualTo("/revoke")).willReturn(aResponse().withStatus(503)));
     assertThat(json(delete(CONNECTION), first, 200).path("status").asText()).isEqualTo("REVOKING");
-    assertThat(job(id).path("status").asText()).isEqualTo("CANCELLED");
+    json(get(JOBS + id), first, 404);
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_export_item", Long.class))
+        .isZero();
+    assertThat(
+            runtime.queryForObject(
+                "SELECT access_token IS NULL AND expires_at IS NULL AND refresh_token IS NOT NULL FROM app.youtube_connection",
+                Boolean.class))
+        .isTrue();
     json(post(AUTH), first, 409);
     provider.stubFor(WireMock.post(urlEqualTo("/revoke")).willReturn(ok()));
     worker.tick();
     assertThat(json(get(CONNECTION), first, 200).path("status").asText()).isEqualTo("DISCONNECTED");
     assertThat(json(get("/api/v1/me"), first, 200).path("id").asText()).isEqualTo(U1.toString());
     provider.verify(0, postRequestedFor(urlPathEqualTo("/youtube/v3/playlists")));
+  }
+
+  @Test
+  void disconnectPurgesCompletedCopiesAndAuthorizationButKeepsLocalPlaylistAndOtherUser()
+      throws Exception {
+    connected(U1);
+    connected(U2);
+    UUID playlist = playlist(S1);
+    UUID completed = UUID.fromString(create(playlist, UUID.randomUUID()).path("id").asText());
+    worker.tick();
+    assertThat(job(completed).path("youtubePlaylistId").asText()).isEqualTo("PL_export");
+    runtime.update(
+        "INSERT INTO app.youtube_export(id,user_id,request_id,source_playlist_id,source_version,name,status) VALUES(?,?,?,?,0,'other','QUEUED')",
+        UUID.randomUUID(),
+        U2,
+        UUID.randomUUID(),
+        UUID.randomUUID());
+    flow(first);
+    json(delete(CONNECTION), first, 200);
+    json(get(JOBS + completed), first, 404);
+    assertThat(
+            runtime.queryForObject(
+                "SELECT count(*) FROM app.youtube_authorization WHERE user_id=?", Long.class, U1))
+        .isZero();
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_export_item", Long.class))
+        .isZero();
+    assertThat(
+            runtime.queryForObject(
+                "SELECT count(*) FROM app.youtube_export WHERE user_id=?", Long.class, U2))
+        .isEqualTo(1);
+    assertThat(json(get("/api/v1/me/playlists/" + playlist), first, 200).path("totalCount").asInt())
+        .isEqualTo(1);
+    assertThat(connections.status(U2).status()).isEqualTo("CONNECTED");
+    provider.verify(0, deleteRequestedFor(urlPathMatching("/youtube/v3/.*")));
+  }
+
+  @Test
+  void lateWorkerResultsCannotRecreateDeletedExportAndOldRevocationCannotPurgeNewGrant()
+      throws Exception {
+    connected(U1);
+    UUID id = UUID.fromString(create(playlist(S1), UUID.randomUUID()).path("id").asText());
+    var task = store.next().orElseThrow();
+    var old = store.connection(U1).orElseThrow();
+    json(delete(CONNECTION), first, 200);
+    store.tx(
+        () -> {
+          store.created(task, "late-playlist");
+          store.itemDone(task, 0, "COPIED");
+          store.finish(task, "SUCCEEDED", null, true);
+          return null;
+        });
+    json(get(JOBS + id), first, 404);
+    owner.update("DELETE FROM app.youtube_connection WHERE user_id=?", U1);
+    connected(U1);
+    UUID current = UUID.fromString(create(playlist(S2), UUID.randomUUID()).path("id").asText());
+    flow(first);
+    store.tx(
+        () -> {
+          store.revoked(old);
+          return null;
+        });
+    assertThat(job(current).path("status").asText()).isEqualTo("QUEUED");
+    assertThat(connections.status(U1).status()).isEqualTo("CONNECTED");
+    assertThat(
+            runtime.queryForObject(
+                "SELECT count(*) FROM app.youtube_authorization WHERE user_id=?", Long.class, U1))
+        .isEqualTo(1);
   }
 
   @Test
@@ -814,8 +896,8 @@ class YouTubeExportIntegrationTest {
     worker.tick();
     assertThat(
             runtime.queryForObject(
-                "SELECT status FROM app.youtube_export WHERE id=?", String.class, id))
-        .isEqualTo("CANCELLED");
+                "SELECT count(*) FROM app.youtube_export WHERE id=?", Long.class, id))
+        .isZero();
     assertThat(connections.status(U1).status()).isEqualTo("DISCONNECTED");
     provider.verify(0, postRequestedFor(urlPathEqualTo("/youtube/v3/playlists")));
     json(get(CONNECTION), first, 401);

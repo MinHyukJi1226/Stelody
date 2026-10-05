@@ -1,0 +1,83 @@
+name: Database backup
+
+on:
+  schedule:
+    - cron: '47 3 * * *'
+    - cron: '47 * * * *'
+  workflow_dispatch:
+    inputs:
+      backup:
+        description: Create and upload a new encrypted backup (otherwise prune only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  offsite:
+    if: github.ref == 'refs/heads/main' && vars.BACKUP_ENABLED == 'true'
+    environment: production-backup
+    runs-on: ubuntu-latest
+    container: postgres:17.6-bookworm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install backup tools
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends python3 python3-venv age ca-certificates openssl
+          python3 -m venv /tmp/stelody-backup-venv
+          /tmp/stelody-backup-venv/bin/pip install --disable-pip-version-check -r infra/backup/requirements.txt
+      - name: Prune expired encrypted objects
+        env:
+          BACKUP_B2_ENDPOINT: ${{ vars.BACKUP_B2_ENDPOINT }}
+          BACKUP_B2_BUCKET: ${{ vars.BACKUP_B2_BUCKET }}
+          BACKUP_B2_ACCESS_KEY_ID: ${{ secrets.BACKUP_B2_ACCESS_KEY_ID }}
+          BACKUP_B2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_B2_SECRET_ACCESS_KEY }}
+        run: /tmp/stelody-backup-venv/bin/python infra/backup/offsite.py prune
+      - name: Create, encrypt, upload and read back the database backup
+        if: github.event.schedule == '47 3 * * *' || (github.event_name == 'workflow_dispatch' && inputs.backup)
+        env:
+          PGHOST: ${{ secrets.BACKUP_DB_HOST }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: ${{ secrets.BACKUP_DB_USERNAME }}
+          PGPASSWORD: ${{ secrets.BACKUP_DB_PASSWORD }}
+          PGSSLMODE: verify-full
+          PGSSLROOTCERT: /tmp/stelody-backup/db-ca.crt
+          PGCONNECT_TIMEOUT: '15'
+          BACKUP_DB_CA_CERTIFICATE_BASE64: ${{ secrets.BACKUP_DB_CA_CERTIFICATE_BASE64 }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          BACKUP_B2_ENDPOINT: ${{ vars.BACKUP_B2_ENDPOINT }}
+          BACKUP_B2_BUCKET: ${{ vars.BACKUP_B2_BUCKET }}
+          BACKUP_B2_ACCESS_KEY_ID: ${{ secrets.BACKUP_B2_ACCESS_KEY_ID }}
+          BACKUP_B2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_B2_SECRET_ACCESS_KEY }}
+        run: |
+          umask 077
+          mkdir -m 700 /tmp/stelody-backup
+          printf '%s' "$BACKUP_DB_CA_CERTIFICATE_BASE64" | base64 --decode > "$PGSSLROOTCERT"
+          openssl x509 -in "$PGSSLROOTCERT" -noout -checkend 0
+          /tmp/stelody-backup-venv/bin/python infra/backup/database.py backup --directory /tmp/stelody-backup/plain
+          /tmp/stelody-backup-venv/bin/python - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'infra/backup')
+          import offsite
+          bundles = list(Path('/tmp/stelody-backup/plain').glob('stelody-*'))
+          if len(bundles) != 1:
+              raise SystemExit('Expected exactly one completed backup')
+          encrypted = offsite.seal(bundles[0], Path('/tmp/stelody-backup/encrypted'))
+          try:
+              key = offsite.upload(encrypted)
+          except Exception:
+              raise SystemExit('Encrypted upload/read-back failed; no credentials displayed') from None
+          print('Encrypted backup uploaded and verified by read-back')
+          PY
+      - name: Remove plaintext, encrypted temporary files and certificate
+        if: always()
+        run: rm -rf /tmp/stelody-backup

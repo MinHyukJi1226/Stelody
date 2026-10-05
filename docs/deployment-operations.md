@@ -2,7 +2,7 @@
 
 ## 현재 상태
 
-이 문서는 Linux 서버에서의 Compose 운영과 백업·복구 준비를 정리한다. 무료 외부 시험 구성인 Render + Supabase의 빌드·접속 설정은 [Render 배포 절차](render-deployment.md)를 따른다. 두 구성 모두 프론트 구현은 포함하지 않는다. 아래의 최초 로컬 검증 기록은 외부 배포 완료를 뜻하지 않는다.
+이 문서는 Linux 서버에서의 Compose 운영과 백업·복구 준비를 정리한다. 무료 외부 시험 구성인 Render + Supabase의 빌드·접속 설정은 [Render 배포 절차](render-deployment.md)를 따른다. 두 구성 모두 프론트 구현은 포함하지 않는다. 아래의 최초 로컬 검증 기록은 외부 배포 완료를 뜻하지 않는다. 이후 확인한 실제 운영 결과와 미완료 항목은 [2026-10-05 운영 검증](operations-verification.md)에 기록했다. 외부 암호화 보관소는 [Backblaze B2 백업 준비](offsite-backup.md)를 따른다.
 
 | 준비 항목 | 위치 |
 | --- | --- |
