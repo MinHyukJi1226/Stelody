@@ -26,7 +26,10 @@ jobs:
         run: ./gradlew check bootJar --no-daemon
       - name: Verify backup and restore safety guards
         working-directory: .
-        run: python3 -B -m unittest discover -s infra/tests -v
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends age
+          python3 -B -m unittest discover -s infra/tests -v
       - name: Store verified OpenAPI contract
         uses: actions/upload-artifact@v4
         with:
