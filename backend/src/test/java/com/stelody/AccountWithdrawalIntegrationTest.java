@@ -12,6 +12,7 @@ import com.stelody.export.service.TokenCipher;
 import com.stelody.export.service.YouTubeConnectionService;
 import com.stelody.user.repository.WithdrawalRepository;
 import com.stelody.user.service.WithdrawalService;
+import com.stelody.user.service.ledger.WithdrawalJournal;
 import com.stelody.user.web.AccountException;
 import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.session.*;
 import org.springframework.test.context.*;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -89,6 +91,7 @@ class AccountWithdrawalIntegrationTest {
   @Autowired YouTubeConnectionService connections;
   @Autowired WithdrawalService withdrawals;
   @Autowired WithdrawalRepository proofs;
+  @MockitoBean WithdrawalJournal journal;
   @Autowired FindByIndexNameSessionRepository<?> sessions;
   JdbcTemplate owner;
   Browser first, another, other;
@@ -291,6 +294,7 @@ class AccountWithdrawalIntegrationTest {
     delete(another, 409, "REAUTHENTICATION_REQUIRED");
     delete(other, 409, "REAUTHENTICATION_REQUIRED");
     retained();
+    org.mockito.Mockito.verifyNoInteractions(journal);
     assertThat(
             runtime.queryForObject(
                 "SELECT app.withdraw_account(?,?)",
@@ -325,6 +329,7 @@ class AccountWithdrawalIntegrationTest {
                     .withStatus(remoteStatus)
                     .withBody("{\"error\":\"temporarily_unavailable\"}")));
     delete(first, 409, "YOUTUBE_REVOCATION_PENDING");
+    org.mockito.Mockito.verifyNoInteractions(journal);
     retained();
     assertThat(
             runtime.queryForObject(
@@ -449,6 +454,66 @@ class AccountWithdrawalIntegrationTest {
         .allSatisfy(result -> assertThat(result).isIn(204, 401, 409))
         .containsOnlyOnce(204);
     assertThat(count("app.app_user", "id", USER)).isZero();
+    org.mockito.Mockito.verify(journal).record(USER);
+  }
+
+  @Test
+  void journalFailureRollsBackDeletionAndTheConfirmedRequestCanRetry() throws Exception {
+    org.mockito.Mockito.doThrow(
+            new AccountException(503, "WITHDRAWAL_JOURNAL_UNAVAILABLE", "retry"))
+        .doNothing()
+        .when(journal)
+        .record(USER);
+    delete(first, 503, "WITHDRAWAL_JOURNAL_UNAVAILABLE");
+    retained();
+    assertThat(proofs.confirmation(USER, YouTubeConnectionService.hash(first.session())))
+        .isPresent();
+    delete(first, 204, null);
+    assertThat(count("app.app_user", "id", USER)).isZero();
+    org.mockito.Mockito.verify(journal, org.mockito.Mockito.times(2)).record(USER);
+  }
+
+  @Test
+  void durableRecordingOccursAfterGuardedDeletionButBeforeCommit() throws Exception {
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              assertThat(
+                      runtime.queryForObject(
+                          "SELECT count(*) FROM app.app_user WHERE id=?", Integer.class, USER))
+                  .isZero();
+              // A different connection still sees the uncommitted account.
+              assertThat(count("app.app_user", "id", USER)).isEqualTo(1);
+              return null;
+            })
+        .when(journal)
+        .record(USER);
+    delete(first, 204, null);
+    org.mockito.Mockito.verify(journal).record(USER);
+    assertThat(count("app.app_user", "id", USER)).isZero();
+  }
+
+  @Test
+  void commitFailureAfterRecordingRetainsTheAuthorizedIntentForRecovery() throws Exception {
+    var recorded = new ArrayList<UUID>();
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              recorded.add(invocation.getArgument(0));
+              return null;
+            })
+        .when(journal)
+        .record(USER);
+    owner.execute(
+        "CREATE FUNCTION app.fail_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private-commit-detail'; END $$");
+    owner.execute(
+        "CREATE CONSTRAINT TRIGGER fail_commit AFTER DELETE ON app.app_user DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.fail_commit()");
+    try {
+      delete(first, 503, "ACCOUNT_STORAGE_UNAVAILABLE");
+      retained();
+      assertThat(recorded).containsExactly(USER);
+    } finally {
+      owner.execute("DROP TRIGGER fail_commit ON app.app_user");
+      owner.execute("DROP FUNCTION app.fail_commit()");
+    }
   }
 
   int withdrawResult() {

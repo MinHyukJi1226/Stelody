@@ -32,7 +32,7 @@
 4. 해당 버킷과 접두어에만 접근하는 application key를 만든다. 파일 목록·읽기·쓰기·삭제 권한(`listFiles`, `readFiles`, `writeFiles`, `deleteFiles`)이 필요하다. master key를 사용하지 않는다. [Application key 안내](https://www.backblaze.com/docs/cloud-storage-application-key-capabilities). keyID와 applicationKey는 비공개 로컬 파일에 보관하고 채팅·PR·스크린샷에 넣지 않는다.
 5. 복구용 age X25519 키 쌍을 비공개 로컬 파일에 생성한다. 공개키만 GitHub에 주고, 개인키는 운영 DB·Render·GitHub와 별개의 안전한 곳에도 보관한다. 개인키가 없으면 백업을 복원할 수 없다. 검증에서 만든 시험 개인키는 운영 키로 쓰지 않는다.
 6. GitHub 실행기에 DB 백업 접속을 제공하는 범위를 별도로 승인한다. 현재 `database.py`는 app/session 스키마 소유자 접속을 요구한다. 기존 수집 Secrets를 재사용하거나 DB 역할 권한을 넓혀 우회하지 않는다. 별도 GitHub environment에 두고 접근을 제한한다.
-7. 백업 이후 탈퇴한 UUID를 운영 DB와 독립적으로 보관하는 기록 경로를 확보한다. **이 백업 작업 자체는 탈퇴 기록을 자동 확보하지 않는다.** 기록이 완전하지 않으면 기존 복구 가드에 따라 회원 자료 공개 재개를 막는다. 주기적인 백업만으로 이 조건을 완료했다고 기록하지 않는다.
+7. [독립 탈퇴 기록](withdrawal-journal.md)을 별도로 활성화하고 기록 시작 이후 새 백업을 만든다. **이 백업 작업 자체는 탈퇴 기록을 자동 확보하지 않는다.** 기록이 완전하지 않으면 기존 복구 가드에 따라 회원 자료 공개 재개를 막는다. 주기적인 백업만으로 이 조건을 완료했다고 기록하지 않는다.
 
 ## GitHub 설정
 

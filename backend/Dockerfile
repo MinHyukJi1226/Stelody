@@ -1,6 +1,7 @@
 FROM eclipse-temurin:21-jre-jammy@sha256:f04fb34e053148344e83317976114ec3f37e4b830ec8bdab5a2fe3cecd7d010b
 
 WORKDIR /opt/stelody
+RUN apt-get update && apt-get install -y --no-install-recommends age && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 stelody && useradd --uid 10001 --gid stelody --no-create-home stelody
 COPY --chown=stelody:stelody backend/build/libs/stelody-0.0.1-SNAPSHOT.jar app.jar
 COPY --chmod=755 infra/deploy/healthcheck.sh /opt/stelody/healthcheck.sh
