@@ -194,7 +194,8 @@ def main():
         else:
             value = reconcile(client, bucket, args.backup, database.instant(args.services_stopped_at))
             database.private_directory(args.output.parent)
-            with args.output.open('x', opener=lambda p,f: os.open(p,f,0o600)) as output:
+            descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, 'w') as output:
                 json.dump(value, output)
                 output.write('\n')
             print(json.dumps({'withdrawalReconciliationPrepared':True,'readyForPublicTraffic':False}))
