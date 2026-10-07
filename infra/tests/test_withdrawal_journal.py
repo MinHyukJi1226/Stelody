@@ -114,6 +114,39 @@ class WithdrawalJournalTest(unittest.TestCase):
         with self.assertRaisesRegex(database.OperationError,'predates'):
             self.reconcile()
 
+    def test_reconcile_cli_creates_private_output_accepted_by_restore(self):
+        _, record = self.record()
+        output = self.root / 'withdrawals.json'
+        args = ['withdrawals.py', 'reconcile', '--backup', str(self.bundle),
+                '--services-stopped-at', self.stopped.isoformat(),
+                '--confirm-continuous-recording', '--output', str(output)]
+        with patch.object(withdrawals, 'remote', return_value=(self.store, 'private-bucket')), \
+                patch.object(self.store, 'close', create=True), \
+                patch.object(sys, 'argv', args), patch('sys.stdout', new_callable=io.StringIO):
+            original_umask = os.umask(0)
+            try:
+                withdrawals.main()
+            finally:
+                os.umask(original_umask)
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(database.withdrawal_ids(output, database.now(), self.created), [record['userId']])
+
+    def test_reconcile_cli_preserves_existing_output(self):
+        self.record()
+        output = self.root / 'withdrawals.json'
+        output.write_text('existing reconciliation')
+        output.chmod(0o600)
+        args = ['withdrawals.py', 'reconcile', '--backup', str(self.bundle),
+                '--services-stopped-at', self.stopped.isoformat(),
+                '--confirm-continuous-recording', '--output', str(output)]
+        with patch.object(withdrawals, 'remote', return_value=(self.store, 'private-bucket')), \
+                patch.object(self.store, 'close', create=True), \
+                patch.object(sys, 'argv', args), patch('sys.stderr', new_callable=io.StringIO), \
+                self.assertRaises(SystemExit) as exit_error:
+            withdrawals.main()
+        self.assertEqual(exit_error.exception.code, 1)
+        self.assertEqual(output.read_text(), 'existing reconciliation')
+
     def test_replaced_or_hidden_coverage_is_rejected(self):
         self.store.objects[withdrawals.COVERAGE,'v2'] = self.store.objects[withdrawals.COVERAGE,'v1']
         with self.assertRaisesRegex(database.OperationError,'replaced'):
