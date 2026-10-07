@@ -51,6 +51,15 @@ management:
       show-details: never
 
 stelody:
+  withdrawal-journal:
+    enabled: ${WITHDRAWAL_JOURNAL_ENABLED:false}
+    endpoint: ${WITHDRAWAL_B2_ENDPOINT:}
+    bucket: ${WITHDRAWAL_B2_BUCKET:}
+    access-key-id: ${WITHDRAWAL_B2_ACCESS_KEY_ID:}
+    secret-access-key: ${WITHDRAWAL_B2_SECRET_ACCESS_KEY:}
+    recipient: ${WITHDRAWAL_AGE_RECIPIENT:}
+    ledger-id: ${WITHDRAWAL_LEDGER_ID:}
+    age-binary: ${WITHDRAWAL_AGE_BINARY:/usr/bin/age}
   cover-publication:
     policy-allowed: ${COVER_AUTO_PUBLICATION_POLICY_ALLOWED:false}
   special-review:

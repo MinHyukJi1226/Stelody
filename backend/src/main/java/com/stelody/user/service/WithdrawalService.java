@@ -3,6 +3,7 @@ package com.stelody.user.service;
 import com.stelody.export.repository.ExportRepository;
 import com.stelody.export.service.YouTubeConnectionService;
 import com.stelody.user.repository.WithdrawalRepository;
+import com.stelody.user.service.ledger.WithdrawalJournal;
 import com.stelody.user.web.AccountException;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -15,17 +16,20 @@ public class WithdrawalService {
   private final ExportRepository exports;
   private final YouTubeConnectionService connections;
   private final TransactionTemplate transaction;
+  private final WithdrawalJournal journal;
 
   public WithdrawalService(
       WithdrawalRepository store,
       ExportRepository exports,
       YouTubeConnectionService connections,
-      PlatformTransactionManager manager) {
+      PlatformTransactionManager manager,
+      WithdrawalJournal journal) {
     this.store = store;
     this.exports = exports;
     this.connections = connections;
+    this.journal = journal;
     transaction = new TransactionTemplate(manager);
-    transaction.setTimeout(10);
+    transaction.setTimeout(30);
   }
 
   public void withdraw(UUID user, String session) {
@@ -46,6 +50,11 @@ public class WithdrawalService {
                   if (connection.isPresent() && !connection.get().status().equals("DISCONNECTED"))
                     return false;
                   if (!store.delete(user, hash)) throw AccountException.reauthenticationRequired();
+                  // The DELETE is still uncommitted. A missing/unverified durable record rolls it
+                  // back.
+                  // Keep the authorized intent if a later commit fails: recovery must err toward
+                  // deletion.
+                  journal.record(user);
                   return true;
                 }));
     // Commit REVOKING and cancellation even if Google is unavailable; the worker can retry.

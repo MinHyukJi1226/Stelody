@@ -113,8 +113,8 @@ def envelope(encrypted):
     return value
 
 
-def remote():
-    endpoint, bucket = os.environ['BACKUP_B2_ENDPOINT'], os.environ['BACKUP_B2_BUCKET']
+def remote(setting_prefix='BACKUP'):
+    endpoint, bucket = os.environ[setting_prefix + '_B2_ENDPOINT'], os.environ[setting_prefix + '_B2_BUCKET']
     match = re.fullmatch(r'https://s3\.([a-z]{2}-[a-z]+-[0-9]{3})\.backblazeb2\.com', endpoint)
     if not match:
         raise database.OperationError('Expected a Backblaze B2 HTTPS endpoint')
@@ -123,8 +123,8 @@ def remote():
     import boto3
     from botocore.config import Config
     client = boto3.client('s3', endpoint_url=endpoint, region_name=match.group(1),
-                         aws_access_key_id=os.environ['BACKUP_B2_ACCESS_KEY_ID'],
-                         aws_secret_access_key=os.environ['BACKUP_B2_SECRET_ACCESS_KEY'],
+                         aws_access_key_id=os.environ[setting_prefix + '_B2_ACCESS_KEY_ID'],
+                         aws_secret_access_key=os.environ[setting_prefix + '_B2_SECRET_ACCESS_KEY'],
                          config=Config(signature_version='s3v4', connect_timeout=10, read_timeout=60,
                                        retries={'mode': 'standard', 'max_attempts': 3},
                                        s3={'addressing_style': 'path'},
