@@ -13,6 +13,8 @@ server:
       max: 30
       min-spare: 2
 stelody:
+  hosting:
+    self-keep-alive-enabled: ${SELF_KEEP_ALIVE_ENABLED:false}
   auth:
     google:
       redirect-uri: ${GOOGLE_REDIRECT_URI:${RENDER_EXTERNAL_URL}/api/v1/auth/callback/google}
