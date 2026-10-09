@@ -641,12 +641,14 @@ class VideoCollectorIntegrationTest {
     seed(1);
     success(List.of(1), 100);
     var before = new CollectionScheduleState(source, false, false);
-    assertThat(before.due(NOW.minusSeconds(1)).videos()).isFalse();
+    assertThat(before.due(NOW.truncatedTo(java.time.temporal.ChronoUnit.HOURS)).videos()).isTrue();
     assertThat(before.due(NOW).videos()).isTrue();
     assertThat(collector(NOW).collect().status()).isEqualTo("SUCCEEDED");
     var restarted = new CollectionScheduleState(source, false, false);
     assertThat(restarted.due(NOW.plusSeconds(60)).due()).isFalse();
-    assertThat(restarted.due(NOW.plusSeconds(3600)).videos()).isTrue();
+    var nextHour = NOW.truncatedTo(java.time.temporal.ChronoUnit.HOURS).plusSeconds(3600);
+    assertThat(restarted.due(nextHour.minusSeconds(1)).due()).isFalse();
+    assertThat(restarted.due(nextHour).videos()).isTrue();
   }
 
   @Test
@@ -687,7 +689,8 @@ class VideoCollectorIntegrationTest {
         CHANNEL_ID,
         java.sql.Timestamp.from(NOW));
     assertThat(schedule.due(NOW.plusSeconds(60)).discovery()).isFalse();
-    assertThat(schedule.due(NOW.plusSeconds(7200)).discovery()).isTrue();
+    assertThat(schedule.due(NOW.plusSeconds(7200)).discovery()).isFalse();
+    assertThat(schedule.due(Instant.parse("2026-10-01T15:00:00Z")).discovery()).isTrue();
     writer.update(
         "INSERT INTO app.collection_retry_request(id, kind, run_id, expected_attempt, created_at) VALUES(?, 'DISCOVERY', ?, 1, ?)",
         UUID.randomUUID(),
@@ -708,27 +711,23 @@ class VideoCollectorIntegrationTest {
         CHANNEL_ID,
         java.sql.Timestamp.from(lastScan));
     var schedule = new CollectionScheduleState(source, true, false);
-    // A prior run's scan can finish slightly after :17. Do not mark the next window
-    // complete while the collector would skip it due to the two-hour freshness guard.
-    assertThat(schedule.due(NOW.plusSeconds(7200)).discovery()).isFalse();
-    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isTrue();
-    writer.update(
-        "INSERT INTO app.discovery_run(id, mode, started_at, status) VALUES (?, 'NEW', ?, 'SUCCEEDED')",
-        UUID.randomUUID(),
-        java.sql.Timestamp.from(NOW.plusSeconds(7200)));
-    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isTrue();
+    var midnight = Instant.parse("2026-10-01T15:00:00Z");
+    assertThat(schedule.due(midnight.minusSeconds(1)).discovery()).isFalse();
+    assertThat(schedule.due(midnight).discovery()).isTrue();
     writer.update(
         "UPDATE app.discovery_channel_state SET last_scanned_at=? WHERE channel_id=?",
-        java.sql.Timestamp.from(lastScan.plusSeconds(7200)),
+        java.sql.Timestamp.from(midnight),
         CHANNEL_ID);
-    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isFalse();
+    assertThat(schedule.due(midnight).discovery()).isFalse();
+    assertThat(schedule.due(midnight.plusSeconds(86399)).discovery()).isFalse();
+    assertThat(schedule.due(midnight.plusSeconds(86400)).discovery()).isTrue();
     writer.update(
         "UPDATE app.discovery_channel_state SET in_progress=true WHERE channel_id=?", CHANNEL_ID);
-    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isTrue();
+    assertThat(schedule.due(midnight).discovery()).isTrue();
   }
 
   @Test
-  void sharedExecutionKeepsWebPollingFromCollectingViewsBeforeTheyAreDue() {
+  void sharedExecutionCanRunDiscoveryWithoutCollectingViewsAgain() {
     seed(1);
     success(List.of(1), 100);
     var execution =

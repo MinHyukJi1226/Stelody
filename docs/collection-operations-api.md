@@ -20,7 +20,7 @@ VIDEO의 진행은 `totalCount`, `observedCount`, `skippedCount`, `pendingCount`
 
 `collection-status`는 `checkedAt`, `retryEnabled`, `video`, `discovery`, `pendingReviews`, `deferredReviews`, `activeRetry`를 반환한다. `deferredReviews`는 검토 대기 중 보류 또는 마지막 원본 관측 후 30일이 지난 항목 수이며 `pendingReviews`에 포함된다.
 
-각 수집 상태에는 `latest`, `lastSuccessAt`, `lastFailureAt`, `missedSlots`, `delayed`, `runningOverdue`가 있다. VIDEO는 매시간 UTC `:17`, 전체 채널 NEW 탐색은 짝수 UTC 시간 `:17`의 예정 슬롯을 기준으로 최근 성공 이후 미완료 슬롯을 계산한다. 3슬롯 이상이면 `delayed=true`다. 오래된 슬롯을 늦게 재개해 성공해도 새 슬롯 수집이 완료된 것으로 계산하지 않는다. BACKFILL이나 특정 채널의 수동 탐색 성공은 전체 NEW 탐색 지연을 해소하지 않는다. 탐색의 `lastSuccessAt`도 전체 채널 NEW 기준이며 최근 실행·실패는 모든 탐색 모드를 포함한다. 11분을 넘긴 RUNNING 실행은 `runningOverdue=true`이며 조회만으로 실행 상태를 변경하지 않는다.
+각 수집 상태에는 `latest`, `lastSuccessAt`, `lastFailureAt`, `missedSlots`, `delayed`, `runningOverdue`가 있다. Spring 정기 수집(`COLLECTOR_ENABLED=true`와 `COLLECTOR_SCHEDULED_ENABLED=true`가 모두 설정됨)에서는 VIDEO는 매시간 정각, 전체 채널 NEW 탐색은 한국 시간 매일 00:00의 예정 슬롯을 기준으로 최근 성공 이후 미완료 슬롯을 계산한다. 두 활성화 플래그 중 하나라도 꺼져 있으면 기존 GitHub 예약 기준(매시간 UTC `:17`·짝수 UTC 시간 `:17`)을 사용한다. 3슬롯 이상이면 `delayed=true`다. 오래된 슬롯을 늦게 재개해 성공해도 새 슬롯 수집이 완료된 것으로 계산하지 않는다. BACKFILL이나 특정 채널의 수동 탐색 성공은 전체 NEW 탐색 지연을 해소하지 않는다. 탐색의 `lastSuccessAt`도 전체 채널 NEW 기준이며 최근 실행·실패는 모든 탐색 모드를 포함한다. 11분을 넘긴 RUNNING 실행은 `runningOverdue=true`이며 조회만으로 실행 상태를 변경하지 않는다.
 
 성공 이력이 없으면 최초 실행부터 계산한다. 실행 자체가 없으면 시각·최근 실행은 null, 미완료 슬롯은 0이다. 수집 활성화 여부나 예약 실행 전송 성공을 이 값만으로 판단할 수 없다. `delayed`는 API 응답의 관리자 경고 값이며 별도 알림 전송은 제공하지 않는다. GitHub 예약 실행은 지연될 수 있다.
 

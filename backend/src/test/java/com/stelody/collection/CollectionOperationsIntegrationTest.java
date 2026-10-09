@@ -24,8 +24,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
@@ -399,7 +402,7 @@ class CollectionOperationsIntegrationTest {
         400);
     assertThatThrownBy(
             () ->
-                new CollectionOperations(queries, false)
+                new CollectionOperations(queries, false, false, false)
                     .request(
                         "VIDEO",
                         run,
@@ -633,6 +636,55 @@ class CollectionOperationsIntegrationTest {
     }
     owner.update("UPDATE app.discovery_run SET mode='NEW' WHERE id=?", backfill);
     assertThat(queries.health("DISCOVERY", at.plusSeconds(1)).missedSlots()).isEqualTo(3);
+  }
+
+  @Test
+  void springScheduleWarningsUseHourStartAndKoreanMidnight() {
+    UUID video = failedVideo(), discovery = failedDiscovery("NEW");
+    owner.update(
+        "UPDATE app.collection_run SET logical_slot=?,status='SUCCEEDED' WHERE id=?",
+        Timestamp.from(Instant.parse("2026-10-03T12:00:00Z")),
+        video);
+    owner.update(
+        "UPDATE app.discovery_run SET started_at=?,status='SUCCEEDED' WHERE id=?",
+        Timestamp.from(Instant.parse("2026-09-30T15:00:00Z")),
+        discovery);
+    var before = Instant.parse("2026-10-03T14:59:59Z");
+    for (String kind : List.of("VIDEO", "DISCOVERY")) {
+      assertThat(queries.health(kind, before, true).missedSlots()).isEqualTo(2);
+      assertThat(queries.health(kind, before, true).delayed()).isFalse();
+      assertThat(queries.health(kind, before.plusSeconds(1), true).missedSlots()).isEqualTo(3);
+      assertThat(queries.health(kind, before.plusSeconds(1), true).delayed()).isTrue();
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"false,false,false", "false,true,false", "true,false,false", "true,true,true"})
+  void overviewUsesSpringCadenceOnlyWhenBothCollectorFlagsAreEnabled(
+      boolean collectorEnabled, boolean scheduledEnabled, boolean expectedSpring) {
+    UUID video = failedVideo(), discovery = failedDiscovery("NEW");
+    owner.update(
+        "UPDATE app.collection_run SET logical_slot=?,status='SUCCEEDED' WHERE id=?",
+        Timestamp.from(now.minusSeconds(345600).truncatedTo(ChronoUnit.HOURS)),
+        video);
+    owner.update(
+        "UPDATE app.discovery_run SET started_at=?,status='SUCCEEDED' WHERE id=?",
+        Timestamp.from(now.minusSeconds(345600)),
+        discovery);
+    new ApplicationContextRunner()
+        .withUserConfiguration(CollectionOperations.class)
+        .withBean(CollectionQueries.class, () -> queries)
+        .withPropertyValues(
+            "stelody.collector.enabled=" + collectorEnabled,
+            "stelody.collector.scheduled-enabled=" + scheduledEnabled)
+        .run(
+            context -> {
+              var overview = context.getBean(CollectionOperations.class).overview();
+              assertThat(overview.video())
+                  .isEqualTo(queries.health("VIDEO", overview.checkedAt(), expectedSpring));
+              assertThat(overview.discovery())
+                  .isEqualTo(queries.health("DISCOVERY", overview.checkedAt(), expectedSpring));
+            });
   }
 
   @Test

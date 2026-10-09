@@ -205,6 +205,43 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   @Test
+  void scheduledMidnightScanDoesNotSkipChannelsScannedLessThanTwoHoursAgo() {
+    var midnight = Instant.parse("2026-10-01T15:00:00Z");
+    page(null, null, 1);
+    videos(1);
+    assertThat(run(midnight.minusSeconds(1800), false, 1).status()).isEqualTo("SUCCEEDED");
+    page(null, null, 2, 1);
+    videos(2);
+    var scheduled =
+        new DiscoveryCollector(
+            source,
+            settings(),
+            new DiscoveryOptions(true, null, false, 3),
+            Clock.fixed(midnight, ZoneOffset.UTC),
+            d -> {});
+    assertThat(
+            scheduled
+                .collectScheduled(
+                    new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(30)),
+                    midnight)
+                .status())
+        .isEqualTo("SUCCEEDED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE youtube_id=?", Long.class, yt(2)))
+        .isEqualTo(1);
+    server.verify(2, getRequestedFor(urlPathEqualTo("/playlistItems")));
+    assertThat(
+            scheduled
+                .collectScheduled(
+                    new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(30)),
+                    midnight)
+                .status())
+        .isEqualTo("SUCCEEDED");
+    server.verify(2, getRequestedFor(urlPathEqualTo("/playlistItems")));
+  }
+
+  @Test
   void collectorFreezesRuleVersionUntilNextRun() {
     var exclude =
         new RuleConfiguration(

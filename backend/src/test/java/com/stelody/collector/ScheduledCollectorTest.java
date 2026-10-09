@@ -11,25 +11,73 @@ import com.stelody.export.config.ExportScheduling;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 class ScheduledCollectorTest {
   @Test
-  void discoveryKeepsOddKstHoursAndCatchesUpAfterRestartOrMidnight() {
-    assertThat(CollectionScheduleState.discoveryBoundary(Instant.parse("2026-10-09T00:16:59Z")))
-        .isEqualTo(Instant.parse("2026-10-08T22:17:00Z"));
-    assertThat(CollectionScheduleState.discoveryBoundary(Instant.parse("2026-10-09T00:17:00Z")))
-        .isEqualTo(Instant.parse("2026-10-09T00:17:00Z"));
-    assertThat(CollectionScheduleState.discoveryBoundary(Instant.parse("2026-10-09T01:59:00Z")))
-        .isEqualTo(Instant.parse("2026-10-09T00:17:00Z"));
-    assertThat(CollectionScheduleState.discoveryBoundary(Instant.parse("2026-10-09T02:17:00Z")))
-        .isEqualTo(Instant.parse("2026-10-09T02:17:00Z"));
+  void discoveryUsesKoreanMidnightAcrossUtcDates() {
+    assertThat(CollectionScheduleState.discoveryBoundary(Instant.parse("2026-10-09T14:59:59Z")))
+        .isEqualTo(Instant.parse("2026-10-08T15:00:00Z"));
+    assertThat(CollectionScheduleState.discoveryBoundary(Instant.parse("2026-10-09T15:00:00Z")))
+        .isEqualTo(Instant.parse("2026-10-09T15:00:00Z"));
+    assertThat(CollectionScheduleState.discoveryBoundary(Instant.parse("2026-10-10T03:00:00Z")))
+        .isEqualTo(Instant.parse("2026-10-09T15:00:00Z"));
+  }
+
+  @Test
+  void regularTriggerIsHourlyWithoutMinutePolling() throws Exception {
+    var schedule = ScheduledCollector.class.getMethod("tick").getAnnotation(Scheduled.class);
+    assertThat(schedule.cron()).isEqualTo("0 0 * * * *");
+    assertThat(schedule.zone()).isEqualTo("Asia/Seoul");
+    assertThat(schedule.fixedDelay()).isEqualTo(-1);
+  }
+
+  @Test
+  void startupChecksOnceAndCompleteWorkCreatesNoFollowUp() {
+    var now = Instant.parse("2026-10-09T00:00:00Z");
+    var scheduler = mock(TaskScheduler.class);
+    var collector =
+        new ScheduledCollector(
+            Clock.fixed(now, ZoneOffset.UTC),
+            time -> new Plan(false, false, false),
+            plan -> 0,
+            scheduler,
+            () -> {});
+    collector.onReady();
+    verify(scheduler).schedule(any(Runnable.class), eq(now.plusSeconds(60)));
+    collector.tick();
+    verifyNoMoreInteractions(scheduler);
+  }
+
+  @Test
+  void unfinishedWorkSchedulesOneContinuationAndShutdownCancelsIt() throws Exception {
+    var now = Instant.parse("2026-10-09T00:00:00Z");
+    var scheduler = mock(TaskScheduler.class);
+    ScheduledFuture<?> future = mock(ScheduledFuture.class);
+    doReturn(future).when(scheduler).schedule(any(Runnable.class), any(Instant.class));
+    var collector =
+        new ScheduledCollector(
+            Clock.fixed(now, ZoneOffset.UTC),
+            time -> new Plan(true, false, false),
+            plan -> 0,
+            scheduler,
+            () -> {});
+    collector.tick();
+    verify(scheduler).schedule(any(Runnable.class), eq(now.plusSeconds(900)));
+    collector.close();
+    verify(future).cancel(false);
+    collector.tick();
+    collector.onReady();
+    verifyNoMoreInteractions(scheduler);
   }
 
   @Test
@@ -43,6 +91,7 @@ class ScheduledCollectorTest {
               calls.incrementAndGet();
               return 0;
             },
+            mock(TaskScheduler.class),
             () -> {});
     collector.tick(); // May have completed an older interrupted slot / admin retry.
     collector.tick(); // Current slot is still due.
@@ -64,6 +113,7 @@ class ScheduledCollectorTest {
               calls.incrementAndGet();
               throw new IllegalStateException("private-error");
             },
+            mock(TaskScheduler.class),
             () -> {});
     collector.tick();
     when(clock.instant()).thenReturn(now.plusSeconds(899));
@@ -88,6 +138,7 @@ class ScheduledCollectorTest {
               calls.incrementAndGet();
               return 1;
             },
+            mock(TaskScheduler.class),
             () -> {});
     collector.tick();
     collector.tick();
@@ -148,6 +199,7 @@ class ScheduledCollectorTest {
             Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
             time -> new Plan(false, false, false),
             plan -> 0,
+            mock(TaskScheduler.class),
             pool)
         .close();
     verify(pool).close();
