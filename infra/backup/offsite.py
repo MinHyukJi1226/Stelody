@@ -19,6 +19,7 @@ import database
 PREFIX = 'stelody/backups/'
 KEY = re.compile(r'stelody/backups/[0-9]{8}T[0-9]{6}Z-[0-9a-f]{32}\.age\Z')
 MAX_BYTES = 128 * 1024 * 1024
+BACKUP_INTERVAL = timedelta(hours=24)
 
 
 def private_file(path):
@@ -217,6 +218,52 @@ def download(key, directory):
     return destination
 
 
+def backup_due():
+    """Check visible backups, so any scheduled run can recover a missed daily backup."""
+    client, bucket = remote()
+    validate_storage(client, bucket)
+    checked_at = database.now()
+    latest = None
+    count = 0
+    for page in client.get_paginator('list_object_versions').paginate(Bucket=bucket, Prefix=PREFIX):
+        versions = [item for item in page.get('Versions', []) if KEY.fullmatch(item['Key'])]
+        count += len(versions) + sum(KEY.fullmatch(item['Key']) is not None
+                                     for item in page.get('DeleteMarkers', []))
+        if count > 10000:
+            raise database.OperationError('Unexpected backup version count; inspect storage before scheduling')
+        for item in versions:
+            # Hidden and noncurrent versions cannot suppress a replacement backup.
+            if not item.get('IsLatest'):
+                continue
+            version = item.get('VersionId')
+            if not version or version == 'null':
+                raise database.OperationError('Storage version missing')
+            metadata = client.head_object(Bucket=bucket, Key=item['Key'], VersionId=version).get('Metadata', {})
+            if metadata.get('stelody-format') != '1':
+                raise database.OperationError('Unknown remote backup format')
+            created = database.instant(metadata['created-at'])
+            expiry = database.instant(metadata['expires-at'])
+            if (created > checked_at or not created < expiry <= created + database.MAX_AGE
+                    or not re.fullmatch(r'[0-9a-f]{64}', metadata.get('cipher-sha256', ''))):
+                raise database.OperationError('Invalid remote backup metadata')
+            if expiry <= checked_at:
+                continue
+            if latest is None or created > latest[0]:
+                latest = (created, item, metadata)
+    if latest is None:
+        return {'backupRequired': True, 'reason': 'missing', 'latestBackupCreatedAt': None}
+    created, item, metadata = latest
+    required = checked_at - created >= BACKUP_INTERVAL
+    if not required:
+        # A previous upload may have failed its read-back. Verify before skipping
+        # another backup instead of treating upload metadata alone as success.
+        expected = {'createdAt': metadata['created-at'], 'expiresAt': metadata['expires-at'],
+                    'sha256': metadata['cipher-sha256']}
+        verify_remote(client, bucket, item['Key'], item['VersionId'], expected)
+    return {'backupRequired': required, 'reason': 'stale' if required else 'recent',
+            'latestBackupCreatedAt': created.isoformat()}
+
+
 def prune():
     client, bucket = remote()
     versions, markers = [], []
@@ -269,6 +316,8 @@ def main():
     command.add_argument('--key', required=True)
     command.add_argument('--directory', type=Path, required=True)
     sub.add_parser('prune')
+    command = sub.add_parser('backup-due')
+    command.add_argument('--github-output', type=Path)
     args = parser.parse_args()
     try:
         if args.command == 'seal':
@@ -279,6 +328,11 @@ def main():
             result = {'uploaded': upload(args.source), 'verifiedByDownload': True}
         elif args.command == 'download':
             result = {'encrypted': str(download(args.key, args.directory))}
+        elif args.command == 'backup-due':
+            result = backup_due()
+            if args.github_output:
+                with args.github_output.open('a') as output:
+                    output.write('backup_required=' + str(result['backupRequired']).lower() + '\n')
         else:
             result = {'expiredObjectsRemoved': prune()}
         print(json.dumps(result))

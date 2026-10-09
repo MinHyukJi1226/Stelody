@@ -2,7 +2,6 @@ name: Database backup
 
 on:
   schedule:
-    - cron: '47 3 * * *'
     - cron: '47 * * * *'
   workflow_dispatch:
     inputs:
@@ -40,8 +39,17 @@ jobs:
           BACKUP_B2_ACCESS_KEY_ID: ${{ secrets.BACKUP_B2_ACCESS_KEY_ID }}
           BACKUP_B2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_B2_SECRET_ACCESS_KEY }}
         run: /tmp/stelody-backup-venv/bin/python infra/backup/offsite.py prune
+      - name: Check whether a scheduled backup is due
+        id: backup-due
+        if: github.event_name == 'schedule'
+        env:
+          BACKUP_B2_ENDPOINT: ${{ vars.BACKUP_B2_ENDPOINT }}
+          BACKUP_B2_BUCKET: ${{ vars.BACKUP_B2_BUCKET }}
+          BACKUP_B2_ACCESS_KEY_ID: ${{ secrets.BACKUP_B2_ACCESS_KEY_ID }}
+          BACKUP_B2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_B2_SECRET_ACCESS_KEY }}
+        run: /tmp/stelody-backup-venv/bin/python infra/backup/offsite.py backup-due --github-output "$GITHUB_OUTPUT"
       - name: Create, encrypt, upload and read back the database backup
-        if: github.event.schedule == '47 3 * * *' || (github.event_name == 'workflow_dispatch' && inputs.backup)
+        if: steps.backup-due.outputs.backup_required == 'true' || (github.event_name == 'workflow_dispatch' && inputs.backup)
         env:
           PGHOST: ${{ secrets.BACKUP_DB_HOST }}
           PGPORT: '5432'
