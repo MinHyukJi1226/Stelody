@@ -51,6 +51,13 @@ management:
       show-details: never
 
 stelody:
+  collector:
+    enabled: ${COLLECTOR_ENABLED:false}
+    scheduled-enabled: ${COLLECTOR_SCHEDULED_ENABLED:false}
+    db-url: ${COLLECTOR_DB_URL:}
+    db-username: ${COLLECTOR_DB_USERNAME:}
+    db-password: ${COLLECTOR_DB_PASSWORD:}
+    api-key: ${YOUTUBE_API_KEY:}
   withdrawal-journal:
     enabled: ${WITHDRAWAL_JOURNAL_ENABLED:false}
     endpoint: ${WITHDRAWAL_B2_ENDPOINT:}
