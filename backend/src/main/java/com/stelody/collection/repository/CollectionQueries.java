@@ -69,6 +69,10 @@ public class CollectionQueries {
   }
 
   public Health health(String kind, Instant now) {
+    return health(kind, now, false);
+  }
+
+  public Health health(String kind, Instant now, boolean springSchedule) {
     var latest = list(kind, 0, 1, null).stream().findFirst().orElse(null);
     String scheduled = kind.equals("VIDEO") ? "" : " AND mode='NEW' AND channel_id IS NULL";
     var success =
@@ -99,8 +103,11 @@ public class CollectionQueries {
             .query((r, n) -> Optional.ofNullable(instant(r, "max")))
             .single()
             .orElse(null);
-    long period = kind.equals("VIDEO") ? 3600 : 7200;
-    long due = Math.floorDiv(now.minusSeconds(17 * 60).getEpochSecond(), period) * period;
+    long period = kind.equals("VIDEO") ? 3600 : springSchedule ? 86400 : 7200;
+    long offset = springSchedule && !kind.equals("VIDEO") ? 32400 : 0;
+    long due =
+        Math.floorDiv(now.getEpochSecond() + offset - (springSchedule ? 0 : 17 * 60), period)
+            * period;
     var first =
         anchor == null
             ? jdbc.sql("SELECT min(started_at) FROM " + table(kind) + " WHERE true" + scheduled)
@@ -114,7 +121,7 @@ public class CollectionQueries {
             ? 0
             : Math.max(
                 0,
-                (due - Math.floorDiv(baseline.getEpochSecond(), period) * period) / period
+                (due - Math.floorDiv(baseline.getEpochSecond() + offset, period) * period) / period
                     + (anchor == null ? 1 : 0));
     boolean overdue =
         jdbc.sql(

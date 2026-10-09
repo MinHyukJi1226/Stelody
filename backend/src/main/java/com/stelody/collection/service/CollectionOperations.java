@@ -13,12 +13,15 @@ import org.springframework.transaction.annotation.*;
 public class CollectionOperations {
   private final CollectionQueries queries;
   private final boolean retryEnabled;
+  private final boolean springSchedule;
 
   public CollectionOperations(
       CollectionQueries queries,
-      @Value("${stelody.collection.retry-enabled:false}") boolean retryEnabled) {
+      @Value("${stelody.collection.retry-enabled:false}") boolean retryEnabled,
+      @Value("${stelody.collector.scheduled-enabled:false}") boolean springSchedule) {
     this.queries = queries;
     this.retryEnabled = retryEnabled;
+    this.springSchedule = springSchedule;
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -27,8 +30,8 @@ public class CollectionOperations {
     return new Overview(
         now,
         retryEnabled,
-        queries.health("VIDEO", now),
-        queries.health("DISCOVERY", now),
+        queries.health("VIDEO", now, springSchedule),
+        queries.health("DISCOVERY", now, springSchedule),
         queries.pending(false),
         queries.pending(true),
         queries.active());

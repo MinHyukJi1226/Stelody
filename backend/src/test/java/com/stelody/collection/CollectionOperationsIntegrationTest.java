@@ -399,7 +399,7 @@ class CollectionOperationsIntegrationTest {
         400);
     assertThatThrownBy(
             () ->
-                new CollectionOperations(queries, false)
+                new CollectionOperations(queries, false, false)
                     .request(
                         "VIDEO",
                         run,
@@ -633,6 +633,26 @@ class CollectionOperationsIntegrationTest {
     }
     owner.update("UPDATE app.discovery_run SET mode='NEW' WHERE id=?", backfill);
     assertThat(queries.health("DISCOVERY", at.plusSeconds(1)).missedSlots()).isEqualTo(3);
+  }
+
+  @Test
+  void springScheduleWarningsUseHourStartAndKoreanMidnight() {
+    UUID video = failedVideo(), discovery = failedDiscovery("NEW");
+    owner.update(
+        "UPDATE app.collection_run SET logical_slot=?,status='SUCCEEDED' WHERE id=?",
+        Timestamp.from(Instant.parse("2026-10-03T12:00:00Z")),
+        video);
+    owner.update(
+        "UPDATE app.discovery_run SET started_at=?,status='SUCCEEDED' WHERE id=?",
+        Timestamp.from(Instant.parse("2026-09-30T15:00:00Z")),
+        discovery);
+    var before = Instant.parse("2026-10-03T14:59:59Z");
+    for (String kind : List.of("VIDEO", "DISCOVERY")) {
+      assertThat(queries.health(kind, before, true).missedSlots()).isEqualTo(2);
+      assertThat(queries.health(kind, before, true).delayed()).isFalse();
+      assertThat(queries.health(kind, before.plusSeconds(1), true).missedSlots()).isEqualTo(3);
+      assertThat(queries.health(kind, before.plusSeconds(1), true).delayed()).isTrue();
+    }
   }
 
   @Test

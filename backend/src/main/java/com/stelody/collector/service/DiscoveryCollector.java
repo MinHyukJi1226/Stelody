@@ -12,6 +12,7 @@ import com.stelody.collector.repository.DiscoveryRepository;
 import com.stelody.collector.youtube.YouTubeUploadsClient;
 import com.stelody.collector.youtube.YouTubeVideoClient;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,15 +54,21 @@ public final class DiscoveryCollector {
   }
 
   public VideoCollector.Result collect(CollectionBudget budget) {
-    return collect(budget, false, id -> {});
+    return collect(budget, false, id -> {}, null);
+  }
+
+  /** Scheduled scans use a calendar boundary instead of the CLI's two-hour cooldown. */
+  public VideoCollector.Result collectScheduled(CollectionBudget budget, Instant boundary) {
+    java.util.Objects.requireNonNull(boundary);
+    return collect(budget, false, id -> {}, boundary);
   }
 
   VideoCollector.Result retry(CollectionBudget budget, Consumer<UUID> started) {
-    return collect(budget, true, started);
+    return collect(budget, true, started, null);
   }
 
   private VideoCollector.Result collect(
-      CollectionBudget budget, boolean lockHeld, Consumer<UUID> started) {
+      CollectionBudget budget, boolean lockHeld, Consumer<UUID> started, Instant scanBoundary) {
     if (!settings.enabled()) return new VideoCollector.Result(null, "SKIPPED_DISABLED", null);
     UUID token = UUID.randomUUID(), run = null;
     try {
@@ -99,7 +106,9 @@ public final class DiscoveryCollector {
                     ? !state.backfillComplete()
                     : state.inProgress()
                         || state.lastScanned() == null
-                        || !state.lastScanned().isAfter(clock.instant().minusSeconds(7200));
+                        || (scanBoundary == null
+                            ? !state.lastScanned().isAfter(clock.instant().minusSeconds(7200))
+                            : state.lastScanned().isBefore(scanBoundary));
             var tokens = new HashSet<String>();
             for (int page = 0; scan && page < options.maxPages(); page++) {
               budget.remaining();

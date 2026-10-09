@@ -2,7 +2,7 @@ package com.stelody.collector.scheduling;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -29,18 +29,17 @@ public final class CollectionScheduleState {
   public Plan due(Instant now) {
     Instant hour = now.truncatedTo(ChronoUnit.HOURS);
     boolean videos =
-        !now.isBefore(hour.plusSeconds(17 * 60))
-            && jdbc.sql(
-                    """
+        jdbc.sql(
+                """
             SELECT NOT EXISTS (SELECT 1 FROM app.collection_run
               WHERE logical_slot=:slot AND status='SUCCEEDED')
               OR EXISTS (SELECT 1 FROM app.collection_run
               WHERE logical_slot>=:oldest AND logical_slot<=:slot AND status<>'SUCCEEDED')
             """)
-                .param("slot", Timestamp.from(hour))
-                .param("oldest", Timestamp.from(now.minusSeconds(172800)))
-                .query(Boolean.class)
-                .single();
+            .param("slot", Timestamp.from(hour))
+            .param("oldest", Timestamp.from(now.minusSeconds(172800)))
+            .query(Boolean.class)
+            .single();
     boolean discovery =
         discoveryEnabled
             && jdbc.sql(
@@ -48,11 +47,9 @@ public final class CollectionScheduleState {
             SELECT EXISTS (SELECT 1 FROM app.channel c
               LEFT JOIN app.discovery_channel_state s ON s.channel_id=c.id
               WHERE c.collection_enabled AND c.channel_type IN ('GROUP','MEMBER')
-                AND (s.in_progress OR s.last_scanned_at IS NULL OR
-                  (s.last_scanned_at<:since AND s.last_scanned_at<=:cutoff)))
+                AND (s.in_progress OR s.last_scanned_at IS NULL OR s.last_scanned_at<:since))
             """)
                 .param("since", Timestamp.from(discoveryBoundary(now)))
-                .param("cutoff", Timestamp.from(now.minusSeconds(7200)))
                 .query(Boolean.class)
                 .single();
     boolean retries =
@@ -67,11 +64,9 @@ public final class CollectionScheduleState {
     return new Plan(videos, discovery, retries);
   }
 
-  /** Even UTC hours at :17 correspond to odd KST hours at :17. */
+  /** Latest midnight in Korea, including when the server starts later in the day. */
   public static Instant discoveryBoundary(Instant now) {
-    Instant hour = now.truncatedTo(ChronoUnit.HOURS);
-    if (now.isBefore(hour.plusSeconds(17 * 60))) hour = hour.minusSeconds(3600);
-    if (hour.atOffset(ZoneOffset.UTC).getHour() % 2 != 0) hour = hour.minusSeconds(3600);
-    return hour.plusSeconds(17 * 60);
+    var zone = ZoneId.of("Asia/Seoul");
+    return now.atZone(zone).toLocalDate().atStartOfDay(zone).toInstant();
   }
 }

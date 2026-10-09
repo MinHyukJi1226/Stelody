@@ -4,12 +4,14 @@ import com.stelody.collector.scheduling.CollectionScheduleState;
 import com.stelody.collector.scheduling.ScheduledCollector;
 import com.stelody.collector.service.CollectorExecution;
 import java.time.Clock;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @Configuration(proxyBeanMethods = false)
@@ -28,7 +30,8 @@ public class CollectorSchedulingConfiguration {
   }
 
   @Bean(destroyMethod = "close")
-  ScheduledCollector scheduledCollector(Environment environment) {
+  ScheduledCollector scheduledCollector(
+      Environment environment, @Qualifier("collectorTaskScheduler") TaskScheduler scheduler) {
     var settings = CollectorSettings.from(environment);
     // Deliberately not a DataSource bean: Spring/JPA/session continue using the web role.
     var source = CollectorExecution.createDataSource(settings);
@@ -46,7 +49,9 @@ public class CollectorSchedulingConfiguration {
                 source,
                 new DefaultApplicationArguments(
                     plan.discovery() ? new String[] {"--discover"} : new String[] {}),
-                plan.videos()),
+                plan.videos(),
+                CollectionScheduleState.discoveryBoundary(Clock.systemUTC().instant())),
+        scheduler,
         source);
   }
 }

@@ -6,6 +6,7 @@ import com.stelody.collector.domain.CollectionBudget;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.time.Clock;
+import java.time.Instant;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,14 @@ public final class CollectorExecution {
   }
 
   public int execute(DataSource source, ApplicationArguments arguments, boolean collectViews) {
+    return execute(source, arguments, collectViews, null);
+  }
+
+  public int execute(
+      DataSource source,
+      ApplicationArguments arguments,
+      boolean collectViews,
+      Instant discoveryBoundary) {
     int exitCode = 0;
     if (!settings.enabled()) {
       LOG.info("collector status=SKIPPED_DISABLED");
@@ -94,14 +103,13 @@ public final class CollectorExecution {
       if (discover
           && (result == null
               || (result.exitCode() == 0 && !result.status().equals("SKIPPED_LOCKED")))) {
-        var discovered =
+        var discoveryCollector =
             new DiscoveryCollector(
-                    source,
-                    settings,
-                    options,
-                    Clock.systemUTC(),
-                    duration -> Thread.sleep(duration))
-                .collect(budget);
+                source, settings, options, Clock.systemUTC(), duration -> Thread.sleep(duration));
+        var discovered =
+            discoveryBoundary == null
+                ? discoveryCollector.collect(budget)
+                : discoveryCollector.collectScheduled(budget, discoveryBoundary);
         exitCode = discovered.exitCode();
         LOG.info(
             "discovery runId={} status={} code={}",
