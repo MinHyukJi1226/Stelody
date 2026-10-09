@@ -9,7 +9,9 @@ import com.stelody.collector.config.CollectorSettings;
 import com.stelody.collector.domain.CollectionFailure;
 import com.stelody.collector.domain.VideoObservation;
 import com.stelody.collector.repository.CollectionRepository;
+import com.stelody.collector.scheduling.CollectionScheduleState;
 import com.stelody.collector.service.CollectionLock;
+import com.stelody.collector.service.CollectorExecution;
 import com.stelody.collector.service.VideoCollector;
 import com.stelody.song.repository.SongRepository;
 import com.zaxxer.hikari.HikariConfig;
@@ -632,5 +634,115 @@ class VideoCollectorIntegrationTest {
           .isEmpty();
       assertThat(SpringApplication.exit(context)).isZero();
     }
+  }
+
+  @Test
+  void scheduledCollectionChecksPersistedSuccessAndResumesCurrentStateAfterRestart() {
+    seed(1);
+    success(List.of(1), 100);
+    var before = new CollectionScheduleState(source, false, false);
+    assertThat(before.due(NOW.minusSeconds(1)).videos()).isFalse();
+    assertThat(before.due(NOW).videos()).isTrue();
+    assertThat(collector(NOW).collect().status()).isEqualTo("SUCCEEDED");
+    var restarted = new CollectionScheduleState(source, false, false);
+    assertThat(restarted.due(NOW.plusSeconds(60)).due()).isFalse();
+    assertThat(restarted.due(NOW.plusSeconds(3600)).videos()).isTrue();
+  }
+
+  @Test
+  void interruptedOlderSlotRemainsDueEvenWhenCurrentSlotIsComplete() {
+    seed(1);
+    success(List.of(1), 100);
+    assertThat(collector(NOW).collect().status()).isEqualTo("SUCCEEDED");
+    writer.update(
+        "INSERT INTO app.collection_run(id, logical_slot, status, attempt, started_at) VALUES(? ,? ,'FAILED',1,?)",
+        UUID.randomUUID(),
+        java.sql.Timestamp.from(
+            NOW.minusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.HOURS)),
+        java.sql.Timestamp.from(NOW.minusSeconds(3600)));
+    assertThat(new CollectionScheduleState(source, false, false).due(NOW).videos()).isTrue();
+  }
+
+  @Test
+  void actualChannelScanSatisfiesScheduleAndRetryRequestsRemainDue() {
+    var owner =
+        new DriverManagerDataSource(postgres.getJdbcUrl(), "stelody_migrator", "test-migrator");
+    new ResourceDatabasePopulator(
+            new ClassPathResource("discovery-grants.sql"),
+            new ClassPathResource("collection-operations-grants.sql"))
+        .execute(owner);
+    var schedule = new CollectionScheduleState(source, true, true);
+    assertThat(schedule.due(NOW).discovery()).isTrue();
+    var id = UUID.randomUUID();
+    writer.update(
+        "INSERT INTO app.discovery_run(id, mode, started_at, status) VALUES(?, 'NEW', ?, 'FAILED')",
+        id,
+        java.sql.Timestamp.from(NOW));
+    assertThat(schedule.due(NOW).discovery()).isTrue();
+    writer.update("UPDATE app.discovery_run SET status='SUCCEEDED' WHERE id=?", id);
+    // A successful overall run may have skipped a recently scanned channel.
+    assertThat(schedule.due(NOW.plusSeconds(60)).discovery()).isTrue();
+    writer.update(
+        "INSERT INTO app.discovery_channel_state(channel_id, uploads_id, last_scanned_at) VALUES (?, 'uploads', ?)",
+        CHANNEL_ID,
+        java.sql.Timestamp.from(NOW));
+    assertThat(schedule.due(NOW.plusSeconds(60)).discovery()).isFalse();
+    assertThat(schedule.due(NOW.plusSeconds(7200)).discovery()).isTrue();
+    writer.update(
+        "INSERT INTO app.collection_retry_request(id, kind, run_id, expected_attempt, created_at) VALUES(?, 'DISCOVERY', ?, 1, ?)",
+        UUID.randomUUID(),
+        id,
+        java.sql.Timestamp.from(NOW));
+    assertThat(schedule.due(NOW).retries()).isTrue();
+  }
+
+  @Test
+  void discoveryWaitsUntilChannelsActuallyNeedScanningAndContinuesIncompletePages() {
+    var owner =
+        new DriverManagerDataSource(postgres.getJdbcUrl(), "stelody_migrator", "test-migrator");
+    new ResourceDatabasePopulator(new ClassPathResource("discovery-grants.sql")).execute(owner);
+    writer.execute("TRUNCATE app.discovery_run");
+    var lastScan = NOW.plusSeconds(30);
+    writer.update(
+        "INSERT INTO app.discovery_channel_state(channel_id, uploads_id, last_scanned_at) VALUES (?, 'uploads', ?)",
+        CHANNEL_ID,
+        java.sql.Timestamp.from(lastScan));
+    var schedule = new CollectionScheduleState(source, true, false);
+    // A prior run's scan can finish slightly after :17. Do not mark the next window
+    // complete while the collector would skip it due to the two-hour freshness guard.
+    assertThat(schedule.due(NOW.plusSeconds(7200)).discovery()).isFalse();
+    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isTrue();
+    writer.update(
+        "INSERT INTO app.discovery_run(id, mode, started_at, status) VALUES (?, 'NEW', ?, 'SUCCEEDED')",
+        UUID.randomUUID(),
+        java.sql.Timestamp.from(NOW.plusSeconds(7200)));
+    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isTrue();
+    writer.update(
+        "UPDATE app.discovery_channel_state SET last_scanned_at=? WHERE channel_id=?",
+        java.sql.Timestamp.from(lastScan.plusSeconds(7200)),
+        CHANNEL_ID);
+    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isFalse();
+    writer.update(
+        "UPDATE app.discovery_channel_state SET in_progress=true WHERE channel_id=?", CHANNEL_ID);
+    assertThat(schedule.due(lastScan.plusSeconds(7200)).discovery()).isTrue();
+  }
+
+  @Test
+  void sharedExecutionKeepsWebPollingFromCollectingViewsBeforeTheyAreDue() {
+    seed(1);
+    success(List.of(1), 100);
+    var execution =
+        new CollectorExecution(
+            settings(Duration.ofSeconds(30), 1),
+            new org.springframework.mock.env.MockEnvironment());
+    assertThat(
+            execution.execute(
+                source, new org.springframework.boot.DefaultApplicationArguments(), false))
+        .isZero();
+    server.verify(0, getRequestedFor(urlPathEqualTo("/videos")));
+    assertThat(
+            execution.execute(source, new org.springframework.boot.DefaultApplicationArguments()))
+        .isZero();
+    server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
   }
 }

@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   collect:
-    if: github.ref == 'refs/heads/main' && vars.COLLECTOR_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && vars.COLLECTOR_ENABLED == 'true' && (github.event_name != 'schedule' || vars.COLLECTOR_SCHEDULE_OWNER != 'render')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

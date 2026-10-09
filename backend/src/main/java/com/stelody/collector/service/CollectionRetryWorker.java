@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.JdbcTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Runs only in the non-web collector, sharing its global collection lock and time budget. */
+/** Uses the dedicated collector role, global collection lock and shared time budget. */
 public final class CollectionRetryWorker {
   private record Request(
       UUID id, String kind, UUID run, int attempt, String status, UUID execution, UUID lease) {}

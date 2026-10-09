@@ -14,7 +14,7 @@ Connect → Direct → **Session pooler**의 주소를 사용한다. 포트는 5
 
 신규 빈 프로젝트의 관리자 접속으로 `infra/deploy/prepare-supabase-roles.sql`을 실행한다. 앱 스키마나 같은 역할이 이미 있으면 멈춘다. 일반 서버용 역할 준비 SQL의 전역 PUBLIC 권한 철회는 관리형 DB 제공자의 다른 서비스에 영향을 줄 수 있어 Supabase용 절차에서는 수행하지 않는다. 제공자 역할·스키마·기본 권한은 유지하고 새 역할에 필요한 DB 권한만 부여한다.
 
-각 역할에 서로 다른 비밀번호를 대화형 `\password`로 설정하고 `ALTER ROLE <역할> LOGIN;`을 적용한다. 비밀번호를 SQL 파일·명령 인수·Git에 넣지 않는다. 웹에 관리자·collector·operator 자격 증명을 전달하지 않는다.
+각 역할에 서로 다른 비밀번호를 대화형 `\password`로 설정하고 `ALTER ROLE <역할> LOGIN;`을 적용한다. 비밀번호를 SQL 파일·명령 인수·Git에 넣지 않는다. 웹에 관리자·operator 자격 증명을 전달하지 않는다. collector 자격 증명은 초기 웹 배포에는 필요 없으며, [Spring 내부 수집](spring-collection-scheduling.md)으로 전환할 때 별도 수집용 연결 풀에만 사용한다.
 
 - 접속 사용자 이름은 `stelody_app.<project-ref>`처럼 프로젝트 식별자를 포함한다.
 - Flyway의 `DB_RUNTIME_ROLE`에는 실제 DB 역할 이름인 **`stelody_app`만** 넣는다.
@@ -64,6 +64,8 @@ docker build --platform linux/amd64 -f backend/Dockerfile.render -t stelody:rend
 이번 프로젝트의 Supabase에는 V19와 수집·운영 역할 권한을 적용했다. 비공개 `backend/.env.render.local`은 `SPRING_FLYWAY_ENABLED=false`인 웹 계정 전용 파일이며, 초기 마이그레이션 설정은 별도 비공개 파일에 보관했다. 설정 예시는 신규 DB에 대한 초기 기동용이므로 기존 프로젝트에 그대로 덮어쓰지 않는다. 2026-10-04에는 검수한 카탈로그 360곡·11명을 운영 DB에 이관했다. 회원·개인 목록·세션·OAuth 자료와 과거 조회수는 복사하지 않았다. [운영 적용 기록](production-catalog-20261004.md)을 참고한다.
 
 ## 4. 첫 배포 검증
+
+웹 내부 수집을 활성화하려면 [Spring 서버 정기 수집](spring-collection-scheduling.md)의 추가 환경변수·상태 확인·전환 절차를 따른다. 수집 전용 계정을 웹의 별도 연결 풀에 추가하는 구성이다.
 
 Render가 표시한 실제 HTTPS 주소를 기록한 뒤 Google OAuth 클라이언트에 아래 주소를 정확히 추가한다. 서비스 이름만으로 URL을 추정하지 않는다.
 

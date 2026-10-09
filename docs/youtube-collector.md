@@ -91,6 +91,8 @@ Spring Boot는 `.env`를 자동으로 읽지 않는다. IntelliJ 환경변수 �
 
 ## GitHub Actions
 
+웹 내부 실행으로 전환하는 절차는 [Spring 서버 정기 수집](spring-collection-scheduling.md)을 따른다. `COLLECTOR_SCHEDULE_OWNER=render`이면 GitHub 예약 job은 건너뛰고 수동 실행은 유지한다. 변수 설정 전에는 아래 예약이 계속 동작한다.
+
 [수집 workflow](../.github/workflows/youtube-collector.yml)는 매시간 UTC `:17`과 `workflow_dispatch`를 제공한다. `main`에서 저장소 Variable `COLLECTOR_ENABLED=true`일 때 실행한다. 활성화 전에는 job이 건너뛴다. 짝수 UTC 시간에는 `DISCOVERY_ENABLED=true`일 때 신규 탐색도 같은 프로세스에서 실행한다. 수동 실행의 `discover=true`도 이 Variable을 요구한다. 제목 분류는 별도 `DISCOVERY_CLASSIFICATION_ALLOWED` Variable로 허용하며 기본 비활성이다. GitHub 예약 실행은 지연될 수 있으므로 시각 일치를 전제하지 않는다.
 
 다음 저장소 Secrets를 먼저 준비한다.
