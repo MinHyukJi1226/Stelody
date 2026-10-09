@@ -18,10 +18,11 @@ public class CollectionOperations {
   public CollectionOperations(
       CollectionQueries queries,
       @Value("${stelody.collection.retry-enabled:false}") boolean retryEnabled,
-      @Value("${stelody.collector.scheduled-enabled:false}") boolean springSchedule) {
+      @Value("${stelody.collector.scheduled-enabled:false}") boolean scheduledEnabled,
+      @Value("${stelody.collector.enabled:false}") boolean collectorEnabled) {
     this.queries = queries;
     this.retryEnabled = retryEnabled;
-    this.springSchedule = springSchedule;
+    this.springSchedule = scheduledEnabled && collectorEnabled;
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
