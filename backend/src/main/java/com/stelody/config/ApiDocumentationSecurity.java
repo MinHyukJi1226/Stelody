@@ -18,9 +18,9 @@ public class ApiDocumentationSecurity {
   @Order(0)
   SecurityFilterChain documentationSecurity(
       HttpSecurity http, Environment env, ApiProblems problems) throws Exception {
-    boolean development = env.acceptsProfiles(Profiles.of("!prod & (local | test)"));
+    boolean documentationProfile = env.acceptsProfiles(Profiles.of("local | test | prod"));
     boolean specification =
-        development && env.getProperty("springdoc.api-docs.enabled", Boolean.class, false);
+        documentationProfile && env.getProperty("springdoc.api-docs.enabled", Boolean.class, false);
     boolean ui =
         specification && env.getProperty("springdoc.swagger-ui.enabled", Boolean.class, false);
     http.securityMatcher(

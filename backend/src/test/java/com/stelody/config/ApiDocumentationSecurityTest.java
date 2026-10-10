@@ -51,6 +51,21 @@ abstract class DocumentationSecurityFixture {
       mvc.perform(get(path).with(user("admin").roles("ADMIN"))).andExpect(status().isForbidden());
     }
   }
+
+  void readable() throws Exception {
+    for (var path :
+        new String[] {
+          "/v3/api-docs",
+          "/v3/api-docs.yaml",
+          "/v3/api-docs/swagger-config",
+          "/swagger-ui.html",
+          "/swagger-ui/index.html"
+        }) {
+      mvc.perform(get(path)).andExpect(status().isOk());
+      mvc.perform(post(path).with(user("admin").roles("ADMIN")).with(csrf()))
+          .andExpect(status().isForbidden());
+    }
+  }
 }
 
 @ActiveProfiles("local")
@@ -66,13 +81,41 @@ class ApiDocumentationSecurityTest extends DocumentationSecurityFixture {
   }
 }
 
-@ActiveProfiles({"local", "prod"})
-@TestPropertySource(
-    properties = {"springdoc.api-docs.enabled=true", "springdoc.swagger-ui.enabled=true"})
+@ActiveProfiles("prod")
 class ProductionApiDocumentationSecurityTest extends DocumentationSecurityFixture {
   @Test
-  void productionRemainsClosedEvenWithLocalProfileAndEnabledProperties() throws Exception {
+  void productionConfigurationAllowsDocumentationReadsButDeniesMutations() throws Exception {
+    readable();
+  }
+}
+
+@ActiveProfiles({"local", "prod"})
+class MixedProfileApiDocumentationSecurityTest extends DocumentationSecurityFixture {
+  @Test
+  void productionWithLocalProfileAlsoAllowsDocumentationReads() throws Exception {
+    readable();
+  }
+}
+
+@ActiveProfiles("prod")
+@TestPropertySource(
+    properties = {"springdoc.api-docs.enabled=false", "springdoc.swagger-ui.enabled=true"})
+class DisabledProductionApiDocumentationSecurityTest extends DocumentationSecurityFixture {
+  @Test
+  void productionSpecificationCanBeDisabledTogetherWithUi() throws Exception {
     closed();
+  }
+}
+
+@ActiveProfiles("prod")
+@TestPropertySource(properties = "springdoc.swagger-ui.enabled=false")
+class DisabledProductionSwaggerSecurityTest extends DocumentationSecurityFixture {
+  @Test
+  void productionUiCanBeDisabledWhileSpecificationRemainsReadable() throws Exception {
+    mvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+    mvc.perform(get("/v3/api-docs.yaml")).andExpect(status().isOk());
+    mvc.perform(get("/v3/api-docs/swagger-config")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isUnauthorized());
   }
 }
 

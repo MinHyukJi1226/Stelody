@@ -2,7 +2,7 @@
 
 ## 문서 열기
 
-웹 서버를 기존 `local` 프로필로 실행하면 다음 주소를 사용할 수 있다. Google 클라이언트나 YouTube 키를 추가 발급할 필요는 없다.
+웹 서버의 `local`·`prod` 프로필에서 다음 주소를 사용할 수 있다. 문서 조회에는 로그인이 필요하지 않으며 Google 클라이언트나 YouTube 키를 추가 발급할 필요는 없다.
 
 | 주소 | 용도 |
 | --- | --- |
@@ -10,9 +10,11 @@
 | `/v3/api-docs` | OpenAPI 3.1 JSON 계약 |
 | `/v3/api-docs.yaml` | 같은 계약의 YAML 표현 |
 
-기본 프로필에서는 문서를 비활성화한다. `local`에서 활성화하고 테스트에서는 문서 통합 테스트가 명시적으로 활성화한다. `prod`에서는 비활성화하며, `prod,local`을 함께 지정하거나 문서 활성화 속성을 강제로 덮어써도 보안 필터가 문서·Swagger 경로를 차단한다. 수집기·운영 명령은 웹 문서 서버를 실행하지 않는다.
+Render 운영 주소는 [Swagger UI](https://stelody-backend.onrender.com/swagger-ui.html), [OpenAPI JSON](https://stelody-backend.onrender.com/v3/api-docs), [OpenAPI YAML](https://stelody-backend.onrender.com/v3/api-docs.yaml)이다. 운영 활성화 변경을 배포한 뒤 사용할 수 있다.
 
-설정은 `springdoc.api-docs.enabled`, `springdoc.swagger-ui.enabled`다. UI는 명세도 활성화된 경우에만 열리며 문서 경로는 GET만 허용한다. 기존 공개·개인·관리자 API의 접근 조건은 유지한다. 개발 문서를 제공하는 서버는 개인 계정·관리자 자료에 접근 가능한 서버이므로 로컬 실행에 기존 환경 설정을 사용한다.
+기본 프로필에서는 문서를 비활성화한다. `local`·`prod`에서 활성화하며, 문서 통합 테스트는 격리 DB에서 `test,prod` 설정을 사용해 운영의 기본 활성화와 실제 문서 생성을 검증한다. 수집기·운영 명령은 웹 문서 서버를 실행하지 않는다.
+
+설정은 `springdoc.api-docs.enabled`, `springdoc.swagger-ui.enabled`다. 운영에서 환경 변수 `SPRINGDOC_API_DOCS_ENABLED=false`로 명세와 UI를 함께 닫거나 `SPRINGDOC_SWAGGER_UI_ENABLED=false`로 UI만 닫을 수 있다. UI는 명세도 활성화된 경우에만 열리며 문서 경로는 GET만 허용한다. 기존 공개·개인·관리자 API의 접근 조건은 유지한다. 로컬 실행에는 기존 환경 설정을 사용한다.
 
 ## 인증과 요청 실행
 
