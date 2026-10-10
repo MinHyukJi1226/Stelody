@@ -25,7 +25,7 @@ public class CatalogAdminController {
         .body(body);
   }
 
-  @GetMapping({"/members", "/artists", "/works", "/songs", "/channels"})
+  @GetMapping({"/members", "/artists", "/works", "/channels"})
   @Operation(summary = "카탈로그 관리 목록")
   public ResponseEntity<Page> list(
       jakarta.servlet.http.HttpServletRequest request,
@@ -34,6 +34,18 @@ public class CatalogAdminController {
       @RequestParam(defaultValue = "") String q) {
     String path = request.getRequestURI();
     return response(service.list(path.substring(path.lastIndexOf('/') + 1), page, size, q), false);
+  }
+
+  @GetMapping("/songs")
+  @Operation(
+      summary = "관리자 곡 목록",
+      description =
+          "자동 등록·수동 등록 및 모든 노출 상태의 곡을 조회합니다. 곡 제목·별칭 검색과 제목·ID 정렬, page·size·hasNext를 유지합니다. status는 노출 설정, informationComplete는 현재 정보 완성도입니다. discoveredAt은 현재 연결된 영상의 최초 발견 기록이며 공개일·등록일이 아닙니다.")
+  public ResponseEntity<SongPage> songs(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(defaultValue = "") String q) {
+    return response(service.songs(page, size, q), false);
   }
 
   @GetMapping({"/members/{id}", "/artists/{id}", "/works/{id}", "/songs/{id}", "/channels/{id}"})

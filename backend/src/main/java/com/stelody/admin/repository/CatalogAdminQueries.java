@@ -102,6 +102,54 @@ public class CatalogAdminQueries {
         .list();
   }
 
+  public List<SongSummary> songs(int page, int size, String q) {
+    return jdbc.sql(
+            """
+        WITH selected AS (
+          SELECT s.* FROM app.song_entry s
+          WHERE s.search_title LIKE :q ESCAPE '!'
+            OR EXISTS(SELECT 1 FROM app.song_alias a WHERE a.song_id=s.id AND a.search_alias LIKE :q ESCAPE '!')
+          ORDER BY s.title,s.id LIMIT :limit OFFSET :offset
+        )
+        SELECT s.id,s.title,s.version,s.visibility,
+          coalesce((SELECT jsonb_agg(to_jsonb(p) - 'category' - 'position' ORDER BY category,position,id)
+            FROM (
+              SELECT m.id,m.name,'MEMBER' AS kind,sm.confirmed,0 AS category,sm.position
+              FROM app.song_member sm JOIN app.member m ON m.id=sm.member_id WHERE sm.song_id=s.id
+              UNION ALL
+              SELECT a.id,a.name,'EXTERNAL' AS kind,sa.confirmed,1 AS category,sa.position
+              FROM app.song_external_artist sa JOIN app.artist a ON a.id=sa.artist_id WHERE sa.song_id=s.id
+            ) p), '[]'::jsonb) AS participants,
+          (SELECT min(r.first_seen_at) FROM app.video v JOIN app.review_item r ON r.youtube_id=v.youtube_id
+            WHERE v.song_id=s.id) AS discovered_at,
+        """
+                + SongInformationSql.SUPPLEMENTAL_MISSING_FIELDS
+                + """
+          || array_remove(ARRAY[
+            CASE WHEN NOT EXISTS(SELECT 1 FROM app.song_member sm WHERE sm.song_id=s.id) THEN 'members' END,
+            CASE WHEN s.representative_video_id IS NULL THEN 'representativeVideo' END
+          ],NULL) AS missing
+        FROM selected s ORDER BY s.title,s.id
+        """)
+        .param("q", SearchText.likePattern(SearchText.normalize(q)))
+        .param("limit", size + 1)
+        .param("offset", page * size)
+        .query(
+            (r, n) -> {
+              var missing = List.of((String[]) r.getArray("missing").getArray());
+              return new SongSummary(
+                  r.getObject("id", UUID.class),
+                  r.getString("title"),
+                  r.getLong("version"),
+                  Visibility.valueOf(r.getString("visibility")),
+                  List.of(mapper.readValue(r.getString("participants"), SongParticipant[].class)),
+                  instant(r, "discovered_at"),
+                  missing,
+                  missing.stream().allMatch("aliases"::equals));
+            })
+        .list();
+  }
+
   public Member member(UUID id) {
     return jdbc.sql("SELECT * FROM app.member WHERE id=:id")
         .param("id", id)

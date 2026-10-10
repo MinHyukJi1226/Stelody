@@ -199,6 +199,43 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsAdminSongListInformationSeparatelyFromOtherCatalogLists() throws Exception {
+    var api = contract();
+    var operation = api.path("paths").path("/api/v1/admin/songs").path("get");
+    assertThat(operation.path("description").asText()).contains("발견", "공개일·등록일", "ADMIN", "정보 완성도");
+    var ref = operation.at("/responses/200/content/application~1json/schema/$ref").asText();
+    var page = api.at(ref.substring(1));
+    var summary = api.at(page.at("/properties/items/items/$ref").asText().substring(1));
+    for (var field :
+        new String[] {
+          "id",
+          "name",
+          "version",
+          "status",
+          "participants",
+          "discoveredAt",
+          "missingFields",
+          "informationComplete"
+        }) assertThat(summary.path("required").toString()).contains("\"" + field + "\"");
+    assertThat(summary.at("/properties/status/enum").toString())
+        .contains("DRAFT", "PUBLISHED", "HIDDEN");
+    assertThat(summary.at("/properties/discoveredAt/type").toString()).contains("string", "null");
+    assertThat(summary.at("/properties/discoveredAt/description").asText())
+        .contains("first_seen_at", "null");
+    assertThat(summary.at("/properties/informationComplete/description").asText())
+        .contains("aliases", "모든 곡");
+    var participant =
+        api.at(summary.at("/properties/participants/items/$ref").asText().substring(1));
+    assertThat(participant.at("/properties/kind/enum").toString()).contains("MEMBER", "EXTERNAL");
+    assertThat(participant.path("required").toString()).contains("confirmed");
+    var memberList =
+        api.at(
+                "/paths/~1api~1v1~1admin~1members/get/responses/200/content/application~1json/schema/$ref")
+            .asText();
+    assertThat(memberList).isNotEqualTo(ref);
+  }
+
+  @Test
   void retainsDistinctPagesNullableDataAndBodyValidation() throws Exception {
     var api = contract();
     var schemas = api.path("components").path("schemas");

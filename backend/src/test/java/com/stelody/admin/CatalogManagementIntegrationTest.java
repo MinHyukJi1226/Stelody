@@ -203,6 +203,156 @@ class CatalogManagementIntegrationTest {
             .asText());
   }
 
+  JsonNode songList(String query, int page, int size) throws Exception {
+    return mapper.readTree(
+        mvc.perform(
+                auth(
+                    get(ROOT + "/songs")
+                        .param("q", query)
+                        .param("page", Integer.toString(page))
+                        .param("size", Integer.toString(size)),
+                    admin))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  @Test
+  void songListReturnsOrderedParticipantsAndEarliestLinkedDiscoveryRatherThanPublicationDate()
+      throws Exception {
+    UUID member = member(), song = song(member, "COVER"), external = UUID.randomUUID();
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,'Guest','guest')", external);
+    writer.update(
+        "INSERT INTO app.song_external_artist(song_id,artist_id,position,confirmed) VALUES(?,?,0,false)",
+        song,
+        external);
+    UUID firstVideo = attach(song, REVIEW, 0, 0, "OFFICIAL_COVER");
+    UUID secondReview = UUID.randomUUID();
+    seed(secondReview, "lmnopqrstuv");
+    attach(song, secondReview, 0, 1, "OTHER");
+    Instant firstSeen = Instant.parse("2026-01-02T00:00:00Z");
+    writer.update(
+        "UPDATE app.review_item SET first_seen_at=?,source_published_at=? WHERE id=?",
+        java.sql.Timestamp.from(Instant.parse("2026-01-03T00:00:00Z")),
+        java.sql.Timestamp.from(Instant.parse("2020-01-01T00:00:00Z")),
+        REVIEW);
+    writer.update(
+        "UPDATE app.review_item SET first_seen_at=? WHERE id=?",
+        java.sql.Timestamp.from(firstSeen),
+        secondReview);
+    writer.update(
+        "UPDATE app.song_entry SET representative_video_id=?,visibility='PUBLISHED' WHERE id=?",
+        firstVideo,
+        song);
+    var item = songList("", 0, 20).path("items").get(0);
+    assertThat(item.path("id").asText()).isEqualTo(song.toString());
+    assertThat(item.path("participants").size()).isEqualTo(2);
+    assertThat(item.path("participants").get(0).path("id").asText()).isEqualTo(member.toString());
+    assertThat(item.path("participants").get(0).path("kind").asText()).isEqualTo("MEMBER");
+    assertThat(item.path("participants").get(0).path("confirmed").asBoolean()).isTrue();
+    assertThat(item.path("participants").get(1).path("name").asText()).isEqualTo("Guest");
+    assertThat(item.path("participants").get(1).path("kind").asText()).isEqualTo("EXTERNAL");
+    assertThat(item.path("participants").get(1).path("confirmed").asBoolean()).isFalse();
+    assertThat(Instant.parse(item.path("discoveredAt").asText())).isEqualTo(firstSeen);
+    assertThat(item.path("status").asText()).isEqualTo("PUBLISHED");
+    assertThat(item.path("informationComplete").asBoolean()).isFalse();
+    writer.update(
+        "UPDATE app.review_item SET source_published_at=now(),source_observed_at=now() WHERE id=?",
+        secondReview);
+    assertThat(songList("", 0, 20).path("items").get(0).path("discoveredAt").asText())
+        .isEqualTo(item.path("discoveredAt").asText());
+    writer.update(
+        "UPDATE app.review_item SET review_status='PENDING',registered_video_id=NULL WHERE id=?",
+        secondReview);
+    writer.update("DELETE FROM app.video WHERE youtube_id='lmnopqrstuv'");
+    assertThat(
+            Instant.parse(songList("", 0, 20).path("items").get(0).path("discoveredAt").asText()))
+        .isEqualTo(Instant.parse("2026-01-03T00:00:00Z"));
+  }
+
+  @Test
+  void songListReportsCurrentMissingInformationIndependentlyOfVisibilityAndOptionalAliases()
+      throws Exception {
+    UUID song = song(null, "COVER");
+    writer.update("DELETE FROM app.song_alias WHERE song_id=?", song);
+    var item = songList("", 0, 20).path("items").get(0);
+    assertThat(item.path("participants").isEmpty()).isTrue();
+    assertThat(item.path("discoveredAt").isNull()).isTrue();
+    assertThat(item.path("missingFields").toString())
+        .isEqualTo(
+            "[\"work\",\"originalArtists\",\"aliases\",\"searchCheck\",\"TJ\",\"KY\",\"members\",\"representativeVideo\"]");
+    UUID member = member(), work = UUID.randomUUID(), artist = UUID.randomUUID();
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'work','work')", work);
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,'artist','artist')", artist);
+    writer.update(
+        "INSERT INTO app.work_artist(work_id,artist_id,position) VALUES(?,?,0)", work, artist);
+    writer.update(
+        "INSERT INTO app.song_member(song_id,member_id,position) VALUES(?,?,0)", song, member);
+    UUID video = attach(song, REVIEW, 0, 0, "OFFICIAL_COVER");
+    writer.update(
+        "UPDATE app.song_entry SET work_id=?,representative_video_id=?,search_visibility='NORMAL',visibility='HIDDEN' WHERE id=?",
+        work,
+        video,
+        song);
+    writer.update(
+        "INSERT INTO app.karaoke_entry(id,work_id,provider,status) VALUES(?,?,'TJ','NOT_LISTED')",
+        UUID.randomUUID(),
+        work);
+    writer.update(
+        "INSERT INTO app.karaoke_entry(id,song_id,provider,status,number,source_url,checked_at) VALUES(?,?,'KY','REGISTERED','12345','https://example.invalid/karaoke',now())",
+        UUID.randomUUID(),
+        song);
+    item = songList("", 0, 20).path("items").get(0);
+    assertThat(item.path("status").asText()).isEqualTo("HIDDEN");
+    assertThat(item.path("missingFields").toString()).isEqualTo("[\"aliases\"]");
+    assertThat(item.path("informationComplete").asBoolean()).isTrue();
+    writer.update(
+        "UPDATE app.karaoke_entry SET status='UNKNOWN',number=NULL WHERE song_id=?", song);
+    item = songList("", 0, 20).path("items").get(0);
+    assertThat(item.path("missingFields").toString()).isEqualTo("[\"aliases\",\"KY\"]");
+    assertThat(item.path("informationComplete").asBoolean()).isFalse();
+  }
+
+  @Test
+  void songListKeepsTitleAliasSearchPaginationAndAdminAccess() throws Exception {
+    UUID a = song(null, "ORIGINAL"), b = song(null, "COVER");
+    writer.update(
+        "UPDATE app.song_entry SET title='A',search_title='a',visibility='PUBLISHED' WHERE id=?",
+        a);
+    writer.update(
+        "UPDATE app.song_entry SET title='B',search_title='b',visibility='HIDDEN' WHERE id=?", b);
+    var page = songList("歌", 0, 1);
+    assertThat(page.path("items").size()).isEqualTo(1);
+    assertThat(page.path("items").get(0).path("id").asText()).isEqualTo(a.toString());
+    assertThat(page.path("hasNext").asBoolean()).isTrue();
+    page = songList("歌", 1, 1);
+    assertThat(page.path("items").get(0).path("id").asText()).isEqualTo(b.toString());
+    assertThat(page.path("hasNext").asBoolean()).isFalse();
+    assertThat(songList("b", 0, 20).path("items").size()).isEqualTo(1);
+    assertThat(songList("missing", 0, 20).path("items").isEmpty()).isTrue();
+    mvc.perform(get(ROOT + "/songs")).andExpect(status().isUnauthorized());
+    mvc.perform(auth(get(ROOT + "/songs"), user)).andExpect(status().isForbidden());
+    for (var params :
+        List.of(Map.of("page", "-1"), Map.of("size", "51"), Map.of("q", "x".repeat(201)))) {
+      var request = auth(get(ROOT + "/songs"), admin);
+      params.forEach(request::param);
+      mvc.perform(request).andExpect(status().isBadRequest());
+    }
+    var members =
+        mapper.readTree(
+            mvc.perform(auth(get(ROOT + "/members"), admin))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(members.path("items").isEmpty()).isTrue();
+  }
+
   void publish(UUID song, UUID member, UUID video, long version, String type) throws Exception {
     var b = songBody(member, type);
     b.put("version", version);
