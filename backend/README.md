@@ -109,7 +109,18 @@ Supabase 접속 이름에는 프로젝트 접미사가 붙지만 `DB_RUNTIME_ROL
 | Root Directory / Build Context | 빈칸 / 저장소 루트 `.` |
 | Dockerfile / Health Check | `backend/Dockerfile.render` / `/actuator/health` |
 
-Docker 빌드는 소스 복사 전에 운영 의존성을 다운로드해 레이어 캐시에 보관하고, 소스 빌드는 오프라인으로 실행합니다. 최초 빌드·의존성 변경·캐시 삭제 시에는 다운로드가 필요하므로 Maven Central의 `429` 제한으로 실패할 수 있습니다.
+[Backend CI](../.github/workflows/backend-ci.yml)가 테스트를 통과한 같은 실행의 JAR로 `linux/amd64` 운영 이미지를 만들고 `ghcr.io/minhyukji1226/stelody-backend:<전체 커밋 SHA>`에 게시합니다. Render는 `RENDER_GIT_COMMIT`에 해당하는 이미지를 가져와 실행하므로 Gradle·Maven 다운로드와 소스 빌드를 수행하지 않습니다. PR에서는 이미지 생성·가져오기·실행 구성을 검증하며 게시하지 않습니다.
+
+Render Auto-Deploy는 **After CI Checks Pass**로 설정합니다. main의 이미지 게시까지 성공해야 CI가 통과합니다. GHCR 패키지는 첫 게시 시 비공개이므로 최초 1회 실행 이미지의 공개 설정을 확인한 뒤 배포합니다. 이미지는 검증된 JAR·시작 스크립트만 포함하고 실제 운영 설정은 Render Environment에서 주입합니다. `latest` 대신 커밋 태그를 사용하고, 롤백에 필요한 이전 이미지도 보관합니다. CI의 Maven 다운로드나 GHCR 게시·가져오기 실패는 여전히 CI 또는 배포 실패로 표시됩니다.
+
+로컬에서는 `./backend/gradlew -p backend bootJar` 후 아래 명령으로 운영 이미지를 검증할 수 있습니다. Render용 Dockerfile을 직접 빌드할 때는 `RENDER_GIT_COMMIT`이 필요합니다.
+
+```sh
+docker build --platform linux/amd64 -f backend/Dockerfile.release -t stelody-render:local .
+docker build --platform linux/amd64 -f backend/Dockerfile.render \
+  --build-arg STELODY_IMAGE_REPOSITORY=stelody-render \
+  --build-arg RENDER_GIT_COMMIT=local -t stelody-render-pull:local .
+```
 
 [render.env.example](../infra/deploy/render.env.example)을 참고해 실제 값을 Render Environment에 넣습니다. `DB_CA_CERTIFICATE_BASE64`는 공개 CA이며 시작 스크립트가 `/tmp/stelody-db-ca.crt`로 준비합니다. 웹·수집 JDBC URL의 `sslrootcert`도 같은 경로여야 합니다. 예시로 기존 운영 설정을 통째로 덮어쓰지 않습니다.
 

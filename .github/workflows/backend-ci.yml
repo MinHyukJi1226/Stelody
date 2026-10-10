@@ -32,6 +32,24 @@ jobs:
         working-directory: .
         run: |
           python3 -B -m unittest discover -s infra/tests -v
+      - name: Verify Render runtime image on pull requests
+        if: github.event_name == 'pull_request'
+        working-directory: .
+        run: |
+          docker build --platform linux/amd64 --file backend/Dockerfile.release \
+            --tag "stelody-render-ci:${GITHUB_SHA}" .
+          docker build --platform linux/amd64 --file backend/Dockerfile.render \
+            --build-arg STELODY_IMAGE_REPOSITORY=stelody-render-ci \
+            --build-arg "RENDER_GIT_COMMIT=${GITHUB_SHA}" \
+            --tag "stelody-render-pull-ci:${GITHUB_SHA}" .
+          docker run --rm --platform linux/amd64 --entrypoint sh \
+            "stelody-render-pull-ci:${GITHUB_SHA}" -ec '
+              test "$(id -u)" = 10001
+              test -r /opt/stelody/app.jar
+              test -x /opt/stelody/render-start.sh
+              command -v age
+              command -v java
+            '
       - name: Store verified OpenAPI contract
         uses: actions/upload-artifact@v4
         with:
@@ -48,12 +66,62 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  required-checks:
-    if: always()
+  publish-image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [backend]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: backend-image-${{ github.sha }}
+      cancel-in-progress: false
     steps:
-      - name: Require successful backend checks
+      - uses: actions/checkout@v4
+      - name: Download verified executable from this CI run
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-collector-${{ github.sha }}
+          path: backend/build/libs
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish verified Render image
+        env:
+          IMAGE_REPOSITORY: ghcr.io/minhyukji1226/stelody-backend
+        run: |
+          docker build --platform linux/amd64 --file backend/Dockerfile.release \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "${IMAGE_REPOSITORY}:${GITHUB_SHA}" .
+          docker run --rm --platform linux/amd64 --entrypoint sh \
+            "${IMAGE_REPOSITORY}:${GITHUB_SHA}" -ec '
+              test "$(id -u)" = 10001
+              test -r /opt/stelody/app.jar
+              test -x /opt/stelody/render-start.sh
+              command -v age
+              command -v java
+            '
+          docker push "${IMAGE_REPOSITORY}:${GITHUB_SHA}"
+
+  required-checks:
+    if: always()
+    needs: [backend, publish-image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful backend checks and main image publication
         env:
           BACKEND_RESULT: ${{ needs.backend.result }}
-        run: test "$BACKEND_RESULT" = success
+          IMAGE_RESULT: ${{ needs.publish-image.result }}
+          CI_EVENT: ${{ github.event_name }}
+        run: |
+          test "$BACKEND_RESULT" = success
+          if [ "$CI_EVENT" = push ]; then
+            test "$IMAGE_RESULT" = success
+          else
+            test "$IMAGE_RESULT" = skipped
+          fi
