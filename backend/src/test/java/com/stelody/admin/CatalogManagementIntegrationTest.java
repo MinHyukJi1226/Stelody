@@ -1042,15 +1042,24 @@ class CatalogManagementIntegrationTest {
   void invalidBirthdayDuplicateParticipantsSpecialLabelAndLinksDoNotMutate() throws Exception {
     var member = memberBody();
     member.put("birthdayDay", 30);
-    mvc.perform(json(post(ROOT + "/members"), member)).andExpect(status().isBadRequest());
+    mvc.perform(json(post(ROOT + "/members"), member))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("birthdayDay"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("OUT_OF_RANGE"));
     UUID m = member();
     var b = songBody(m, "COVER");
     b.put("memberIds", List.of(m, m));
-    mvc.perform(json(post(ROOT + "/songs"), b)).andExpect(status().isBadRequest());
+    mvc.perform(json(post(ROOT + "/songs"), b))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("memberIds[1]"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("DUPLICATE"));
     b.put("memberIds", List.of(m));
     b.put("isSpecialEvent", true);
     b.put("specialEventLabel", " ");
-    mvc.perform(json(post(ROOT + "/songs"), b)).andExpect(status().isBadRequest());
+    mvc.perform(json(post(ROOT + "/songs"), b))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("specialEventLabel"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("REQUIRED"));
     b.put("isSpecialEvent", false);
     b.put(
         "links",
@@ -1064,6 +1073,132 @@ class CatalogManagementIntegrationTest {
                 "https://example.invalid")));
     mvc.perform(json(post(ROOT + "/songs"), b)).andExpect(status().isBadRequest());
     assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Long.class)).isZero();
+  }
+
+  @Test
+  void fieldErrorsIdentifyDtoAndNestedInputsWithoutEchoingRejectedValues() throws Exception {
+    var b = memberBody();
+    b.put("name", " ");
+    b.put("aliases", List.of("valid", " "));
+    b.put("reason", "sensitive-token".repeat(50));
+    String body =
+        mvc.perform(json(post(ROOT + "/members"), b))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType("application/problem+json"))
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.code").value("INVALID_CATALOG_REQUEST"))
+            .andExpect(jsonPath("$.fieldErrors[0].field").value("aliases[1]"))
+            .andExpect(jsonPath("$.fieldErrors[0].code").value("REQUIRED"))
+            .andExpect(jsonPath("$.fieldErrors[1].field").value("name"))
+            .andExpect(jsonPath("$.fieldErrors[2].field").value("reason"))
+            .andExpect(jsonPath("$.fieldErrors[2].code").value("INVALID_SIZE"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(body).doesNotContain("sensitive-token", "rejectedValue", "java.lang");
+    var song = songBody(null, "COVER");
+    song.put(
+        "links",
+        List.of(Map.of("platform", "test", "url", "https://example.invalid", "sourceUrl", " ")));
+    mvc.perform(json(post(ROOT + "/songs"), song))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("links[0].sourceUrl"));
+    song.put(
+        "links",
+        List.of(
+            Map.of(
+                "platform",
+                "test",
+                "url",
+                "https://user:sensitive-token@example.invalid/path",
+                "sourceUrl",
+                "https://example.invalid")));
+    body =
+        mvc.perform(json(post(ROOT + "/songs"), song))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors[0].field").value("links[0].url"))
+            .andExpect(jsonPath("$.fieldErrors[0].code").value("INVALID_FORMAT"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(body).doesNotContain("sensitive-token", "example.invalid/path");
+    song.put("links", List.of());
+    song.put("karaoke", List.of(Map.of("provider", "TJ", "status", "REGISTERED")));
+    mvc.perform(json(post(ROOT + "/songs"), song))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("karaoke[0].number"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("REQUIRED"));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.member", Long.class)).isZero();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Long.class)).isZero();
+  }
+
+  @Test
+  void malformedJsonTypesAndParametersKeepStableProblemCodesAndSafeFieldPaths() throws Exception {
+    var b = memberBody();
+    b.put("activityStatus", "sensitive-token");
+    String body =
+        mvc.perform(json(post(ROOT + "/members"), b))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors[0].field").value("activityStatus"))
+            .andExpect(jsonPath("$.fieldErrors[0].code").value("INVALID_FORMAT"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(body).doesNotContain("sensitive-token", "com.stelody");
+    b = memberBody();
+    b.put("debutDate", "secret-date");
+    mvc.perform(json(post(ROOT + "/members"), b))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("debutDate"));
+    body =
+        mvc.perform(
+                auth(post(ROOT + "/members"), admin)
+                    .contentType("application/json")
+                    .content("{\"name\":\"sensitive-token\","))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors").isEmpty())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(body).doesNotContain("sensitive-token");
+    mvc.perform(auth(get(ROOT + "/members").param("page", "secret-number"), admin))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("page"));
+    mvc.perform(auth(get(ROOT + "/members").param("size", "51"), admin))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("size"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("OUT_OF_RANGE"));
+  }
+
+  @Test
+  void collectionRuleErrorsIdentifyNestedMarkerInputs() throws Exception {
+    var config = new HashMap<String, Object>();
+    config.put(
+        "cover",
+        List.of(
+            Map.of("text", "cover", "match", "WORD"), Map.of("text", "Ｃｏｖｅｒ", "match", "WORD")));
+    config.put("original", List.of());
+    config.put("exclude", List.of());
+    mvc.perform(
+            json(
+                put(ROOT + "/collection-rules"),
+                Map.of("version", 0, "reason", "test", "configuration", config)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("configuration.cover[1].text"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("DUPLICATE"));
+    config.put("cover", List.of(Map.of("text", "cover", "match", "invalid-private-value")));
+    String body =
+        mvc.perform(
+                json(
+                    put(ROOT + "/collection-rules"),
+                    Map.of("version", 0, "reason", "test", "configuration", config)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors[0].field").value("configuration.cover[0].match"))
+            .andExpect(jsonPath("$.fieldErrors[0].code").value("INVALID_FORMAT"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(body).doesNotContain("invalid-private-value");
   }
 
   @Test

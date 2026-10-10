@@ -5,6 +5,7 @@ import com.stelody.admin.controller.CollectionRuleController;
 import com.stelody.admin.controller.CoverPublicationController;
 import com.stelody.admin.controller.SpecialReviewController;
 import com.stelody.auth.web.ApiProblems;
+import com.stelody.auth.web.InputErrors;
 import jakarta.servlet.http.*;
 import java.io.IOException;
 import org.springframework.dao.*;
@@ -30,7 +31,7 @@ public class AdminCatalogExceptionHandler {
   @ExceptionHandler(AdminCatalogException.class)
   public void business(AdminCatalogException e, HttpServletRequest req, HttpServletResponse res)
       throws IOException {
-    problems.write(req, res, e.status(), e.code(), e.getMessage());
+    problems.write(req, res, e.status(), e.code(), e.getMessage(), e.fieldErrors());
   }
 
   @ExceptionHandler({
@@ -60,6 +61,6 @@ public class AdminCatalogExceptionHandler {
   })
   public void invalid(Exception e, HttpServletRequest req, HttpServletResponse res)
       throws IOException {
-    business(AdminCatalogException.invalid(), req, res);
+    business(AdminCatalogException.invalid(InputErrors.from(e)), req, res);
   }
 }

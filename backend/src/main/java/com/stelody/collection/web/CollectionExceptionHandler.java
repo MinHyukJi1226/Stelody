@@ -32,7 +32,8 @@ public class CollectionExceptionHandler {
   })
   public void invalid(Exception error, HttpServletRequest request, HttpServletResponse response)
       throws IOException {
-    business(CollectionException.invalid(), request, response);
+    var invalid = CollectionException.invalid();
+    problems.writeInvalid(request, response, invalid.code(), invalid.getMessage(), error);
   }
 
   @ExceptionHandler(DuplicateKeyException.class)

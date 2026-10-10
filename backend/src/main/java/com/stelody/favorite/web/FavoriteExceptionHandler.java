@@ -24,7 +24,9 @@ public class FavoriteExceptionHandler {
   }
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-  void invalid(HttpServletRequest request, HttpServletResponse response) throws IOException {
-    favorite(FavoriteException.invalid(), request, response);
+  void invalid(Exception error, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
+    var invalid = FavoriteException.invalid();
+    problems.writeInvalid(request, response, invalid.code(), invalid.getMessage(), error);
   }
 }

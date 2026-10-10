@@ -222,9 +222,29 @@ public class ApiDocumentationConfiguration {
         .addProperty(
             "fieldErrors",
             new ArraySchema()
-                .items(new ObjectSchema())
-                .maxItems(0)
-                .description("현재 오류 응답에서는 빈 배열입니다."))
+                .items(
+                    new ObjectSchema()
+                        .addProperty(
+                            "field",
+                            new StringSchema()
+                                .description("요청 필드 또는 파라미터 경로. 점은 객체 속성, [n]은 0부터 시작하는 배열 인덱스입니다.")
+                                .example("links[0].url"))
+                        .addProperty(
+                            "code",
+                            new StringSchema()
+                                ._enum(
+                                    List.of(
+                                        "REQUIRED",
+                                        "INVALID_FORMAT",
+                                        "INVALID_SIZE",
+                                        "OUT_OF_RANGE",
+                                        "DUPLICATE",
+                                        "INVALID_VALUE")))
+                        .addProperty(
+                            "message", new StringSchema().description("입력값을 포함하지 않는 고정 안내 문구"))
+                        .required(List.of("field", "code", "message")))
+                .description(
+                    "DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다."))
         .addProperty("traceId", new StringSchema().format("uuid"))
         .required(List.of("type", "title", "status", "instance", "code", "fieldErrors", "traceId"));
   }

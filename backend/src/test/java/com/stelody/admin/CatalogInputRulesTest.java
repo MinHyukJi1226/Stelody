@@ -66,4 +66,41 @@ class CatalogInputRulesTest {
     assertThatThrownBy(() -> rules.aliases(java.util.List.of("Cover", "Ｃｏｖｅｒ")))
         .isInstanceOf(AdminCatalogException.class);
   }
+
+  record Nested(@jakarta.validation.constraints.NotBlank String url) {}
+
+  record Inputs(
+      @jakarta.validation.Valid java.util.List<Nested> links,
+      java.util.List<@jakarta.validation.constraints.NotBlank String> aliases,
+      @jakarta.validation.constraints.Size(max = 2, message = "unsafe ${validatedValue}")
+          String token) {}
+
+  @Test
+  void directServiceValidationUsesIndexedPathsAndStaticMessages() {
+    var error =
+        catchThrowableOfType(
+            () ->
+                rules.validate(
+                    new Inputs(
+                        java.util.List.of(new Nested(" ")),
+                        java.util.List.of("valid", " "),
+                        "private-token")),
+            AdminCatalogException.class);
+    assertThat(error.fieldErrors())
+        .extracting(com.stelody.auth.web.ApiFieldError::field)
+        .containsExactly("aliases[1]", "links[0].url", "token");
+    assertThat(error.fieldErrors())
+        .extracting(com.stelody.auth.web.ApiFieldError::code)
+        .containsExactly("REQUIRED", "REQUIRED", "INVALID_SIZE");
+    assertThat(error.fieldErrors().toString()).doesNotContain("private-token", "unsafe");
+  }
+
+  @Test
+  void duplicateAliasesIdentifyTheSecondNormalizedElement() {
+    var error =
+        catchThrowableOfType(
+            () -> rules.aliases(java.util.List.of("Cover", "Ｃｏｖｅｒ")), AdminCatalogException.class);
+    assertThat(error.fieldErrors())
+        .containsExactly(com.stelody.auth.web.InputErrors.field("aliases[1]", "DUPLICATE"));
+  }
 }

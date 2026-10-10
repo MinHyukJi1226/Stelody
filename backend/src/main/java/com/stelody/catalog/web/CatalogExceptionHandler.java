@@ -24,8 +24,9 @@ public class CatalogExceptionHandler {
   }
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-  void invalid(HttpServletRequest request, HttpServletResponse response) throws IOException {
-    var exception = CatalogException.invalid();
-    problems.write(request, response, exception.status(), exception.code(), exception.getMessage());
+  void invalid(Exception error, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
+    var invalid = CatalogException.invalid();
+    problems.writeInvalid(request, response, invalid.code(), invalid.getMessage(), error);
   }
 }

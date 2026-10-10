@@ -135,8 +135,20 @@ class OpenApiIntegrationTest {
         api.at(
             "/paths/~1api~1v1~1me/get/responses/401/content/application~1problem+json/schema/$ref");
     assertThat(problem.asText()).isEqualTo("#/components/schemas/ApiProblem");
-    assertThat(api.at("/components/schemas/ApiProblem/properties/fieldErrors/maxItems").asInt())
-        .isZero();
+    var errors = api.at("/components/schemas/ApiProblem/properties/fieldErrors");
+    assertThat(errors.has("maxItems")).isFalse();
+    assertThat(errors.at("/items/required").toString()).contains("field", "code", "message");
+    assertThat(errors.at("/items/properties/field/example").asText()).isEqualTo("links[0].url");
+    assertThat(errors.at("/items/properties/code/enum").toString())
+        .contains(
+            "REQUIRED",
+            "INVALID_FORMAT",
+            "INVALID_SIZE",
+            "OUT_OF_RANGE",
+            "DUPLICATE",
+            "INVALID_VALUE");
+    assertThat(errors.path("description").asText())
+        .contains("aliases[1]", "configuration.cover[0].text", "빈 배열", "비밀번호", "토큰");
   }
 
   @Test

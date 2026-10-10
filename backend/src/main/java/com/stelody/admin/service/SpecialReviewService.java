@@ -70,7 +70,8 @@ public class SpecialReviewService {
   }
 
   private void page(int page, int size) {
-    if (page < 0 || page > 10000 || size < 1 || size > 50) throw AdminCatalogException.invalid();
+    if (page < 0 || page > 10000) throw AdminCatalogException.invalid("page", "OUT_OF_RANGE");
+    if (size < 1 || size > 50) throw AdminCatalogException.invalid("size", "OUT_OF_RANGE");
   }
 
   private void allowed() {
@@ -126,7 +127,7 @@ public class SpecialReviewService {
           throw new AdminCatalogException(
               409, "SPECIAL_REVIEW_BASIS_CHANGED", "날짜 근거를 다시 생성하고 확인해 주세요");
         if (input.label() == null || SearchText.normalize(input.label()).isEmpty())
-          throw AdminCatalogException.invalid();
+          throw AdminCatalogException.invalid("label", "REQUIRED");
         song.isSpecialEvent(true);
         song.specialEventLabel(input.label().strip());
         song.touch();
