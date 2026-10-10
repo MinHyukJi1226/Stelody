@@ -2,8 +2,9 @@ FROM eclipse-temurin:21-jdk-jammy@sha256:e0c60c487345d1dc9d0fc7b6f0496f3cc941e51
 WORKDIR /build/backend
 COPY backend/gradlew backend/build.gradle backend/settings.gradle ./
 COPY backend/gradle/ gradle/
+RUN chmod 755 gradlew && ./gradlew resolveProductionDependencies --no-daemon --max-workers=1
 COPY backend/src/main/ src/main/
-RUN chmod 755 gradlew && ./gradlew bootJar --no-daemon --max-workers=1
+RUN ./gradlew bootJar --offline --no-daemon --max-workers=1
 
 FROM eclipse-temurin:21-jre-jammy@sha256:f04fb34e053148344e83317976114ec3f37e4b830ec8bdab5a2fe3cecd7d010b
 WORKDIR /opt/stelody

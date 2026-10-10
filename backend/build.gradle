@@ -53,6 +53,15 @@ tasks.named('test') {
 	useJUnitPlatform { excludeTags 'integration' }
 }
 
+// Resolve actual production artifacts before source changes invalidate Docker layers.
+tasks.register('resolveProductionDependencies') {
+    description = 'Downloads production compile and runtime artifacts for the Docker build cache.'
+    inputs.files(configurations.compileClasspath, configurations.runtimeClasspath)
+    doLast {
+        logger.lifecycle('Production dependency cache is ready.')
+    }
+}
+
 spotless {
     java { googleJavaFormat('1.25.2') }
 }

@@ -109,6 +109,8 @@ Supabase 접속 이름에는 프로젝트 접미사가 붙지만 `DB_RUNTIME_ROL
 | Root Directory / Build Context | 빈칸 / 저장소 루트 `.` |
 | Dockerfile / Health Check | `backend/Dockerfile.render` / `/actuator/health` |
 
+Docker 빌드는 소스 복사 전에 운영 의존성을 다운로드해 레이어 캐시에 보관하고, 소스 빌드는 오프라인으로 실행합니다. 최초 빌드·의존성 변경·캐시 삭제 시에는 다운로드가 필요하므로 Maven Central의 `429` 제한으로 실패할 수 있습니다.
+
 [render.env.example](../infra/deploy/render.env.example)을 참고해 실제 값을 Render Environment에 넣습니다. `DB_CA_CERTIFICATE_BASE64`는 공개 CA이며 시작 스크립트가 `/tmp/stelody-db-ca.crt`로 준비합니다. 웹·수집 JDBC URL의 `sslrootcert`도 같은 경로여야 합니다. 예시로 기존 운영 설정을 통째로 덮어쓰지 않습니다.
 
 Google에는 실제 HTTPS 주소의 `/api/v1/auth/callback/google`, `/api/v1/me/youtube/callback`을 등록합니다. 명시한 `GOOGLE_REDIRECT_URI`, `YOUTUBE_EXPORT_REDIRECT_URI`와 일치해야 합니다. render 기본값은 `RENDER_EXTERNAL_URL`을 사용합니다.
