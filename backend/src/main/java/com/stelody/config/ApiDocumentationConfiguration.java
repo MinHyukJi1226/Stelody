@@ -169,7 +169,7 @@ public class ApiDocumentationConfiguration {
               .required(false)
               .schema(new StringSchema().maxLength(2048))
               .description(
-                  "사이트 내부 절대 경로. 허용 기준·기본값은 docs/login-return-api.md 참고. 로그인 성공 시 이 경로로 이동합니다."));
+                  "사이트 내부 UI 절대 경로. 외부 주소·API·actuator 경로는 허용하지 않습니다. 생략하면 /api/v1/me로 이동합니다."));
       login.getResponses().addApiResponse("503", problem("Google 로그인 설정이 없습니다."));
       login
           .getResponses()
