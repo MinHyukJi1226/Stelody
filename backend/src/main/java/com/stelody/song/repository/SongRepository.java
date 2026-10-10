@@ -76,6 +76,11 @@ public class SongRepository {
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).list();
   }
 
+  public long count(SongQuery query, UUID publication) {
+    var statement = SongSqlQueries.count(query, publication);
+    return jdbc.sql(statement.sql()).params(statement.parameters()).query(Long.class).single();
+  }
+
   public Optional<Row> find(UUID id, UUID publication) {
     var statement = SongSqlQueries.find(id, publication);
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).optional();

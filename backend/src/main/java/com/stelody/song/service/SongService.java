@@ -28,7 +28,8 @@ public class SongService {
   public SongDtos.Page list(SongQuery query, String cursor) {
     var publication = songs.publication();
     var position = cursors.decode(cursor, query, publication);
-    if (query.emptySearch()) return new SongDtos.Page(List.of(), null, false);
+    if (query.emptySearch()) return new SongDtos.Page(List.of(), null, false, 0);
+    long totalCount = songs.count(query, publication);
     var rows = songs.list(query, publication, position);
     boolean more = rows.size() > query.size();
     var page = more ? rows.subList(0, query.size()) : rows;
@@ -39,7 +40,7 @@ public class SongService {
           cursors.encode(
               query, publication, last.rank(), last.viewCount(), last.publishedAt(), last.id());
     }
-    return new SongDtos.Page(songs.cards(page), next, more);
+    return new SongDtos.Page(songs.cards(page), next, more, totalCount);
   }
 
   public SongDtos.Detail detail(UUID id) {

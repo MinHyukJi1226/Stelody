@@ -184,7 +184,13 @@ class OpenApiIntegrationTest {
     assertThat(playlists.path("items").path("items").path("$ref").asText())
         .endsWith("PlaylistDtos.Summary");
     assertThat(playlists.has("totalCount")).isTrue();
-    assertThat(songs.has("totalCount")).isFalse();
+    assertThat(songs.path("totalCount").path("type").asText()).isEqualTo("integer");
+    assertThat(songs.path("totalCount").path("format").asText()).isEqualTo("int64");
+    assertThat(songs.path("totalCount").path("minimum").asLong()).isZero();
+    assertThat(songs.path("totalCount").path("description").asText())
+        .contains("전체 고유 곡 수", "커서와 무관", "스냅샷");
+    assertThat(schemas.path("com.stelody.song.dto.SongDtos.Page").path("required").toString())
+        .contains("items", "nextCursor", "hasNext", "totalCount");
     var card = schemas.path("com.stelody.song.dto.SongDtos.Card").path("properties");
     assertThat(card.path("viewCount").path("type").toString()).contains("integer", "null");
     assertThat(card.path("work").path("anyOf").toString()).contains("SongDtos.Work", "null");

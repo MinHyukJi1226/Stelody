@@ -74,26 +74,43 @@ final class SongSqlQueries {
           OR EXISTS (SELECT 1 FROM app.artist_alias aa WHERE aa.artist_id = a.id AND aa.search_alias LIKE :pattern ESCAPE '!')))
       """;
 
-  private static final String RANKED_SONGS =
+  private static final String RANKED_CTE =
       PublicCatalogSql.SONGS
           + ", ranked AS (SELECT s.*, pv.view_count, pv.observed_at, "
           + SEARCH_RANK
           + """
            FROM public_songs s LEFT JOIN app.published_video_view pv
              ON pv.video_id = s.representative_video_id AND pv.publication_id = :publication)
-          SELECT * FROM ranked s WHERE true
           """;
+
+  private static final String RANKED_SONGS = RANKED_CTE + "SELECT * FROM ranked s WHERE true\n";
 
   private static final String DATE_BOUNDARY =
       "(s.published_at < :date OR (s.published_at = :date AND s.id < :id))";
 
   static Statement list(SongQuery query, UUID publication, Position cursor) {
-    var sql = new StringBuilder(RANKED_SONGS);
-    var params = baseParameters(query.text(), publication);
-    appendFilters(sql, params, query);
+    var filtered = filtered(query, publication, "*");
+    var sql = new StringBuilder(filtered.sql());
+    var params = filtered.parameters();
     appendCursor(sql, params, query.sort(), cursor);
     sql.append(" ORDER BY ").append(orderBy(query.sort())).append(" LIMIT :limit");
     params.put("limit", query.size() + 1);
+    return new Statement(sql.toString(), params);
+  }
+
+  static Statement count(SongQuery query, UUID publication) {
+    // public_songs has one representative video per song; all relationship filters use EXISTS.
+    return filtered(query, publication, "count(*)");
+  }
+
+  private static Statement filtered(SongQuery query, UUID publication, String selection) {
+    var sql =
+        new StringBuilder(RANKED_CTE)
+            .append("SELECT ")
+            .append(selection)
+            .append(" FROM ranked s WHERE true");
+    var params = baseParameters(query.text(), publication);
+    appendFilters(sql, params, query);
     return new Statement(sql.toString(), params);
   }
 
