@@ -286,6 +286,99 @@ class CatalogManagementIntegrationTest {
         .andExpect(jsonPath("$.member.songCounts.total").value(1));
   }
 
+  @Test
+  void memberProfilesRoundTripThroughAdminAndPublicApisAndCanBeCleared() throws Exception {
+    var body = memberBody();
+    body.put("unitName", "  Mystic  ");
+    body.put("chzzkUrl", " https://chzzk.naver.com/member ");
+    body.put("xUrl", "https://x.com/member");
+    var item = create("/members", body).path("item");
+    UUID id = UUID.fromString(item.path("id").asText());
+    assertThat(item.path("generation").asInt()).isEqualTo(1);
+    assertThat(item.path("unitName").asText()).isEqualTo("Mystic");
+    assertThat(item.path("chzzkUrl").asText()).isEqualTo("https://chzzk.naver.com/member");
+    assertThat(item.path("xUrl").asText()).isEqualTo("https://x.com/member");
+    mvc.perform(auth(get(ROOT + "/members/" + id), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.unitName").value("Mystic"))
+        .andExpect(jsonPath("$.chzzkUrl").value("https://chzzk.naver.com/member"))
+        .andExpect(jsonPath("$.xUrl").value("https://x.com/member"));
+    mvc.perform(get("/api/v1/members"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].unitName").value("Mystic"))
+        .andExpect(jsonPath("$.items[0].chzzkUrl").value("https://chzzk.naver.com/member"))
+        .andExpect(jsonPath("$.items[0].xUrl").value("https://x.com/member"));
+    mvc.perform(get("/api/v1/members/" + id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.member.unitName").value("Mystic"))
+        .andExpect(jsonPath("$.channels").isEmpty());
+
+    body.put("unitName", "Universe");
+    body.put("chzzkUrl", "https://chzzk.naver.com/updated");
+    body.put("xUrl", "https://x.com/updated");
+    mvc.perform(json(put(ROOT + "/members/" + id), body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.item.version").value(1))
+        .andExpect(jsonPath("$.item.unitName").value("Universe"))
+        .andExpect(jsonPath("$.item.chzzkUrl").value("https://chzzk.naver.com/updated"))
+        .andExpect(jsonPath("$.item.xUrl").value("https://x.com/updated"));
+    mvc.perform(json(put(ROOT + "/members/" + id), body))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CATALOG_VERSION_CONFLICT"));
+    mvc.perform(auth(get(ROOT + "/members/" + id + "/audit"), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].before.unitName").value("Mystic"))
+        .andExpect(jsonPath("$.items[0].after.unitName").value("Universe"));
+
+    body.put("version", 1);
+    body.put("unitName", "  ");
+    body.put("chzzkUrl", null);
+    body.remove("xUrl");
+    var cleared =
+        mapper
+            .readTree(
+                mvc.perform(json(put(ROOT + "/members/" + id), body))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+            .path("item");
+    assertThat(cleared.has("unitName") && cleared.path("unitName").isNull()).isTrue();
+    assertThat(cleared.has("chzzkUrl") && cleared.path("chzzkUrl").isNull()).isTrue();
+    assertThat(cleared.has("xUrl") && cleared.path("xUrl").isNull()).isTrue();
+    var member =
+        mapper
+            .readTree(
+                mvc.perform(get("/api/v1/members/" + id))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+            .path("member");
+    for (var field : List.of("unitName", "chzzkUrl", "xUrl"))
+      assertThat(member.has(field) && member.path(field).isNull()).as(field).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"chzzkUrl", "xUrl"})
+  void invalidProfileLinksDoNotPartiallyUpdateMember(String field) throws Exception {
+    UUID id = member();
+    var body = memberBody();
+    body.put("unitName", "Must not be saved");
+    body.put(field, "javascript:alert(1)");
+    mvc.perform(json(put(ROOT + "/members/" + id), body)).andExpect(status().isBadRequest());
+    assertThat(writer.queryForObject("SELECT version FROM app.member WHERE id=?", Long.class, id))
+        .isZero();
+    assertThat(
+            writer.queryForObject("SELECT unit_name FROM app.member WHERE id=?", String.class, id))
+        .isNull();
+    body.put(field, "https://example.invalid/" + "a".repeat(2000));
+    mvc.perform(json(put(ROOT + "/members/" + id), body)).andExpect(status().isBadRequest());
+    body.remove(field);
+    body.put("unitName", "a".repeat(101));
+    mvc.perform(json(put(ROOT + "/members/" + id), body)).andExpect(status().isBadRequest());
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"PRIVATE", "UNAVAILABLE", "EXPIRED", "IGNORED", "DISABLED", "FUTURE"})
   void nonPublicStaleIgnoredAndDisabledCandidatesStayUnregistered(String condition)
@@ -529,6 +622,9 @@ class CatalogManagementIntegrationTest {
             0L,
             "Must rollback",
             1,
+            null,
+            null,
+            null,
             Activity.ACTIVE,
             null,
             null,
@@ -647,6 +743,9 @@ class CatalogManagementIntegrationTest {
                                       0L,
                                       name,
                                       1,
+                                      null,
+                                      null,
+                                      null,
                                       Activity.ACTIVE,
                                       null,
                                       null,

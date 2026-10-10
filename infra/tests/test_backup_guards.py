@@ -36,6 +36,16 @@ class BackupGuardsTest(unittest.TestCase):
         path.write_text(json.dumps(self.metadata))
         path.chmod(0o600)
 
+    def test_v19_and_v20_archives_remain_valid_but_unknown_schema_is_rejected(self):
+        for version in (19, 20):
+            self.metadata['schemaVersion'] = version
+            self.save_manifest()
+            self.assertEqual(version, backup.validate_archive(self.bundle)['schemaVersion'])
+        self.metadata['schemaVersion'] = 21
+        self.save_manifest()
+        with self.assertRaisesRegex(backup.OperationError, 'Unsupported backup format/schema'):
+            backup.validate_archive(self.bundle)
+
     def ledger(self, **overrides):
         timestamp = backup.now().isoformat()
         data = {'complete': True, 'servicesStoppedAt': timestamp,
@@ -203,12 +213,13 @@ class BackupGuardsTest(unittest.TestCase):
             return ''
 
         with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner', 'database': 'test'}), \
-             patch.object(backup, 'sql', side_effect=['19', expiry]), \
+             patch.object(backup, 'sql', side_effect=['20', expiry]), \
              patch.object(backup, 'run', side_effect=dump), patch('builtins.print'):
             backup.backup(self.root)
         completed = [path for path in self.root.glob('stelody-*') if path != self.bundle]
         self.assertEqual(1, len(completed))
         self.assertEqual(expiry, backup.validate_archive(completed[0])['expiresAt'])
+        self.assertEqual(20, backup.validate_archive(completed[0])['schemaVersion'])
         self.assertFalse(list(self.root.glob('.partial-*')))
 
     def wait_until(self, predicate):
