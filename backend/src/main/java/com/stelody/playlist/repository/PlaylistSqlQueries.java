@@ -9,7 +9,9 @@ final class PlaylistSqlQueries {
       PublicCatalogSql.SONGS
           + """
       SELECT p.id, p.name, p.version, p.created_at, p.updated_at,
-        count(i.id) AS total_count, count(s.id) AS available_count
+        count(i.id) AS total_count, count(s.id) AS available_count,
+        CASE WHEN CAST(:songId AS uuid) IS NULL THEN NULL
+          ELSE coalesce(bool_or(i.song_id = CAST(:songId AS uuid)), false) END AS contains_song
       FROM app.playlist p LEFT JOIN app.playlist_item i ON i.playlist_id = p.id
         LEFT JOIN public_songs s ON s.id = i.song_id
       WHERE p.user_id = :userId

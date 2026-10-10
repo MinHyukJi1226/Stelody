@@ -46,9 +46,9 @@ public class PlaylistService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public PlaylistDtos.Page list(UUID userId, int size, String cursor) {
+  public PlaylistDtos.Page list(UUID userId, int size, String cursor, UUID songId) {
     size(size);
-    var rows = queries.list(userId, size, cursors.lists(cursor, userId));
+    var rows = queries.list(userId, size, cursors.lists(cursor, userId), songId);
     boolean next = rows.size() > size;
     var page = rows.subList(0, Math.min(size, rows.size()));
     var last = page.isEmpty() ? null : page.getLast();

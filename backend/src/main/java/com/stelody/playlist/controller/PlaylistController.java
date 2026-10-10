@@ -5,6 +5,7 @@ import com.stelody.playlist.dto.PlaylistDtos;
 import com.stelody.playlist.service.PlaylistItemService;
 import com.stelody.playlist.service.PlaylistService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -42,12 +43,23 @@ public class PlaylistController {
   }
 
   @GetMapping("/api/v1/me/playlists")
-  @Operation(summary = "개인 플레이리스트 목록")
+  @Operation(
+      summary = "개인 플레이리스트 목록",
+      description =
+          "songId를 지정하면 각 목록의 containsSong으로 저장 여부를 확인합니다. "
+              + "목록을 필터링하지 않으며 기존 정렬·커서·전체 목록 개수를 유지합니다. "
+              + "조회 이후 목록이 변경될 수 있으므로 곡 추가 API의 version·중복 검증을 계속 사용합니다.")
   public PlaylistDtos.Page list(
       @AuthenticationPrincipal SessionUser user,
       @RequestParam(defaultValue = "20") int size,
-      @RequestParam(required = false) String cursor) {
-    return playlists.list(user.id(), size, cursor);
+      @RequestParam(required = false) String cursor,
+      @Parameter(
+              description =
+                  "포함 여부를 확인할 곡 UUID. 생략하면 containsSong은 null입니다. "
+                      + "이용 불가 곡도 저장되어 있으면 true이며, 저장되지 않은 곡이나 존재하지 않는 UUID는 false입니다.")
+          @RequestParam(required = false)
+          UUID songId) {
+    return playlists.list(user.id(), size, cursor, songId);
   }
 
   @GetMapping("/api/v1/me/playlists/{id}")
