@@ -36,6 +36,14 @@ public class CatalogManagementService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public SongPage songs(int page, int size, String q) {
+    page(page, size);
+    if (q.length() > 200) throw AdminCatalogException.invalid();
+    var rows = queries.songs(page, size, q);
+    return new SongPage(rows.stream().limit(size).toList(), page, size, rows.size() > size);
+  }
+
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Object detail(String kind, UUID id) {
     return queries.detail(Resource.parse(kind), id);
   }

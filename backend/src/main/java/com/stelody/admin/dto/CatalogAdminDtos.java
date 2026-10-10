@@ -159,6 +159,52 @@ public final class CatalogAdminDtos {
   @Schema(requiredProperties = {"items", "page", "size", "hasNext"})
   public record Page(List<Summary> items, int page, int size, boolean hasNext) {}
 
+  public enum ParticipantKind {
+    MEMBER,
+    EXTERNAL
+  }
+
+  @Schema(requiredProperties = {"id", "name", "kind", "confirmed"})
+  public record SongParticipant(UUID id, String name, ParticipantKind kind, boolean confirmed) {}
+
+  @Schema(
+      requiredProperties = {
+        "id",
+        "name",
+        "version",
+        "status",
+        "participants",
+        "discoveredAt",
+        "missingFields",
+        "informationComplete"
+      })
+  public record SongSummary(
+      UUID id,
+      String name,
+      long version,
+      @Schema(
+              description =
+                  "사이트 노출 설정. DRAFT: 초안, PUBLISHED: 공개 설정, HIDDEN: 숨김. 정보 완성도와 독립적이며 공개 API의 영상·참여자 조건도 별도로 적용됩니다.")
+          Visibility status,
+      @Schema(description = "멤버 순서 다음 외부 아티스트 순서. 미등록이면 빈 배열이며 미확정 참여자도 confirmed=false로 포함합니다.")
+          List<SongParticipant> participants,
+      @Schema(
+              nullable = true,
+              description =
+                  "현재 연결된 영상들의 수집 후보 first_seen_at 중 가장 이른 시각. YouTube 공개일·곡 등록일과 다르며, 발견 기록이 없으면 null입니다.")
+          Instant discoveredAt,
+      @Schema(
+              description =
+                  "현재 정보의 누락 코드. work: 원곡, originalArtists: 원곡 아티스트, aliases: 선택 별칭, searchCheck: 검색 확인, TJ·KY: 노래방 확인, members: 멤버, representativeVideo: 대표 영상. 자동 등록 목록의 앞 6개 코드를 재사용합니다.")
+          List<String> missingFields,
+      @Schema(
+              description =
+                  "aliases를 제외한 누락 필드가 없으면 true. 별칭은 선택 정보이며 공개 설정(status)과 무관합니다. 자동 등록 여부와 관계없이 모든 곡에 같은 기준을 적용합니다.")
+          boolean informationComplete) {}
+
+  @Schema(requiredProperties = {"items", "page", "size", "hasNext"})
+  public record SongPage(List<SongSummary> items, int page, int size, boolean hasNext) {}
+
   @Schema(requiredProperties = {"item", "possibleDuplicateIds"})
   public record Saved<T>(T item, List<UUID> possibleDuplicateIds) {}
 

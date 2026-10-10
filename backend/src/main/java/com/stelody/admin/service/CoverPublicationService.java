@@ -3,6 +3,7 @@ package com.stelody.admin.service;
 import com.stelody.admin.dto.CatalogAdminDtos.AuditPage;
 import com.stelody.admin.dto.CoverPublicationDtos.*;
 import com.stelody.admin.repository.CatalogAdminQueries;
+import com.stelody.admin.repository.SongInformationSql;
 import com.stelody.admin.web.AdminCatalogException;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -65,14 +66,10 @@ public class CoverPublicationService {
         jdbc.sql(
                 """
         SELECT a.*,s.title,s.visibility,
-          array_remove(ARRAY[
-            CASE WHEN s.work_id IS NULL THEN 'work' END,
-            CASE WHEN NOT EXISTS(SELECT 1 FROM app.work_artist w WHERE w.work_id=s.work_id) THEN 'originalArtists' END,
-            CASE WHEN NOT EXISTS(SELECT 1 FROM app.song_alias x WHERE x.song_id=s.id) THEN 'aliases' END,
-            CASE WHEN s.search_visibility='UNCHECKED' THEN 'searchCheck' END,
-            CASE WHEN NOT EXISTS(SELECT 1 FROM app.karaoke_entry k WHERE k.provider='TJ' AND k.status<>'UNKNOWN' AND (k.song_id=s.id OR k.work_id=s.work_id)) THEN 'TJ' END,
-            CASE WHEN NOT EXISTS(SELECT 1 FROM app.karaoke_entry k WHERE k.provider='KY' AND k.status<>'UNKNOWN' AND (k.song_id=s.id OR k.work_id=s.work_id)) THEN 'KY' END
-          ],NULL) AS missing
+        """
+                    + SongInformationSql.SUPPLEMENTAL_MISSING_FIELDS
+                    + """
+          AS missing
         FROM app.cover_auto_registration a JOIN app.song_entry s ON s.id=a.song_id
         """
                     + (incompleteOnly
