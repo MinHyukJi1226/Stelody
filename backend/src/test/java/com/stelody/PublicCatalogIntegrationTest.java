@@ -13,6 +13,7 @@ import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
@@ -348,6 +349,97 @@ class PublicCatalogIntegrationTest {
   }
 
   @Test
+  void totalCountMatchesSearchFiltersAndCountsSongsOnceAcrossRelationshipsAndUploads()
+      throws Exception {
+    writer.update("INSERT INTO app.song_alias VALUES (?, ?, ?)", S1, "Sky cover", "sky cover");
+    writer.update("INSERT INTO app.member_alias VALUES (?, ?, ?)", M1, "Alpha", "alpha");
+    writer.update(
+        "INSERT INTO app.video(id, song_id, youtube_id, video_kind, availability, source_title, published_at) VALUES (?, ?, '99999999999', 'REUPLOAD', 'PUBLIC', 'Reupload', '2026-02-01T00:00:00Z')",
+        id(999),
+        S1);
+    var cases =
+        Map.ofEntries(
+            Map.entry("", 4L),
+            Map.entry("?q=sky", 2L),
+            Map.entry("?q=논브레스 오블리주", 2L),
+            Map.entry("?q=외부 가수", 3L),
+            Map.entry("?q=알파", 2L),
+            Map.entry("?q=%", 1L),
+            Map.entry("?q=missing", 0L),
+            Map.entry("?q=", 0L),
+            Map.entry("?q=+++", 0L),
+            Map.entry("?mode=BROWSE", 4L),
+            Map.entry("?type=COVER", 3L),
+            Map.entry("?memberIds=" + M1 + "," + M2, 4L),
+            Map.entry(
+                "?q=sky&memberIds=" + M1 + "," + M2 + "&type=COVER&year=2026&collaboration=true",
+                1L),
+            Map.entry("?memberIds=" + M1 + "&type=ORIGINAL&collaboration=true", 1L),
+            Map.entry("?memberIds=" + M3, 0L),
+            Map.entry("?collaboration=true", 2L),
+            Map.entry("?year=2025", 0L));
+    for (var entry : cases.entrySet()) {
+      assertThat(request("/api/v1/songs" + entry.getKey()).get("totalCount").asLong())
+          .as(entry.getKey())
+          .isEqualTo(entry.getValue());
+    }
+    assertThat(request("/api/v1/members/" + M1 + "/songs?size=1").get("totalCount").asLong())
+        .isEqualTo(2);
+    assertThat(
+            request("/api/v1/members/" + M1 + "/songs?type=COVER&collaboration=true")
+                .get("totalCount")
+                .asLong())
+        .isEqualTo(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"LATEST", "RELEVANCE", "VIEWS"})
+  void totalCountIgnoresPageSizeSortAndCursorIncludingTheFinalPage(String sort) throws Exception {
+    publish(10L, 10L, 0L, null);
+    var first = request("/api/v1/songs?size=2&sort=" + sort);
+    assertThat(ids(first)).hasSize(2);
+    assertThat(first.get("totalCount").asLong()).isEqualTo(4);
+    assertThat(first.get("hasNext").asBoolean()).isTrue();
+    var second =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs")
+                        .param("size", "2")
+                        .param("sort", sort)
+                        .param("cursor", first.get("nextCursor").asText()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(ids(second)).hasSize(2).doesNotContainAnyElementsOf(ids(first));
+    assertThat(second.get("totalCount").asLong()).isEqualTo(4);
+    assertThat(second.get("hasNext").asBoolean()).isFalse();
+    assertThat(second.get("nextCursor").isNull()).isTrue();
+    assertThat(request("/api/v1/songs?size=50&sort=" + sort).get("totalCount").asLong())
+        .isEqualTo(4);
+  }
+
+  @Test
+  void emptyPageAfterCatalogChangeStillReturnsTheCurrentTotalBeforeTheCursor() throws Exception {
+    var first = request("/api/v1/songs?size=2");
+    writer.update("UPDATE app.song_entry SET visibility='HIDDEN' WHERE id IN (?, ?)", S1, S2);
+    var second =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs")
+                        .param("size", "2")
+                        .param("cursor", first.get("nextCursor").asText()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(ids(second)).isEmpty();
+    assertThat(second.get("totalCount").asLong()).isEqualTo(2);
+    assertThat(second.get("hasNext").asBoolean()).isFalse();
+    assertThat(second.get("nextCursor").isNull()).isTrue();
+  }
+
+  @Test
   void memberOrFiltersAndExternalCollaborationMatchCounts() throws Exception {
     assertThat(ids(request("/api/v1/songs?memberIds=" + M1 + "," + M2)))
         .hasSize(4)
@@ -422,6 +514,7 @@ class PublicCatalogIntegrationTest {
       if (cursor != null) request.param("cursor", cursor);
       var response = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse();
       var page = mapper.readTree(response.getContentAsString());
+      assertThat(page.get("totalCount").asLong()).isEqualTo(all.isEmpty() ? 4 : 5);
       all.addAll(ids(page));
       cursor = page.get("nextCursor").isNull() ? null : page.get("nextCursor").asText();
       if (all.size() == 1) {
@@ -520,6 +613,8 @@ class PublicCatalogIntegrationTest {
         .contains(S1.toString())
         .doesNotContain(S2.toString());
     assertThat(ids(request("/api/v1/songs?year=2025"))).containsExactly(S2.toString());
+    assertThat(request("/api/v1/songs?year=2026").get("totalCount").asLong()).isEqualTo(3);
+    assertThat(request("/api/v1/songs?year=2025").get("totalCount").asLong()).isEqualTo(1);
   }
 
   @Test
@@ -605,11 +700,13 @@ class PublicCatalogIntegrationTest {
         """);
     request("/api/v1/songs?size=20&q=bench");
     SELECTS.set(0);
-    assertThat(ids(request("/api/v1/songs?size=20&q=bench"))).hasSize(20);
+    var twentyPage = request("/api/v1/songs?size=20&q=bench");
+    assertThat(ids(twentyPage)).hasSize(20);
+    assertThat(twentyPage.get("totalCount").asLong()).isEqualTo(1000);
     int twenty = SELECTS.get();
     SELECTS.set(0);
     assertThat(ids(request("/api/v1/songs?size=50&q=bench"))).hasSize(50);
-    assertThat(twenty).isEqualTo(4);
+    assertThat(twenty).isEqualTo(5);
     assertThat(SELECTS.get()).isEqualTo(twenty);
     SELECTS.set(0);
     assertThat(ids(request("/api/v1/songs/recommendations?size=6")))

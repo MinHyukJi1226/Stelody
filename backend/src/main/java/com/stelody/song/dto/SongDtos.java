@@ -84,9 +84,16 @@ public final class SongDtos {
       List<Karaoke> karaoke,
       @Schema(nullable = true) WorkResources workResources) {}
 
-  @Schema(requiredProperties = {"items", "nextCursor", "hasNext"})
+  @Schema(requiredProperties = {"items", "nextCursor", "hasNext", "totalCount"})
   public record Page(
-      List<Card> items, @Schema(nullable = true) String nextCursor, boolean hasNext) {}
+      List<Card> items,
+      @Schema(nullable = true) String nextCursor,
+      boolean hasNext,
+      @Schema(
+              description =
+                  "현재 요청의 검색어·필터·공개 조건에 일치하는 전체 고유 곡 수입니다. 페이지 크기·정렬·커서와 무관하며 결과가 없거나 빈 검색이면 0입니다. 각 요청의 items와 같은 DB 스냅샷에서 집계하며 요청 사이 카탈로그 변경 시 달라질 수 있습니다.",
+              minimum = "0")
+          long totalCount) {}
 
   @Schema(requiredProperties = {"items"})
   public record Recommendations(List<Card> items) {}
