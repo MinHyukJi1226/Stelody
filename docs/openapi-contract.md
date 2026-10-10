@@ -49,6 +49,6 @@ cd backend
 
 Docker가 필요하다. 분리된 PostgreSQL 역할을 사용하는 임시 DB에서 애플리케이션을 실행하며, 실제 Google·YouTube 연결 없이 명세를 검증한다. 테스트가 성공하면 `backend/build/openapi/stelody-openapi.json`을 생성한다. 전체 검증 `./gradlew check bootJar --no-daemon`에도 포함된다. CI는 검증한 JSON을 `backend-openapi-<커밋 SHA>` 아티팩트로 보관한다. 프론트의 타입 생성·연동은 이 파일과 해당 커밋을 기준으로 한다.
 
-문서에는 실제 계정·DB 자료·OAuth 키·토큰을 넣지 않는다. API 경로의 누락, 스키마 참조, 인증·CSRF, 응답 코드, 개발 문서 접근과 운영 차단을 테스트한다.
+문서에는 실제 계정·DB 자료·OAuth 키·토큰을 넣지 않는다. API 경로의 누락, 스키마 참조, 인증·CSRF, 응답 코드, local·prod 문서 GET 조회와 변경 요청 차단, 기본 프로필 및 비활성화 설정의 접근 차단을 테스트한다.
 
 의존성은 [springdoc 공식 안내](https://springdoc.org/)의 Spring Boot 4용 3.x 계열을 사용한다. 문서 노출·스키마 이름 관련 설정은 [공식 속성 문서](https://springdoc.org/properties.html)를 따른다. 현재 프로젝트의 Spring Boot 4.1.1과의 호환성은 컴파일과 실제 문서 통합 테스트로 확인한다.
