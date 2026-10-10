@@ -51,6 +51,15 @@ public final class CollectionDtos {
   @Schema(requiredProperties = {"items", "page", "size", "hasNext"})
   public record Page(List<Run> items, int page, int size, boolean hasNext) {}
 
+  @Schema(requiredProperties = {"items", "page", "size", "hasNext", "from", "to"})
+  public record FailurePage(
+      List<Run> items,
+      int page,
+      int size,
+      boolean hasNext,
+      @Schema(description = "포함하는 실패 시각의 하한") Instant from,
+      @Schema(description = "포함하는 실패 시각의 상한") Instant to) {}
+
   @Schema(
       requiredProperties = {
         "latest",

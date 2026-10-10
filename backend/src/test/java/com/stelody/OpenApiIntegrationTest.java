@@ -236,6 +236,46 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsInboxCountDefinitionsAndMatchingFailureListWindow() throws Exception {
+    var api = contract();
+    var inbox = api.path("paths").path("/api/v1/admin/inbox").path("get");
+    assertThat(inbox.path("description").asText()).contains("동일한 조건", "DB 스냅샷", "ADMIN");
+    assertThat(inbox.path("security").get(0).has("session")).isTrue();
+    var schema =
+        api.at(
+            inbox.at("/responses/200/content/application~1json/schema/$ref").asText().substring(1));
+    assertThat(schema.path("required").size()).isEqualTo(6);
+    for (String field :
+        new String[] {
+          "newReviewCount",
+          "incompleteAutoRegistrationCount",
+          "specialEventReviewCount",
+          "collectionFailureCount"
+        }) {
+      assertThat(schema.path("required").toString()).contains(field);
+      assertThat(schema.path("properties").path(field).path("minimum").asInt()).isZero();
+      assertThat(schema.path("properties").path(field).path("description").asText())
+          .contains("GET /api/v1/admin/");
+    }
+    assertThat(schema.at("/properties/incompleteAutoRegistrationCount/description").asText())
+        .contains("자동 등록 곡만", "별칭은 선택");
+    assertThat(schema.at("/properties/collectionFailureCount/description").asText())
+        .contains("24시간", "작업 수", "SUCCEEDED", "실패 영상 수");
+    var failures = api.path("paths").path("/api/v1/admin/collection-failures").path("get");
+    assertThat(failures.path("description").asText())
+        .contains("failureWindowStart", "checkedAt", "FAILED", "QUOTA_EXHAUSTED", "TIMED_OUT");
+    for (String name : new String[] {"from", "to"}) {
+      var parameter =
+          java.util.stream.StreamSupport.stream(failures.path("parameters").spliterator(), false)
+              .filter(p -> p.path("name").asText().equals(name))
+              .findFirst()
+              .orElseThrow();
+      assertThat(parameter.path("required").asBoolean()).isFalse();
+      assertThat(parameter.path("schema").path("format").asText()).isEqualTo("date-time");
+    }
+  }
+
+  @Test
   void retainsDistinctPagesNullableDataAndBodyValidation() throws Exception {
     var api = contract();
     var schemas = api.path("components").path("schemas");

@@ -4,6 +4,14 @@ package com.stelody.admin.repository;
 public final class SongInformationSql {
   private SongInformationSql() {}
 
+  public static final String INCOMPLETE_AUTO_REGISTRATION =
+      """
+      s.work_id IS NULL OR s.search_visibility='UNCHECKED'
+      OR NOT EXISTS(SELECT 1 FROM app.work_artist w WHERE w.work_id=s.work_id)
+      OR NOT EXISTS(SELECT 1 FROM app.karaoke_entry k WHERE k.provider='TJ' AND k.status<>'UNKNOWN' AND (k.song_id=s.id OR k.work_id=s.work_id))
+      OR NOT EXISTS(SELECT 1 FROM app.karaoke_entry k WHERE k.provider='KY' AND k.status<>'UNKNOWN' AND (k.song_id=s.id OR k.work_id=s.work_id))
+      """;
+
   public static final String SUPPLEMENTAL_MISSING_FIELDS =
       """
     array_remove(ARRAY[

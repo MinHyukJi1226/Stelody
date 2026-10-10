@@ -219,6 +219,205 @@ class CatalogManagementIntegrationTest {
             .getContentAsString());
   }
 
+  JsonNode adminGet(String path) throws Exception {
+    return mapper.readTree(
+        mvc.perform(auth(get(path), admin))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  void clearCollectionRuns() {
+    writer.execute(
+        "TRUNCATE app.collection_run,app.discovery_run,app.collection_retry_request CASCADE");
+  }
+
+  @Test
+  void inboxReviewAndSpecialCountsMatchLinkedListsAndExcludeHandledAndDeferredCandidates()
+      throws Exception {
+    clearCollectionRuns();
+    UUID expired = UUID.randomUUID(),
+        excluded = UUID.randomUUID(),
+        deferred = UUID.randomUUID(),
+        ignored = UUID.randomUUID();
+    seed(expired, "lmnopqrstuv");
+    seed(excluded, "wxyz1234567");
+    seed(deferred, "890abcdefgh");
+    seed(ignored, "ijklmnopqrs");
+    writer.update(
+        "UPDATE app.review_item SET source_observed_at=now()-interval '31 days' WHERE id=?",
+        expired);
+    writer.update("UPDATE app.review_item SET disposition='EXCLUDED' WHERE id=?", excluded);
+    writer.update("UPDATE app.review_item SET disposition='DEFERRED' WHERE id=?", deferred);
+    writer.update("UPDATE app.review_item SET review_status='IGNORED' WHERE id=?", ignored);
+    UUID pendingSong = song(null, "COVER"),
+        confirmedSong = song(null, "COVER"),
+        dismissedSong = song(null, "ORIGINAL");
+    for (var entry :
+        Map.of(pendingSong, "PENDING", confirmedSong, "CONFIRMED", dismissedSong, "DISMISSED")
+            .entrySet()) {
+      writer.update(
+          "INSERT INTO app.special_event_review(id,song_id,status,evidence,active,source_expires_at) VALUES(?,?,?,'[]',false,now()-interval '1 day')",
+          UUID.randomUUID(),
+          entry.getKey(),
+          entry.getValue());
+    }
+    var inbox = adminGet(ROOT + "/inbox");
+    assertThat(inbox.path("newReviewCount").asLong()).isEqualTo(1);
+    assertThat(inbox.path("newReviewCount").asLong())
+        .isEqualTo(
+            adminGet(ROOT + "/reviews?status=PENDING&disposition=REVIEW").path("items").size());
+    assertThat(inbox.path("specialEventReviewCount").asLong()).isEqualTo(1);
+    assertThat(inbox.path("specialEventReviewCount").asLong())
+        .isEqualTo(adminGet(ROOT + "/special-event-reviews?status=PENDING").path("items").size());
+    assertThat(inbox.path("incompleteAutoRegistrationCount").asLong()).isZero();
+    assertThat(inbox.path("collectionFailureCount").asLong()).isZero();
+    assertThat(Instant.parse(inbox.path("checkedAt").asText()).minusSeconds(86400))
+        .isEqualTo(Instant.parse(inbox.path("failureWindowStart").asText()));
+    writer.update("UPDATE app.review_item SET review_status='IGNORED' WHERE id=?", REVIEW);
+    writer.update(
+        "UPDATE app.special_event_review SET status='DISMISSED' WHERE song_id=?", pendingSong);
+    inbox = adminGet(ROOT + "/inbox");
+    assertThat(inbox.path("newReviewCount").asLong()).isZero();
+    assertThat(inbox.path("specialEventReviewCount").asLong()).isZero();
+    mvc.perform(get(ROOT + "/inbox")).andExpect(status().isUnauthorized());
+    mvc.perform(auth(get(ROOT + "/inbox"), user)).andExpect(status().isForbidden());
+  }
+
+  @Test
+  void inboxInformationCountTargetsOnlyIncompleteAutomaticRegistrationsAndMatchesQueue()
+      throws Exception {
+    clearCollectionRuns();
+    UUID member = member(), automatic = song(member, "COVER");
+    song(null, "COVER"); // Incomplete manual song is outside this queue.
+    UUID video = attach(automatic, REVIEW, 0, 0, "OFFICIAL_COVER");
+    writer.update(
+        "INSERT INTO app.cover_auto_registration(review_id,song_id,video_id,member_id,rule_version,reason,processed_at) VALUES(?,?,?,?,'test','test',now())",
+        REVIEW,
+        automatic,
+        video,
+        member);
+    writer.update("UPDATE app.song_entry SET visibility='HIDDEN' WHERE id=?", automatic);
+    assertThat(adminGet(ROOT + "/inbox").path("incompleteAutoRegistrationCount").asLong())
+        .isEqualTo(1);
+    assertThat(
+            adminGet(ROOT + "/cover-auto-publication/registrations?incompleteOnly=true")
+                .path("items")
+                .size())
+        .isEqualTo(1);
+    UUID work = UUID.randomUUID(), artist = UUID.randomUUID();
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'work','work')", work);
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,'artist','artist')", artist);
+    writer.update(
+        "INSERT INTO app.work_artist(work_id,artist_id,position) VALUES(?,?,0)", work, artist);
+    writer.update(
+        "UPDATE app.song_entry SET work_id=?,search_visibility='NORMAL' WHERE id=?",
+        work,
+        automatic);
+    for (String provider : List.of("TJ", "KY"))
+      writer.update(
+          "INSERT INTO app.karaoke_entry(id,work_id,provider,status) VALUES(?,?,?,'NOT_LISTED')",
+          UUID.randomUUID(),
+          work,
+          provider);
+    writer.update("DELETE FROM app.song_alias WHERE song_id=?", automatic);
+    assertThat(adminGet(ROOT + "/inbox").path("incompleteAutoRegistrationCount").asLong()).isZero();
+    assertThat(
+            adminGet(ROOT + "/cover-auto-publication/registrations?incompleteOnly=true")
+                .path("items")
+                .isEmpty())
+        .isTrue();
+    assertThat(
+            adminGet(ROOT + "/cover-auto-publication/registrations?incompleteOnly=false")
+                .path("items")
+                .get(0)
+                .path("missingFields")
+                .toString())
+        .isEqualTo("[\"aliases\"]");
+  }
+
+  UUID failureRun(String kind, String status, Instant finished, int slot) {
+    UUID id = UUID.randomUUID();
+    var start = java.sql.Timestamp.from(finished.minusSeconds(60));
+    if (kind.equals("VIDEO")) {
+      writer.update(
+          "INSERT INTO app.collection_run(id,logical_slot,status,attempt,started_at,finished_at) VALUES(?,date_trunc('hour',now())-?*interval '1 hour',?,1,?,?)",
+          id,
+          slot,
+          status,
+          start,
+          java.sql.Timestamp.from(finished));
+    } else {
+      writer.update(
+          "INSERT INTO app.discovery_run(id,mode,status,started_at,finished_at) VALUES(?,'NEW',?,?,?)",
+          id,
+          status,
+          start,
+          java.sql.Timestamp.from(finished));
+    }
+    return id;
+  }
+
+  @Test
+  void inboxFailuresMatchCombinedWindowedListAndDropSuccessfulRetriesWithoutHidingOtherFailures()
+      throws Exception {
+    clearCollectionRuns();
+    Instant now = Instant.now().minusSeconds(10);
+    UUID video = failureRun("VIDEO", "FAILED", now.minusSeconds(100), 0);
+    failureRun("DISCOVERY", "QUOTA_EXHAUSTED", now.minusSeconds(200), 0);
+    failureRun("DISCOVERY", "TIMED_OUT", now.minusSeconds(300), 0);
+    UUID retried = failureRun("DISCOVERY", "FAILED", now.minusSeconds(400), 0);
+    UUID execution = failureRun("DISCOVERY", "SUCCEEDED", now.minusSeconds(50), 0);
+    writer.update(
+        "INSERT INTO app.collection_retry_request(id,kind,run_id,expected_attempt,status,execution_run_id) VALUES(?,'DISCOVERY',?,1,'SUCCEEDED',?)",
+        UUID.randomUUID(),
+        retried,
+        execution);
+    failureRun("VIDEO", "FAILED", now.minusSeconds(90000), 1);
+    failureRun("VIDEO", "SUCCEEDED", now, 2);
+    failureRun("DISCOVERY", "FAILED", now.plusSeconds(600), 0);
+    failureRun("DISCOVERY", "RUNNING", now, 0);
+    var inbox = adminGet(ROOT + "/inbox");
+    assertThat(inbox.path("collectionFailureCount").asLong()).isEqualTo(3);
+    String window =
+        "?from="
+            + inbox.path("failureWindowStart").asText()
+            + "&to="
+            + inbox.path("checkedAt").asText();
+    var all = adminGet(ROOT + "/collection-failures" + window);
+    assertThat(all.path("items").size()).isEqualTo(inbox.path("collectionFailureCount").asInt());
+    assertThat(all.path("items").get(0).path("id").asText()).isEqualTo(video.toString());
+    assertThat(
+            adminGet(ROOT + "/collection-failures" + window + "&size=1")
+                .path("hasNext")
+                .asBoolean())
+        .isTrue();
+    assertThat(
+            adminGet(ROOT + "/collection-failures" + window + "&size=1&page=2")
+                .path("hasNext")
+                .asBoolean())
+        .isFalse();
+    assertThat(adminGet(ROOT + "/collection-failures" + window + "&page=1").path("items").isEmpty())
+        .isTrue();
+    writer.update("UPDATE app.collection_run SET status='SUCCEEDED' WHERE id=?", video);
+    assertThat(adminGet(ROOT + "/inbox").path("collectionFailureCount").asLong()).isEqualTo(2);
+    mvc.perform(get(ROOT + "/collection-failures")).andExpect(status().isUnauthorized());
+    mvc.perform(auth(get(ROOT + "/collection-failures"), user)).andExpect(status().isForbidden());
+    for (String query :
+        List.of(
+            "?from=bad",
+            "?size=51",
+            "?page=-1",
+            "?from=2026-02-02T00:00:00Z&to=2026-02-01T00:00:00Z"))
+      mvc.perform(auth(get(ROOT + "/collection-failures" + query), admin))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_COLLECTION_REQUEST"));
+  }
+
   @Test
   void songListReturnsOrderedParticipantsAndEarliestLinkedDiscoveryRatherThanPublicationDate()
       throws Exception {
