@@ -1,0 +1,8 @@
+**
+!backend/
+!backend/build/
+!backend/build/libs/
+!backend/build/libs/stelody-0.0.1-SNAPSHOT.jar
+!infra/
+!infra/deploy/
+!infra/deploy/render-start.sh
