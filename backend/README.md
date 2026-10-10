@@ -191,4 +191,4 @@ V15 적용 후 스키마 소유자로 [운영 요청 수집 권한](../infra/sql
 
 ## API 문서
 
-`local` 프로필로 웹 서버를 실행한 뒤 `/swagger-ui.html`에서 API를 확인합니다. JSON 계약은 `/v3/api-docs`, YAML은 `/v3/api-docs.yaml`입니다. 기본·운영 환경에서는 닫혀 있으며, 개인·관리자 API의 세션·CSRF 검증을 그대로 적용합니다. 사용 방법과 프론트에 전달할 계약 파일 생성·검증은 [OpenAPI 문서](../docs/openapi-contract.md)를 참고합니다.
+`local`·`prod` 프로필로 웹 서버를 실행한 뒤 `/swagger-ui.html`에서 API를 확인합니다. JSON 계약은 `/v3/api-docs`, YAML은 `/v3/api-docs.yaml`입니다. 문서는 로그인 없이 GET으로 조회할 수 있으며 기본 프로필에서는 닫혀 있습니다. 개인·관리자 API의 세션·역할·CSRF 검증은 그대로 적용합니다. 운영에서 `SPRINGDOC_API_DOCS_ENABLED=false`로 명세와 UI를 함께 닫거나 `SPRINGDOC_SWAGGER_UI_ENABLED=false`로 UI만 닫을 수 있습니다. 사용 방법과 프론트에 전달할 계약 파일 생성·검증은 [OpenAPI 문서](../docs/openapi-contract.md)를 참고합니다.

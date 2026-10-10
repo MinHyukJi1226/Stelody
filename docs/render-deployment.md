@@ -51,7 +51,7 @@ docker build --platform linux/amd64 -f backend/Dockerfile.render -t stelody:rend
 
 `infra/deploy/render.env.example`의 `SESSION_POOLER_HOST`, `PROJECT_REF`와 비밀번호·인증서·Google 클라이언트 입력 표시를 모두 실제 값으로 바꾼 뒤 Add from .env로 넣는다. 비공개 실제 설정 파일은 Git에서 제외하고 로컬 권한을 600으로 유지한다. 이 파일 전체·Render 환경변수 화면을 채팅이나 PR에 게시하지 않는다.
 
-- 실행 프로필은 **`prod,google,render`**이다. render만 활성화해서 운영 쿠키·문서 차단을 빠뜨리지 않는다.
+- 실행 프로필은 **`prod,google,render`**이다. `prod`가 운영 HTTPS 쿠키와 OpenAPI/Swagger 기본 활성화를 적용하므로 `render`만 지정하지 않는다. 문서 경로는 비로그인 GET 조회만 허용한다. 명세와 UI를 함께 닫으려면 `SPRINGDOC_API_DOCS_ENABLED=false`, UI만 닫으려면 `SPRINGDOC_SWAGGER_UI_ENABLED=false`를 설정한다.
 - `PORT=10000`을 사용하고 앱은 Render에 전달된 PORT에 바인딩한다.
 - `DB_URL`에는 해당 프로젝트의 Connect → Session pooler에서 복사한 전체 호스트·5432·DB 이름, `sslmode=verify-full&sslrootcert=/tmp/stelody-db-ca.crt`를 넣는다. 비밀번호는 URL에서 분리한다.
 - `DB_CA_CERTIFICATE_BASE64`는 다운로드한 **공개 CA 인증서**를 한 줄 base64로 인코딩한 값이다. 개인키가 아니다. 기동 스크립트가 임시 파일을 권한 600으로 생성한 뒤 고정 경로에 교체한다. 재시작 시 인증서를 다시 적용하며 유효하지 않은 base64·필수 설정 누락은 기동을 실패시킨다.
@@ -72,7 +72,7 @@ Render가 표시한 실제 HTTPS 주소를 기록한 뒤 Google OAuth 클라이�
 - `<배정된 HTTPS 주소>/api/v1/auth/callback/google`
 - `<배정된 HTTPS 주소>/api/v1/me/youtube/callback`
 
-`/actuator/health`가 UP인지, Flyway V19 완료·웹 계정의 최소 권한·공개 API·개인/관리 접근 차단·CSRF·운영 문서 차단을 확인한다. 이후 실제 로그인과 원래 화면 복귀, HTTPS 쿠키를 확인한다. 최초 카탈로그 등록과 YouTube 연결/내보내기 등 나머지 검증은 [배포·운영 체크](deployment-operations.md)를 따른다.
+`/actuator/health`가 UP인지, Flyway V19 완료·웹 계정의 최소 권한·공개 API·개인/관리 접근 차단·CSRF를 확인한다. 운영 문서는 `/swagger-ui.html`, `/v3/api-docs`, `/v3/api-docs.yaml`의 비로그인 GET 조회와 변경 요청 차단을 확인한다. 문서 비활성화 설정을 적용했다면 해당 경로의 접근 차단을 확인한다. 이후 실제 로그인과 원래 화면 복귀, HTTPS 쿠키를 확인한다. 최초 카탈로그 등록과 YouTube 연결/내보내기 등 나머지 검증은 [배포·운영 체크](deployment-operations.md)를 따른다.
 
 ## 준비 과정의 검증
 

@@ -18,7 +18,7 @@ import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.*;
 
 @Configuration
-@Profile("!prod & (local | test)")
+@Profile("local | test | prod")
 public class ApiDocumentationConfiguration {
   @Bean
   OpenAPI stelodyOpenApi() {

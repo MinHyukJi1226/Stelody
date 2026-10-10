@@ -88,7 +88,7 @@ Google에 운영 HTTPS 주소 두 개를 정확히 등록한다.
 - `/api/v1/auth/callback/google`: 일반 로그인·탈퇴 재인증
 - `/api/v1/me/youtube/callback`: YouTube 추가 동의
 
-`GOOGLE_REDIRECT_URI`와 `YOUTUBE_EXPORT_REDIRECT_URI`는 해당 주소와 일치해야 한다. `prod`는 Secure·HttpOnly·SameSite=Lax 쿠키를 유지하고 OpenAPI/Swagger를 닫는다. 고정된 외부 콜백을 사용하므로 전달 헤더 처리를 임의로 켜지 않는다. 테스트 대상 밖의 실제 사용자에게 서비스를 공개하려면 Google의 앱 게시·권한 검증 조건도 확인한다.
+`GOOGLE_REDIRECT_URI`와 `YOUTUBE_EXPORT_REDIRECT_URI`는 해당 주소와 일치해야 한다. `prod`는 Secure·HttpOnly·SameSite=Lax 쿠키를 유지하고 OpenAPI/Swagger의 GET 조회를 기본 활성화한다. 개인·관리자 API의 로그인·역할·CSRF 조건은 유지한다. 문서를 닫으려면 `SPRINGDOC_API_DOCS_ENABLED=false`, UI만 닫으려면 `SPRINGDOC_SWAGGER_UI_ENABLED=false`를 설정한다. [OpenAPI 문서](openapi-contract.md)에 접근 조건과 사용 방법을 기록했다. 고정된 외부 콜백을 사용하므로 전달 헤더 처리를 임의로 켜지 않는다. 테스트 대상 밖의 실제 사용자에게 서비스를 공개하려면 Google의 앱 게시·권한 검증 조건도 확인한다.
 
 처음 운영 카탈로그를 등록할 때는 [초기 등록 명세](initial-catalog-registration.md)를 운영 DB의 후보·채널·현재 영상 상태와 대조하여 적용한다. 로컬 `reviewId`나 개발용 회원·개인 목록을 그대로 초기 데이터로 복사하지 않는다. 등록을 Flyway나 앱 자동 초기화로 실행하지 않는다. 아래 백업 복구는 **이미 운영 중인 DB의 재해 복구** 절차이며 최초 콘텐츠 등록을 대신하지 않는다.
 
@@ -174,11 +174,13 @@ python3 infra/backup/database.py restore \
 - Google 로그인, 외부 returnTo 차단, 내부 returnTo 복귀, 로그아웃
 - 즐겨찾기·플레이리스트 저장·순서·삭제와 사용자 간 접근 차단
 - YouTube 추가 동의·연결·작은 새 비공개 목록 내보내기·제외/실패/재시도
-- HTTPS 쿠키 Secure/HttpOnly/SameSite, 운영 OpenAPI/Swagger 차단
+- HTTPS 쿠키 Secure/HttpOnly/SameSite, 운영 OpenAPI/Swagger 비로그인 GET 조회와 변경 요청 차단; 문서 비활성화 설정을 적용했다면 해당 경로 접근 차단
 - 수집 수동·예약 실행, 재시도 접수, 수집 권한 제한
 - 복구 결과 검증과 삭제 재적용; 탈퇴 흐름은 전용 시험 계정으로만 확인
 
 ## 이번 로컬 검증 (2026-10-04)
+
+아래 결과는 2026-10-04 당시 설정의 검증 기록이다. 2026-10-10 운영 문서 활성화 변경 이후에는 위 공개 전 API 확인 항목에 따라 OpenAPI/Swagger의 GET 조회를 검증한다.
 
 - 실제 로컬 DB를 읽기 전용으로 백업하고 **별도 PostgreSQL 17 컨테이너**에 복구했다. 검색 확장 pg_trgm 포함·FK·ACL 복구를 확인했다.
 - 공개 360곡·11명·검색/추천 자료를 복원했다. 원래 로컬 DB를 덮어쓰거나 사용자 계정을 변경하지 않았다.

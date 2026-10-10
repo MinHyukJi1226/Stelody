@@ -16,10 +16,9 @@ import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.*;
 
-@SpringBootTest(
-    properties = {"springdoc.api-docs.enabled=true", "springdoc.swagger-ui.enabled=true"})
+@SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ActiveProfiles({"test", "prod"})
 @Testcontainers
 @Tag("integration")
 class OpenApiIntegrationTest {
