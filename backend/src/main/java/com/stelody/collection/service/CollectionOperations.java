@@ -57,6 +57,17 @@ public class CollectionOperations {
     return queries.detail(kind, id);
   }
 
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public FailurePage failures(Instant from, Instant to, int page, int size) {
+    Instant end = to == null ? Instant.now() : to;
+    Instant start = from == null ? end.minusSeconds(86400) : from;
+    if (start.isAfter(end) || page < 0 || page > 10000 || size < 1 || size > 50)
+      throw CollectionException.invalid();
+    var rows = queries.failures(start, end, page, size);
+    return new FailurePage(
+        rows.stream().limit(size).toList(), page, size, rows.size() > size, start, end);
+  }
+
   @Transactional(readOnly = true)
   public Retry retry(UUID id) {
     return queries

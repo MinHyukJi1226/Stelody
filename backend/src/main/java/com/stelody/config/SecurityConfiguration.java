@@ -115,6 +115,8 @@ public class SecurityConfiguration {
                     .requestMatchers(
                         HttpMethod.GET,
                         "/api/v1/admin/collection-status",
+                        "/api/v1/admin/inbox",
+                        "/api/v1/admin/collection-failures",
                         "/api/v1/admin/collection-runs",
                         "/api/v1/admin/collection-runs/{kind}/{id}",
                         "/api/v1/admin/collection-retries/{id}")

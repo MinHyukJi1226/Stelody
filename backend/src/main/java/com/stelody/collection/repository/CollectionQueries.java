@@ -60,6 +60,34 @@ public class CollectionQueries {
         .list();
   }
 
+  public static String unresolvedFailureWhere(String kind) {
+    table(kind);
+    return "r.status IN ('FAILED','QUOTA_EXHAUSTED','TIMED_OUT') "
+        + "AND coalesce(r.finished_at,r.started_at)>=:from AND coalesce(r.finished_at,r.started_at)<=:to "
+        + "AND NOT EXISTS(SELECT 1 FROM app.collection_retry_request retry WHERE retry.kind='"
+        + kind
+        + "' AND retry.run_id=r.id AND retry.status='SUCCEEDED')";
+  }
+
+  public List<Run> failures(Instant from, Instant to, int page, int size) {
+    return jdbc.sql(
+            "SELECT * FROM ("
+                + VIDEO
+                + " WHERE "
+                + unresolvedFailureWhere("VIDEO")
+                + " UNION ALL "
+                + DISCOVERY
+                + " WHERE "
+                + unresolvedFailureWhere("DISCOVERY")
+                + ") failures ORDER BY coalesce(finished_at,started_at) DESC,kind,id DESC LIMIT :limit OFFSET :offset")
+        .param("from", Timestamp.from(from))
+        .param("to", Timestamp.from(to))
+        .param("limit", size + 1)
+        .param("offset", page * size)
+        .query(this::run)
+        .list();
+  }
+
   public Run detail(String kind, UUID id) {
     return jdbc.sql(select(kind) + " WHERE r.id=:id")
         .param("id", id)

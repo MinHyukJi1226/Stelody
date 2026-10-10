@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class ReviewQueries {
+  public static final String EFFECTIVE_DISPOSITION =
+      "CASE WHEN r.source_observed_at <= CURRENT_TIMESTAMP - INTERVAL '30 days' THEN 'DEFERRED' ELSE r.disposition END";
   private static final String SELECT =
       """
       SELECT r.*,c.name AS channel_name FROM app.review_item r JOIN app.channel c ON c.id=r.channel_id
@@ -33,10 +35,7 @@ public class ReviewQueries {
     return jdbc.sql(
             SELECT
                 + " WHERE r.review_status=:status "
-                + (disposition == null
-                    ? ""
-                    : "AND (CASE WHEN r.source_observed_at <= CURRENT_TIMESTAMP - INTERVAL '30 days' "
-                        + "THEN 'DEFERRED' ELSE r.disposition END)=:disposition ")
+                + (disposition == null ? "" : "AND (" + EFFECTIVE_DISPOSITION + ")=:disposition ")
                 + "ORDER BY r.first_seen_at DESC,r.id DESC LIMIT :limit OFFSET :offset")
         .param("status", status)
         .params(
