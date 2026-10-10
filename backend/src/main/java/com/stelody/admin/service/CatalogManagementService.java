@@ -30,7 +30,7 @@ public class CatalogManagementService {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Page list(String kind, int page, int size, String q) {
     page(page, size);
-    if (q.length() > 200) throw AdminCatalogException.invalid();
+    if (q.length() > 200) throw AdminCatalogException.invalid("q", "INVALID_SIZE");
     var rows = queries.list(Resource.parse(kind), page, size, q);
     return new Page(rows.subList(0, Math.min(size, rows.size())), page, size, rows.size() > size);
   }
@@ -38,7 +38,7 @@ public class CatalogManagementService {
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public SongPage songs(int page, int size, String q) {
     page(page, size);
-    if (q.length() > 200) throw AdminCatalogException.invalid();
+    if (q.length() > 200) throw AdminCatalogException.invalid("q", "INVALID_SIZE");
     var rows = queries.songs(page, size, q);
     return new SongPage(rows.stream().limit(size).toList(), page, size, rows.size() > size);
   }
@@ -73,7 +73,8 @@ public class CatalogManagementService {
   }
 
   private void page(int page, int size) {
-    if (page < 0 || page > 10000 || size < 1 || size > 50) throw AdminCatalogException.invalid();
+    if (page < 0 || page > 10000) throw AdminCatalogException.invalid("page", "OUT_OF_RANGE");
+    if (size < 1 || size > 50) throw AdminCatalogException.invalid("size", "OUT_OF_RANGE");
   }
 
   private <T extends EditedEntity> T existing(Class<T> type, UUID id, long version) {
@@ -84,7 +85,7 @@ public class CatalogManagementService {
   }
 
   private void initial(long version) {
-    if (version != 0) throw AdminCatalogException.invalid();
+    if (version != 0) throw AdminCatalogException.invalid("version", "INVALID_VALUE");
   }
 
   private void flush(EditedEntity value, boolean creating) {
@@ -100,8 +101,8 @@ public class CatalogManagementService {
   @Transactional
   public Saved<Member> member(UUID id, MemberInput input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
-    rules.aliases(input.aliases(), 300);
+    rules.text(input.reason(), "reason");
+    rules.aliases(input.aliases(), 300, "aliases");
     rules.birthday(input.birthdayMonth(), input.birthdayDay());
     boolean create = id == null;
     if (create) {
@@ -110,17 +111,17 @@ public class CatalogManagementService {
     }
     Object before = create ? null : queries.member(id);
     var item = create ? new ManagedMember(id) : existing(ManagedMember.class, id, input.version());
-    item.name(rules.text(input.name()));
-    item.searchName(rules.normalized(item.name(), 200));
+    item.name(rules.text(input.name(), "name"));
+    item.searchName(rules.normalized(item.name(), 200, "name"));
     item.generation(input.generation());
     item.unitName(
         input.unitName() == null || input.unitName().isBlank()
             ? null
-            : rules.text(input.unitName()));
-    item.chzzkUrl(rules.url(input.chzzkUrl()));
-    item.xUrl(rules.url(input.xUrl()));
+            : rules.text(input.unitName(), "unitName"));
+    item.chzzkUrl(rules.url(input.chzzkUrl(), "chzzkUrl"));
+    item.xUrl(rules.url(input.xUrl(), "xUrl"));
     item.activityStatus(input.activityStatus().name());
-    item.profileImageUrl(rules.url(input.profileImageUrl()));
+    item.profileImageUrl(rules.url(input.profileImageUrl(), "profileImageUrl"));
     item.debutDate(input.debutDate());
     item.birthdayMonth(input.birthdayMonth());
     item.birthdayDay(input.birthdayDay());
@@ -135,8 +136,8 @@ public class CatalogManagementService {
   @Transactional
   public Saved<Artist> artist(UUID id, ArtistInput input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
-    rules.aliases(input.aliases(), 300);
+    rules.text(input.reason(), "reason");
+    rules.aliases(input.aliases(), 300, "aliases");
     boolean create = id == null;
     if (create) {
       initial(input.version());
@@ -144,8 +145,8 @@ public class CatalogManagementService {
     }
     Object before = create ? null : queries.artist(id);
     var item = create ? new ManagedArtist(id) : existing(ManagedArtist.class, id, input.version());
-    item.name(rules.text(input.name()));
-    item.searchName(rules.normalized(item.name(), 300));
+    item.name(rules.text(input.name(), "name"));
+    item.searchName(rules.normalized(item.name(), 300, "name"));
     flush(item, create);
     queries.aliases(Resource.ARTISTS, id, input.aliases());
     var after = queries.artist(id);
@@ -157,9 +158,9 @@ public class CatalogManagementService {
   @Transactional
   public Saved<Work> work(UUID id, WorkInput input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
-    rules.aliases(input.aliases());
-    rules.ids(input.artistIds());
+    rules.text(input.reason(), "reason");
+    rules.aliases(input.aliases(), 400, "aliases");
+    rules.ids(input.artistIds(), "artistIds");
     rules.extras(input.links(), input.karaoke());
     queries.requireReferences(Resource.ARTISTS, input.artistIds());
     boolean create = id == null;
@@ -169,8 +170,8 @@ public class CatalogManagementService {
     }
     Object before = create ? null : queries.work(id);
     var item = create ? new ManagedWork(id) : existing(ManagedWork.class, id, input.version());
-    item.title(rules.text(input.title()));
-    item.searchTitle(rules.normalized(item.title(), 400));
+    item.title(rules.text(input.title(), "title"));
+    item.searchTitle(rules.normalized(item.title(), 400, "title"));
     flush(item, create);
     queries.aliases(Resource.WORKS, id, input.aliases());
     queries.relation("work_artist", "work_id", "artist_id", id, input.artistIds());
@@ -183,11 +184,12 @@ public class CatalogManagementService {
   @Transactional
   public Channel channel(UUID id, ChannelInput input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
+    rules.text(input.reason(), "reason");
     queries.requireReferences(Resource.MEMBERS, reference(input.memberId()));
-    if (input.memberId() != null && input.channelType() != ChannelType.MEMBER
-        || input.channelType() == ChannelType.EXTERNAL && input.collectionEnabled())
-      throw AdminCatalogException.invalid();
+    if (input.memberId() != null && input.channelType() != ChannelType.MEMBER)
+      throw AdminCatalogException.invalid("memberId", "INVALID_VALUE");
+    if (input.channelType() == ChannelType.EXTERNAL && input.collectionEnabled())
+      throw AdminCatalogException.invalid("collectionEnabled", "INVALID_VALUE");
     boolean create = id == null;
     if (create) {
       initial(input.version());
@@ -202,7 +204,7 @@ public class CatalogManagementService {
       throw new AdminCatalogException(
           409, "CHANNEL_IDENTITY_IMMUTABLE", "기존 채널 ID와 유형은 변경할 수 없습니다");
     item.youtubeId(input.youtubeId());
-    item.name(rules.text(input.name()));
+    item.name(rules.text(input.name(), "name"));
     item.memberId(input.memberId());
     item.channelType(input.channelType().name());
     item.collectionEnabled(input.collectionEnabled());
@@ -216,10 +218,10 @@ public class CatalogManagementService {
   @Transactional
   public Saved<Song> song(UUID id, SongInput input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
-    rules.aliases(input.aliases());
-    rules.ids(input.memberIds());
-    rules.ids(input.externalArtistIds());
+    rules.text(input.reason(), "reason");
+    rules.aliases(input.aliases(), 400, "aliases");
+    rules.ids(input.memberIds(), "memberIds");
+    rules.ids(input.externalArtistIds(), "externalArtistIds");
     rules.extras(input.links(), input.karaoke());
     queries.requireReferences(Resource.MEMBERS, input.memberIds());
     queries.requireReferences(Resource.ARTISTS, input.externalArtistIds());
@@ -227,11 +229,11 @@ public class CatalogManagementService {
     if (input.isSpecialEvent()
         && (input.specialEventLabel() == null
             || SearchText.normalize(input.specialEventLabel()).isEmpty()))
-      throw AdminCatalogException.invalid();
+      throw AdminCatalogException.invalid("specialEventLabel", "REQUIRED");
     if (input.searchVisibility() == SearchVisibility.DIFFICULT
         && (input.recommendedSearchQuery() == null
             || SearchText.normalize(input.recommendedSearchQuery()).isEmpty()))
-      throw AdminCatalogException.invalid();
+      throw AdminCatalogException.invalid("recommendedSearchQuery", "REQUIRED");
     boolean create = id == null;
     if (create) {
       initial(input.version());
@@ -241,17 +243,18 @@ public class CatalogManagementService {
     var item = create ? new ManagedSong(id) : existing(ManagedSong.class, id, input.version());
     // Flush the aggregate version before replacing child rows; concurrent writers cannot both
     // commit.
-    item.title(rules.text(input.title()));
-    item.searchTitle(rules.normalized(item.title(), 400));
+    item.title(rules.text(input.title(), "title"));
+    item.searchTitle(rules.normalized(item.title(), 400, "title"));
     item.songType(input.type().name());
     item.workId(input.workId());
     item.visibility(input.visibility().name());
     if (input.representativeVideoId() != null
         && !queries.video(input.representativeVideoId()).songId().equals(id))
-      throw AdminCatalogException.invalid();
+      throw AdminCatalogException.invalid("representativeVideoId", "INVALID_VALUE");
     item.representativeVideoId(input.representativeVideoId());
     item.isSpecialEvent(input.isSpecialEvent());
-    item.specialEventLabel(input.isSpecialEvent() ? rules.text(input.specialEventLabel()) : null);
+    item.specialEventLabel(
+        input.isSpecialEvent() ? rules.text(input.specialEventLabel(), "specialEventLabel") : null);
     if (input.searchVisibility().name().equals(item.searchVisibility())
         && Objects.equals(input.recommendedSearchQuery(), item.recommendedSearchQuery())) {
       // Preserve the original confirmation time when unrelated fields are edited.
@@ -264,7 +267,7 @@ public class CatalogManagementService {
             ? null
             : input.recommendedSearchQuery() == null
                 ? null
-                : rules.text(input.recommendedSearchQuery()));
+                : rules.text(input.recommendedSearchQuery(), "recommendedSearchQuery"));
     flush(item, create);
     queries.aliases(Resource.SONGS, id, input.aliases());
     queries.relation("song_member", "song_id", "member_id", id, input.memberIds());
@@ -285,7 +288,7 @@ public class CatalogManagementService {
             .findFirst()
             .orElse(null);
     if (item.representativeVideoId() != null && representative == null)
-      throw AdminCatalogException.invalid();
+      throw AdminCatalogException.invalid("representativeVideoId", "INVALID_VALUE");
     if (!"PUBLISHED".equals(item.visibility())) return;
     if (members.isEmpty()
         || representative == null
@@ -313,7 +316,7 @@ public class CatalogManagementService {
   @Transactional
   public Video register(UUID reviewId, Registration input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
+    rules.text(input.reason(), "reason");
     var song = existing(ManagedSong.class, input.songId(), input.songVersion());
     Object oldSong = queries.song(song.id());
     // Match the automatic registration lock order: candidate before channel.
@@ -368,7 +371,7 @@ public class CatalogManagementService {
   @Transactional
   public Video registerUrl(UUID songId, VideoRegistration input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
+    rules.text(input.reason(), "reason");
     String youtube = rules.youtubeId(input.videoUrl());
     return register(
         queries.candidateId(youtube),
@@ -380,8 +383,8 @@ public class CatalogManagementService {
   @Transactional
   public Video video(UUID songId, UUID videoId, long songVersion, VideoInput input, UUID actor) {
     rules.validate(input);
-    rules.text(input.reason());
-    if (songVersion < 0) throw AdminCatalogException.invalid();
+    rules.text(input.reason(), "reason");
+    if (songVersion < 0) throw AdminCatalogException.invalid("songVersion", "OUT_OF_RANGE");
     var song = existing(ManagedSong.class, songId, songVersion);
     Object oldSong = queries.song(songId);
     var before = queries.video(videoId);
@@ -391,7 +394,7 @@ public class CatalogManagementService {
     var video = existing(ManagedVideo.class, videoId, input.version());
     video.videoKind(input.kind().name());
     video.publishedAt(input.publishedAt());
-    video.thumbnailUrl(rules.url(input.thumbnailUrl()));
+    video.thumbnailUrl(rules.url(input.thumbnailUrl(), "thumbnailUrl"));
     video.touch();
     entities.flush();
     validateSong(song, queries.song(songId).memberIds());

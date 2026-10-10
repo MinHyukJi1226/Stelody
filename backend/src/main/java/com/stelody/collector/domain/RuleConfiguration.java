@@ -13,28 +13,49 @@ public record RuleConfiguration(List<Marker> cover, List<Marker> original, List<
 
   public record Marker(String text, Match match) {}
 
-  public RuleConfiguration validated() {
-    return new RuleConfiguration(validate(cover), validate(original), validate(exclude));
+  public static final class InvalidInput extends IllegalArgumentException {
+    private final String field;
+    private final String code;
+
+    public InvalidInput(String field, String code) {
+      super("Invalid rule configuration");
+      this.field = field;
+      this.code = code;
+    }
+
+    public String field() {
+      return field;
+    }
+
+    public String code() {
+      return code;
+    }
   }
 
-  private static List<Marker> validate(List<Marker> markers) {
-    if (markers == null || markers.size() > 30)
-      throw new IllegalArgumentException("Invalid markers");
+  public RuleConfiguration validated() {
+    return new RuleConfiguration(
+        validate(cover, "cover"), validate(original, "original"), validate(exclude, "exclude"));
+  }
+
+  private static List<Marker> validate(List<Marker> markers, String path) {
+    if (markers == null) throw new InvalidInput(path, "REQUIRED");
+    if (markers.size() > 30) throw new InvalidInput(path, "INVALID_SIZE");
     var seen = new HashSet<String>();
-    return markers.stream()
-        .map(
-            marker -> {
-              if (marker == null
-                  || marker.text() == null
-                  || marker.match() == null
-                  || marker.text().length() > 60)
-                throw new IllegalArgumentException("Invalid marker");
-              String text = SearchText.normalize(marker.text());
-              if (text.isEmpty() || text.length() > 60 || !seen.add(text))
-                throw new IllegalArgumentException("Invalid marker");
-              return new Marker(text, marker.match());
-            })
-        .toList();
+    var result = new java.util.ArrayList<Marker>();
+    for (int i = 0; i < markers.size(); i++) {
+      var marker = markers.get(i);
+      String field = path + "[" + i + "]";
+      if (marker == null) throw new InvalidInput(field, "REQUIRED");
+      if (marker.text() == null) throw new InvalidInput(field + ".text", "REQUIRED");
+      if (marker.match() == null) throw new InvalidInput(field + ".match", "REQUIRED");
+      String text = SearchText.normalize(marker.text());
+      if (text.isEmpty()) throw new InvalidInput(field + ".text", "REQUIRED");
+      if (marker.text().length() > 60 || text.length() > 60)
+        throw new InvalidInput(field + ".text", "INVALID_SIZE");
+      if (!seen.add(text)) throw new InvalidInput(field + ".text", "DUPLICATE");
+      result.add(new Marker(text, marker.match()));
+    }
+    return List.copyOf(result);
   }
 
   public static RuleConfiguration defaults() {

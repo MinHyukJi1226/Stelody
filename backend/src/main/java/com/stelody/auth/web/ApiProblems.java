@@ -24,6 +24,27 @@ public class ApiProblems {
       String code,
       String title)
       throws IOException {
+    write(request, response, status, code, title, List.of());
+  }
+
+  public void writeInvalid(
+      HttpServletRequest request,
+      HttpServletResponse response,
+      String code,
+      String title,
+      Exception error)
+      throws IOException {
+    write(request, response, 400, code, title, InputErrors.from(error));
+  }
+
+  public void write(
+      HttpServletRequest request,
+      HttpServletResponse response,
+      int status,
+      String code,
+      String title,
+      List<ApiFieldError> fieldErrors)
+      throws IOException {
     String traceId = UUID.randomUUID().toString();
     response.setStatus(status);
     response.setContentType("application/problem+json");
@@ -43,7 +64,7 @@ public class ApiProblems {
             "code",
             code,
             "fieldErrors",
-            List.of(),
+            fieldErrors,
             "traceId",
             traceId));
   }

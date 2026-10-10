@@ -63,6 +63,7 @@ cd backend
 - V20에는 운영자가 제공한 기존 11명 프로필 초기값이 포함됩니다. 카탈로그의 멤버 ID가 일치할 때만 적용하며 멤버를 새로 생성하지 않습니다. 이후 변경은 관리자 API를 사용합니다.
 - GET `/api/v1/admin/songs`는 기존 `id/name/version/status`에 `participants`, `discoveredAt`, `missingFields`, `informationComplete`를 제공합니다. 참여자는 멤버·외부 아티스트 순서이며 미확정 항목도 `confirmed=false`로 표시합니다. 발견일은 연결된 영상 후보의 최초 발견 시각이고 기록이 없으면 `null`입니다. 자동 등록 목록의 누락 코드 6개에 `members/representativeVideo`를 더하며, 선택 별칭(`aliases`)만 없으면 완성입니다. 공개 설정(`status`)과 완성도는 독립적이며 전체 곡에 같은 기준을 적용합니다.
 - GET `/api/v1/admin/inbox`는 신규 검토(`PENDING+REVIEW`), 자동 등록 곡의 정보 보완, 기념일 `PENDING` 후보, 최근 24시간 미해결 수집 실패 작업 수를 반환합니다. 보완 완료·검토 처리·해당 원본 작업 재시도 성공 시 집계에서 제외합니다. 기념일 후보는 만료·비활성 근거도 재검토 대상으로 포함합니다. 실패 목록은 `/api/v1/admin/collection-failures`에 응답의 `failureWindowStart/checkedAt`을 `from/to`로 전달하면 같은 기간으로 조회합니다. 집계 단위·누락 조건은 OpenAPI에 명시하며 기존 설정·수집 현황 API를 함께 사용합니다.
+- 입력 오류는 기존 최상위 `code`와 함께 `fieldErrors: [{field, code, message}]`를 반환합니다. `links[0].url`·`aliases[1]`처럼 객체 속성은 점, 배열 위치는 0부터 시작하는 인덱스로 구분합니다. 오류 코드는 `REQUIRED/INVALID_FORMAT/INVALID_SIZE/OUT_OF_RANGE/DUPLICATE/INVALID_VALUE`이며 메시지는 고정 안내 문구입니다. 잘못된 JSON 구조·인증·필드와 무관한 업무 오류는 빈 배열이고, 입력값·비밀번호·토큰은 반환하지 않습니다.
 - YouTube는 같은 Google 계정의 추가 동의를 받습니다. 내보내기에는 UUID `requestId`와 목록 `version`이 필요하며 요청 당시 이름·순서를 새 비공개 목록으로 복사합니다. 이용 불가 곡은 제외합니다. `UNCERTAIN`은 기존 작업을 확인·재시도하고 새 작업으로 반복하지 않습니다. 취소·연결 해제·탈퇴는 외부 목록을 삭제하지 않습니다.
 
 | 설정 | 기본값·조건 |

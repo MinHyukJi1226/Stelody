@@ -31,8 +31,8 @@ public class CollectionRuleService {
   private RuleConfiguration validate(RuleConfiguration input) {
     try {
       return input.validated();
-    } catch (IllegalArgumentException e) {
-      throw AdminCatalogException.invalid();
+    } catch (RuleConfiguration.InvalidInput e) {
+      throw AdminCatalogException.invalid("configuration." + e.field(), e.code());
     }
   }
 
@@ -73,7 +73,8 @@ public class CollectionRuleService {
 
   @Transactional(readOnly = true)
   public AuditPage audits(int page, int size) {
-    if (page < 0 || page > 10000 || size < 1 || size > 50) throw AdminCatalogException.invalid();
+    if (page < 0 || page > 10000) throw AdminCatalogException.invalid("page", "OUT_OF_RANGE");
+    if (size < 1 || size > 50) throw AdminCatalogException.invalid("size", "OUT_OF_RANGE");
     var rows = audit.audits("COLLECTION_RULES", CollectionRuleStore.ID, page, size);
     return new AuditPage(
         rows.subList(0, Math.min(size, rows.size())), page, size, rows.size() > size);

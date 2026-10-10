@@ -95,6 +95,7 @@ public class CoverPublicationService {
   }
 
   private void page(int page, int size) {
-    if (page < 0 || page > 10000 || size < 1 || size > 50) throw AdminCatalogException.invalid();
+    if (page < 0 || page > 10000) throw AdminCatalogException.invalid("page", "OUT_OF_RANGE");
+    if (size < 1 || size > 50) throw AdminCatalogException.invalid("size", "OUT_OF_RANGE");
   }
 }

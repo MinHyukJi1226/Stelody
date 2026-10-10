@@ -43,6 +43,7 @@ public class ReviewExceptionHandler {
   })
   public void invalid(Exception error, HttpServletRequest request, HttpServletResponse response)
       throws IOException {
-    business(ReviewException.invalid(), request, response);
+    var invalid = ReviewException.invalid();
+    problems.writeInvalid(request, response, invalid.code(), invalid.getMessage(), error);
   }
 }

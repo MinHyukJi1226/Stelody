@@ -29,7 +29,10 @@ public class ExportExceptionHandler {
     MethodArgumentTypeMismatchException.class,
     MissingServletRequestParameterException.class
   })
-  void invalid(HttpServletRequest request, HttpServletResponse response) throws IOException {
-    export(ExportException.invalid(), request, response);
+  void invalid(Exception error, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
+    var invalid = ExportException.invalid();
+    response.setHeader("Referrer-Policy", "no-referrer");
+    problems.writeInvalid(request, response, invalid.code(), invalid.getMessage(), error);
   }
 }

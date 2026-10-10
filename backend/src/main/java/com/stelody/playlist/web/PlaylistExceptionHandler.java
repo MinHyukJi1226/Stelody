@@ -34,8 +34,10 @@ public class PlaylistExceptionHandler {
     HttpMessageNotReadableException.class,
     MissingServletRequestParameterException.class
   })
-  void invalid(HttpServletRequest request, HttpServletResponse response) throws IOException {
-    playlist(PlaylistException.invalid(), request, response);
+  void invalid(Exception error, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
+    var invalid = PlaylistException.invalid();
+    problems.writeInvalid(request, response, invalid.code(), invalid.getMessage(), error);
   }
 
   @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockException.class})
