@@ -105,6 +105,12 @@ public class CatalogManagementService {
     item.name(rules.text(input.name()));
     item.searchName(rules.normalized(item.name(), 200));
     item.generation(input.generation());
+    item.unitName(
+        input.unitName() == null || input.unitName().isBlank()
+            ? null
+            : rules.text(input.unitName()));
+    item.chzzkUrl(rules.url(input.chzzkUrl()));
+    item.xUrl(rules.url(input.xUrl()));
     item.activityStatus(input.activityStatus().name());
     item.profileImageUrl(rules.url(input.profileImageUrl()));
     item.debutDate(input.debutDate());

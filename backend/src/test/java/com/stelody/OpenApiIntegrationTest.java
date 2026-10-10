@@ -140,6 +140,41 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsMemberProfileFieldsAndAbsentValues() throws Exception {
+    var schemas = contract().path("components").path("schemas");
+    for (var name :
+        new String[] {
+          "com.stelody.member.dto.MemberDtos.Card", "com.stelody.admin.dto.CatalogAdminDtos.Member"
+        }) {
+      var schema = schemas.path(name);
+      for (var field : new String[] {"unitName", "chzzkUrl", "xUrl"}) {
+        var property = schema.path("properties").path(field);
+        assertThat(property.path("type").toString())
+            .as(name + "." + field)
+            .contains("string", "null");
+        assertThat(property.path("description").asText()).contains("null");
+        assertThat(schema.path("required").toString()).contains(field);
+      }
+    }
+    var input = schemas.path("com.stelody.admin.dto.CatalogAdminDtos.MemberInput");
+    for (var field : new String[] {"unitName", "chzzkUrl", "xUrl"}) {
+      assertThat(input.path("required").toString()).doesNotContain(field);
+      assertThat(input.path("properties").path(field).path("description").asText())
+          .contains("기존 값 삭제");
+    }
+    assertThat(input.path("properties").path("unitName").path("maxLength").asInt()).isEqualTo(100);
+    assertThat(input.path("properties").path("chzzkUrl").path("maxLength").asInt()).isEqualTo(2000);
+    assertThat(
+            schemas
+                .path("com.stelody.member.dto.MemberDtos.Detail")
+                .path("properties")
+                .path("channels")
+                .path("description")
+                .asText())
+        .contains("빈 배열", "null은 반환하지");
+  }
+
+  @Test
   void retainsDistinctPagesNullableDataAndBodyValidation() throws Exception {
     var api = contract();
     var schemas = api.path("components").path("schemas");

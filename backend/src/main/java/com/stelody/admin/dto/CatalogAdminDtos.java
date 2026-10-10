@@ -73,6 +73,15 @@ public final class CatalogAdminDtos {
       @NotNull @Min(0) Long version,
       @NotBlank @Size(max = 100) String name,
       @Min(1) @Max(32767) Integer generation,
+      @Schema(description = "기수와 별도로 관리하는 유닛명. 생략·null·빈 문자열이면 미등록 또는 기존 값 삭제.", nullable = true)
+          @Size(max = 100)
+          String unitName,
+      @Schema(description = "치지직 HTTPS 링크. 생략·null·빈 문자열이면 미등록 또는 기존 값 삭제.", nullable = true)
+          @Size(max = 2000)
+          String chzzkUrl,
+      @Schema(description = "X HTTPS 링크. 생략·null·빈 문자열이면 미등록 또는 기존 값 삭제.", nullable = true)
+          @Size(max = 2000)
+          String xUrl,
       @NotNull Activity activityStatus,
       @Size(max = 2000) String profileImageUrl,
       LocalDate debutDate,
@@ -159,6 +168,9 @@ public final class CatalogAdminDtos {
         "version",
         "name",
         "generation",
+        "unitName",
+        "chzzkUrl",
+        "xUrl",
         "activityStatus",
         "profileImageUrl",
         "debutDate",
@@ -171,6 +183,9 @@ public final class CatalogAdminDtos {
       long version,
       String name,
       @Schema(nullable = true) Integer generation,
+      @Schema(description = "기수와 별도로 관리하는 유닛명. 미등록이면 null.", nullable = true) String unitName,
+      @Schema(description = "치지직 HTTPS 링크. 미등록이면 null.", nullable = true) String chzzkUrl,
+      @Schema(description = "X HTTPS 링크. 미등록이면 null.", nullable = true) String xUrl,
       String activityStatus,
       @Schema(nullable = true) String profileImageUrl,
       @Schema(nullable = true) LocalDate debutDate,

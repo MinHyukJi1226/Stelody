@@ -92,6 +92,9 @@ public class MemberRepository {
             rs.getObject("id", UUID.class),
             rs.getString("name"),
             generation == null ? null : ((Number) generation).intValue(),
+            rs.getString("unit_name"),
+            rs.getString("chzzk_url"),
+            rs.getString("x_url"),
             rs.getString("activity_status"),
             rs.getString("profile_image_url"),
             new MemberDtos.Counts(

@@ -18,6 +18,15 @@ public class ManagedMember extends EditedEntity {
   @Column(name = "generation")
   private Integer generation;
 
+  @Column(name = "unit_name")
+  private String unitName;
+
+  @Column(name = "chzzk_url")
+  private String chzzkUrl;
+
+  @Column(name = "x_url")
+  private String xUrl;
+
   @Column(name = "activity_status")
   private String activityStatus;
 
@@ -57,6 +66,30 @@ public class ManagedMember extends EditedEntity {
 
   public void generation(Integer value) {
     generation = value;
+  }
+
+  public String unitName() {
+    return unitName;
+  }
+
+  public void unitName(String value) {
+    unitName = value;
+  }
+
+  public String chzzkUrl() {
+    return chzzkUrl;
+  }
+
+  public void chzzkUrl(String value) {
+    chzzkUrl = value;
+  }
+
+  public String xUrl() {
+    return xUrl;
+  }
+
+  public void xUrl(String value) {
+    xUrl = value;
   }
 
   public String activityStatus() {

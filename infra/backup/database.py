@@ -16,6 +16,7 @@ import tempfile
 import uuid
 
 MAX_AGE = timedelta(days=7)
+SUPPORTED_SCHEMA_VERSIONS = (19, 20)
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
@@ -116,8 +117,8 @@ def create_backup(root, descriptor):
     if info['owners'] != [info['user']]:
         raise OperationError('Connect as the app/session schema owner')
     version = sql("SELECT max(version::int) FROM app.flyway_schema_history WHERE success;")
-    if version != '19':
-        raise OperationError('This backup procedure is validated for schema V19')
+    if version not in tuple(str(value) for value in SUPPORTED_SCHEMA_VERSIONS):
+        raise OperationError('This backup procedure is validated for schemas V19 and V20')
     created = now()
     expires = created + MAX_AGE
     source_expiry = sql("""SELECT min(expires_at)::text FROM (
@@ -155,7 +156,7 @@ def create_backup(root, descriptor):
         run(command, log=staging / 'dump.log', pass_fds=(descriptor,))
         dump.chmod(0o600)
         run(['pg_restore', '--list', str(dump)], log=staging / 'archive-check.log', pass_fds=(descriptor,))
-        manifest = {'format': 1, 'createdAt': created.isoformat(), 'expiresAt': expires.isoformat(), 'schemaVersion': 19,
+        manifest = {'format': 1, 'createdAt': created.isoformat(), 'expiresAt': expires.isoformat(), 'schemaVersion': int(version),
                     'schemaOwner': info['user'], 'sourceDatabase': info['database'],
                     'sha256': digest(dump), 'excludedData': list(EXCLUDED_DATA)}
         (staging / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
@@ -179,7 +180,7 @@ def validate_archive(directory):
         if path.stat().st_mode & 0o077:
             raise OperationError('Backup files must be private (600)')
     metadata = json.loads((directory / 'manifest.json').read_text())
-    if metadata.get('format') != 1 or metadata.get('schemaVersion') != 19:
+    if metadata.get('format') != 1 or metadata.get('schemaVersion') not in SUPPORTED_SCHEMA_VERSIONS:
         raise OperationError('Unsupported backup format/schema')
     if metadata.get('excludedData') != list(EXCLUDED_DATA):
         raise OperationError('Backup exclusion policy does not match')
