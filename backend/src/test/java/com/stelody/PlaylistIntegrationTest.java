@@ -458,8 +458,100 @@ class PlaylistIntegrationTest {
     assertThat(page.get("nextCursor").isNull()).isTrue();
   }
 
+  @Test
+  void songMembershipDoesNotFilterListsOrChangeTheirCursorAndCounts() throws Exception {
+    for (UUID playlist : List.of(id(1001), id(1002), id(1003)))
+      seedPlaylist(playlist, U1, "2026-01-01T00:00:00.123456Z");
+    add(first, id(1003), 0, S1);
+    add(first, id(1003), 1, S2);
+    add(first, id(1002), 0, S2);
+    var original = list(first, "?size=1");
+    RELATION_QUERIES.set(0);
+    var page = list(first, "?size=1&songId=" + S1);
+    assertThat(RELATION_QUERIES.get()).isZero();
+    assertThat(page.get("totalCount").asLong()).isEqualTo(3);
+    assertThat(page.get("nextCursor")).isEqualTo(original.get("nextCursor"));
+    assertThat(page.get("hasNext").asBoolean()).isTrue();
+    var saved = page.get("items").get(0);
+    assertThat(uuid(saved, "id")).isEqualTo(id(1003));
+    assertThat(saved.get("containsSong").isBoolean()).isTrue();
+    assertThat(saved.get("containsSong").asBoolean()).isTrue();
+    assertThat(saved.get("totalCount").asLong()).isEqualTo(2);
+    assertThat(saved.get("availableCount").asLong()).isEqualTo(2);
+    var rest = list(first, "?size=50&songId=" + S1 + "&cursor=" + page.get("nextCursor").asText());
+    assertThat(rest.get("items").size()).isEqualTo(2);
+    assertThat(rest.get("totalCount").asLong()).isEqualTo(3);
+    assertThat(rest.get("hasNext").asBoolean()).isFalse();
+    assertThat(rest.get("nextCursor").isNull()).isTrue();
+    assertThat(uuid(rest.get("items").get(0), "id")).isEqualTo(id(1002));
+    assertThat(uuid(rest.get("items").get(1), "id")).isEqualTo(id(1001));
+    for (var row : rest.get("items")) {
+      assertThat(row.get("containsSong").isBoolean()).isTrue();
+      assertThat(row.get("containsSong").asBoolean()).isFalse();
+    }
+    var changedSong =
+        list(first, "?size=50&songId=" + S2 + "&cursor=" + original.get("nextCursor").asText());
+    assertThat(changedSong.get("items").get(0).get("containsSong").asBoolean()).isTrue();
+    assertThat(changedSong.get("items").get(1).get("containsSong").asBoolean()).isFalse();
+  }
+
+  @Test
+  void membershipIsScopedToOwnerAndUnknownSongReturnsFalseWithoutHydration() throws Exception {
+    UUID mine = uuid(create(first, "내 목록"), "id");
+    UUID theirs = uuid(create(second, "다른 계정 목록"), "id");
+    add(second, theirs, 0, S1);
+    var page = list(first, "?songId=" + S1 + "&ownerId=" + U2);
+    assertThat(page.get("totalCount").asLong()).isEqualTo(1);
+    assertThat(page.get("items").size()).isEqualTo(1);
+    assertThat(uuid(page.get("items").get(0), "id")).isEqualTo(mine);
+    assertThat(page.get("items").get(0).get("containsSong").asBoolean()).isFalse();
+    assertThat(list(second, "?songId=" + S1).get("items").get(0).get("containsSong").asBoolean())
+        .isTrue();
+    assertThat(
+            list(first, "?songId=" + id(999)).get("items").get(0).get("containsSong").asBoolean())
+        .isFalse();
+    mvc.perform(get(ROOT).param("songId", S1.toString())).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void membershipIncludesUnavailableSavedSongsAndUpdatesAfterRemoval() throws Exception {
+    UUID playlist = uuid(create(first, "비공개 곡 포함"), "id");
+    UUID item = uuid(add(first, playlist, 0, S1), "itemId");
+    writer.update("UPDATE app.song_entry SET visibility = 'HIDDEN' WHERE id = ?", S1);
+    var saved = list(first, "?songId=" + S1).get("items").get(0);
+    assertThat(saved.get("containsSong").asBoolean()).isTrue();
+    assertThat(saved.get("availableCount").asLong()).isZero();
+    assertThat(saved.get("totalCount").asLong()).isEqualTo(1);
+    mvc.perform(
+            authenticated(post(ROOT + "/" + playlist + "/items"), first)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(java.util.Map.of("version", 1, "songId", S1))))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PLAYLIST_SONG_ALREADY_EXISTS"));
+    var removed =
+        response(
+            authenticated(delete(ROOT + "/" + playlist + "/items/" + item + "?version=1"), first),
+            200);
+    assertThat(removed.get("containsSong").isNull()).isTrue();
+    assertThat(list(first, "?songId=" + S1).get("items").get(0).get("containsSong").asBoolean())
+        .isFalse();
+  }
+
+  @Test
+  void omittedSongIdAndNonListSummariesHaveNullMembership() throws Exception {
+    var created = create(first, "미지정 여부");
+    UUID playlist = uuid(created, "id");
+    assertThat(created.get("containsSong").isNull()).isTrue();
+    var added = add(first, playlist, 0, S1);
+    assertThat(added.get("playlist").get("containsSong").isNull()).isTrue();
+    assertThat(detail(first, playlist).get("containsSong").isNull()).isTrue();
+    assertThat(list(first, "").get("items").get(0).get("containsSong").isNull()).isTrue();
+    assertThat(list(second, "?songId=" + S1).get("items").size()).isZero();
+  }
+
   @ParameterizedTest
-  @ValueSource(strings = {"?size=0", "?size=51", "?size=x", "?cursor=bad", "/bad-id"})
+  @ValueSource(
+      strings = {"?size=0", "?size=51", "?size=x", "?cursor=bad", "/bad-id", "?songId=bad-id"})
   void invalidReadInputsUseProblemResponses(String suffix) throws Exception {
     mvc.perform(authenticated(get(ROOT + suffix), first))
         .andExpect(status().isBadRequest())

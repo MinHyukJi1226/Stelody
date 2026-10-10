@@ -54,6 +54,7 @@ cd backend
 - Swagger에서 인증하려면 같은 브라우저로 `/api/v1/auth/google?returnTo=%2Fswagger-ui.html`에 이동해 로그인한 뒤 GET `/api/v1/auth/csrf`의 token을 **Authorize → csrf**에 입력합니다.
 - 개인 API는 SESSION 쿠키, 관리자 API는 ADMIN 역할이 필요합니다. 변경 요청에는 CSRF 응답의 `headerName`·`token`을 전달하고 로그인·재인증·로그아웃 뒤에는 새 토큰을 받습니다.
 - 플레이리스트·관리 설정 변경은 현재 `version`을 전달합니다. 409이면 최신 내용을 다시 조회합니다. 다른 회원의 목록은 404이며 오류는 Problem JSON의 `code`·`status`·`traceId`로 처리합니다.
+- GET `/api/v1/me/playlists?songId=<UUID>`는 각 목록의 `containsSong`으로 곡 저장 여부를 반환합니다. 이용 불가 곡도 이미 저장되어 있으면 `true`, 미저장·존재하지 않는 UUID는 `false`입니다. `songId` 생략 및 생성·상세·변경 응답은 `null`입니다. 목록 정렬·커서·개수는 그대로이며, 추가 요청의 `version`·중복 검증은 계속 사용합니다.
 - 로그인 `returnTo`는 `/`로 시작하는 내부 UI 경로만 허용합니다. 최대 2,048자이며 외부 주소·경로 우회·`/api`·`/actuator`는 거절합니다. 같은 브라우저에서 5분 안에 완료해야 합니다. 생략하면 `/api/v1/me`로 이동합니다. `loginResult`는 안내용이며 실제 로그인은 `/api/v1/me`로 확인합니다.
 - 세션은 idle 30분·로그인 후 최대 12시간입니다. 탈퇴는 POST `/api/v1/me/reauthentications`로 같은 계정을 재인증한 뒤 새 CSRF로 5분 내 DELETE `/api/v1/me`를 호출합니다. 철회·탈퇴 기록 저장 실패 시 계정은 유지됩니다.
 - 조회수는 대표 영상 하나의 실제 관측값이며 미관측 날짜는 null입니다. 커버는 공식 커버 영상, 오리지널은 공식 MV 또는 MV가 없을 때 공식 음원을 대표로 사용합니다. 영상 간 조회수를 합산하지 않습니다.

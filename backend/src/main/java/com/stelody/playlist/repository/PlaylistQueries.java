@@ -7,6 +7,7 @@ import com.stelody.playlist.web.PlaylistException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -45,12 +46,13 @@ public class PlaylistQueries {
     return jdbc.sql(PlaylistSqlQueries.SUMMARY + " AND p.id = :id GROUP BY p.id")
         .param("userId", userId)
         .param("id", id)
+        .param("songId", null, Types.OTHER)
         .query(this::summary)
         .optional()
         .orElseThrow(PlaylistException::missing);
   }
 
-  public List<PlaylistDtos.Summary> list(UUID userId, int size, ListPosition cursor) {
+  public List<PlaylistDtos.Summary> list(UUID userId, int size, ListPosition cursor, UUID songId) {
     String boundary = cursor == null ? "" : " AND (p.created_at, p.id) < (:createdAt, :id)";
     var statement =
         jdbc.sql(
@@ -58,6 +60,7 @@ public class PlaylistQueries {
                     + boundary
                     + " GROUP BY p.id ORDER BY p.created_at DESC, p.id DESC LIMIT :limit")
             .param("userId", userId)
+            .param("songId", songId, Types.OTHER)
             .param("limit", size + 1);
     if (cursor != null)
       statement.param("createdAt", Timestamp.from(cursor.createdAt())).param("id", cursor.id());
@@ -120,6 +123,7 @@ public class PlaylistQueries {
         rs.getTimestamp("created_at").toInstant(),
         rs.getTimestamp("updated_at").toInstant(),
         rs.getLong("total_count"),
-        rs.getLong("available_count"));
+        rs.getLong("available_count"),
+        rs.getObject("contains_song", Boolean.class));
   }
 }

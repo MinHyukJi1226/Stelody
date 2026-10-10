@@ -175,6 +175,30 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsOptionalPlaylistSongLookupAndNullableMembership() throws Exception {
+    var api = contract();
+    var operation = api.path("paths").path("/api/v1/me/playlists").path("get");
+    var songParameter =
+        java.util.stream.StreamSupport.stream(operation.path("parameters").spliterator(), false)
+            .filter(parameter -> parameter.path("name").asText().equals("songId"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(songParameter.path("in").asText()).isEqualTo("query");
+    assertThat(songParameter.path("required").asBoolean()).isFalse();
+    assertThat(songParameter.path("schema").path("format").asText()).isEqualTo("uuid");
+    assertThat(songParameter.path("description").asText()).contains("null", "이용 불가", "false");
+    assertThat(operation.path("description").asText()).contains("필터링하지", "중복 검증");
+    var summary =
+        api.path("components")
+            .path("schemas")
+            .path("com.stelody.playlist.dto.PlaylistDtos.Summary");
+    var membership = summary.path("properties").path("containsSong");
+    assertThat(membership.path("type").toString()).contains("boolean", "null");
+    assertThat(membership.path("description").asText()).contains("이용 불가", "상세", "null", "조회 시점");
+    assertThat(summary.path("required").toString()).contains("containsSong");
+  }
+
+  @Test
   void retainsDistinctPagesNullableDataAndBodyValidation() throws Exception {
     var api = contract();
     var schemas = api.path("components").path("schemas");

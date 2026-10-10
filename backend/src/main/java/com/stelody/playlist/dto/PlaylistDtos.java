@@ -28,7 +28,8 @@ public final class PlaylistDtos {
         "createdAt",
         "updatedAt",
         "totalCount",
-        "availableCount"
+        "availableCount",
+        "containsSong"
       })
   public record Summary(
       UUID id,
@@ -37,7 +38,13 @@ public final class PlaylistDtos {
       Instant createdAt,
       Instant updatedAt,
       long totalCount,
-      long availableCount) {}
+      long availableCount,
+      @Schema(
+              nullable = true,
+              description =
+                  "목록 조회에서 지정한 songId의 저장 여부. 이용 불가 곡도 포함합니다. "
+                      + "songId 생략 및 생성·상세·변경 응답에서는 null입니다. 조회 시점의 값이며 추가 시 중복 검증은 별도로 수행합니다.")
+          Boolean containsSong) {}
 
   @Schema(requiredProperties = {"items", "nextCursor", "hasNext", "totalCount"})
   public record Page(
