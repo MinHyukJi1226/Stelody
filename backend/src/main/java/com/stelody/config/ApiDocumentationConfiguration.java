@@ -314,7 +314,11 @@ public class ApiDocumentationConfiguration {
         schema.setMaximum(BigDecimal.valueOf(10000));
       }
       case "version", "songVersion" -> schema.setMinimum(BigDecimal.ZERO);
-      case "cursor" -> parameter.setDescription("직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.");
+      case "cursor" ->
+          parameter.setDescription(
+              path.equals("/api/v1/me/favorites")
+                  ? "직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정의 최근 저장순 커서이며 size는 변경할 수 있습니다. 새 저장 항목은 첫 페이지를 새로 조회해 확인합니다. 잘못된 커서·다른 계정의 커서는 400 INVALID_FAVORITE_QUERY입니다."
+                  : "직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.");
       case "days" -> schema.setEnum(List.of(7, 30));
       case "year" -> {
         schema.setMinimum(BigDecimal.valueOf(1900));

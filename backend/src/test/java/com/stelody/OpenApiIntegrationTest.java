@@ -318,6 +318,45 @@ class OpenApiIntegrationTest {
     var schemas = api.path("components").path("schemas");
     var songs = schemas.path("com.stelody.song.dto.SongDtos.Page").path("properties");
     var playlists = schemas.path("com.stelody.playlist.dto.PlaylistDtos.Page").path("properties");
+    var favoriteList = api.path("paths").path("/api/v1/me/favorites").path("get");
+    assertThat(favoriteList.path("description").asText())
+        .contains(
+            "최근 저장순만 지원",
+            "sort 파라미터는 제공하지",
+            "savedAt 내림차순",
+            "songId 내림차순",
+            "이용 불가",
+            "DB 스냅샷",
+            "첫 페이지",
+            "INVALID_FAVORITE_QUERY");
+    var favoriteParameters = new java.util.ArrayList<String>();
+    favoriteList.path("parameters").forEach(p -> favoriteParameters.add(p.path("name").asText()));
+    assertThat(favoriteParameters).containsExactlyInAnyOrder("size", "cursor");
+    for (var parameter : favoriteList.path("parameters"))
+      if (parameter.path("name").asText().equals("cursor"))
+        assertThat(parameter.path("description").asText())
+            .contains("현재 계정", "최근 저장순", "size는 변경", "INVALID_FAVORITE_QUERY");
+    var favoritePage =
+        schemas.path("com.stelody.favorite.dto.FavoriteDtos.Page").path("properties");
+    assertThat(favoritePage.path("items").path("description").asText())
+        .contains("savedAt 내림차순", "songId 내림차순", "이용 불가");
+    assertThat(favoritePage.path("nextCursor").path("description").asText())
+        .contains("계정 전용", "다음 페이지가 없으면 null");
+    assertThat(
+            schemas
+                .path("com.stelody.favorite.dto.FavoriteDtos.Item")
+                .path("properties")
+                .path("savedAt")
+                .path("description")
+                .asText())
+        .contains("최근 저장순", "중복 저장");
+    assertThat(
+            api.path("paths")
+                .path("/api/v1/me/favorites/{songId}")
+                .path("put")
+                .path("description")
+                .asText())
+        .contains("savedAt과 목록 순서를 유지", "해제 후 다시 저장");
     assertThat(songs.path("items").path("items").path("$ref").asText()).endsWith("SongDtos.Card");
     assertThat(playlists.path("items").path("items").path("$ref").asText())
         .endsWith("PlaylistDtos.Summary");
