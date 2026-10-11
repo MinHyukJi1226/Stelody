@@ -116,6 +116,7 @@ public class ApiDocumentationConfiguration {
                                   .getResponses()
                                   .addApiResponse("403", problem("권한 또는 CSRF 검증에 실패했습니다."));
                             correctSuccess(path, verb, operation);
+                            playlistOrdering(path, verb, operation);
                             operation
                                 .getResponses()
                                 .values()
@@ -297,6 +298,21 @@ public class ApiDocumentationConfiguration {
     }
   }
 
+  private static void playlistOrdering(String path, String verb, Operation operation) {
+    if (!(verb.equals("GET") && path.equals("/api/v1/me/playlists/{id}/items"))
+        && !(verb.equals("PUT") && path.equals("/api/v1/me/playlists/{id}/order"))) return;
+    operation
+        .getResponses()
+        .addApiResponse(
+            "400",
+            problem(
+                "INVALID_PLAYLIST_REQUEST: 잘못된 입력·커서 또는 전체 항목 순서입니다. 순서 저장 시 누락·중복·다른 목록 항목을 포함할 수 없습니다."))
+        .addApiResponse(
+            "409",
+            problem(
+                "PLAYLIST_CHANGED: 조회·편집 중 목록 version이 변경되었습니다. 전체 페이지를 다시 조회하고 편집 내용을 확인하세요. version만 갱신해 기존 순서를 재전송하지 마세요."));
+  }
+
   @SuppressWarnings("unchecked") // Swagger exposes raw schemas on Parameter.
   private static void queryConstraints(String path, Parameter parameter) {
     var schema = parameter.getSchema();
@@ -314,11 +330,15 @@ public class ApiDocumentationConfiguration {
         schema.setMaximum(BigDecimal.valueOf(10000));
       }
       case "version", "songVersion" -> schema.setMinimum(BigDecimal.ZERO);
-      case "cursor" ->
+      case "cursor" -> {
+        if (path.equals("/api/v1/me/favorites"))
           parameter.setDescription(
-              path.equals("/api/v1/me/favorites")
-                  ? "직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정의 최근 저장순 커서이며 size는 변경할 수 있습니다. 새 저장 항목은 첫 페이지를 새로 조회해 확인합니다. 잘못된 커서·다른 계정의 커서는 400 INVALID_FAVORITE_QUERY입니다."
-                  : "직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.");
+              "직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정의 최근 저장순 커서이며 size는 변경할 수 있습니다. 새 저장 항목은 첫 페이지를 새로 조회해 확인합니다. 잘못된 커서·다른 계정의 커서는 400 INVALID_FAVORITE_QUERY입니다.");
+        else if (path.equals("/api/v1/me/playlists/{id}/items"))
+          parameter.setDescription(
+              "직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정·목록·version에 묶이며 size는 변경할 수 있습니다. 목록 변경 시 409 PLAYLIST_CHANGED이므로 첫 페이지부터 다시 조회합니다.");
+        else parameter.setDescription("직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.");
+      }
       case "days" -> schema.setEnum(List.of(7, 30));
       case "year" -> {
         schema.setMinimum(BigDecimal.valueOf(1900));

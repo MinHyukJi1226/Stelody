@@ -387,6 +387,44 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsWholePlaylistOrderAndVersionConflicts() throws Exception {
+    var api = contract();
+    var schemas = api.path("components").path("schemas");
+    var list = api.path("paths").path("/api/v1/me/playlists/{id}/items").path("get");
+    var order = api.path("paths").path("/api/v1/me/playlists/{id}/order").path("put");
+    assertThat(list.path("description").asText())
+        .contains("position 오름차순", "이용 불가", "hasNext=false", "모든 페이지", "같은 version", "카탈로그 공개 상태");
+    assertThat(order.path("description").asText())
+        .contains("전체 itemIds", "songId가 아닌", "이용 불가", "한 번씩", "version만 갱신", "version을 1 증가");
+    for (var operation : java.util.List.of(list, order)) {
+      assertThat(operation.at("/responses/400/description").asText())
+          .contains("INVALID_PLAYLIST_REQUEST");
+      assertThat(operation.at("/responses/409/description").asText())
+          .contains("PLAYLIST_CHANGED", "전체 페이지를 다시 조회");
+      assertThat(
+              operation.at("/responses/409/content/application~1problem+json/schema/$ref").asText())
+          .isEqualTo("#/components/schemas/ApiProblem");
+    }
+    for (var parameter : list.path("parameters"))
+      if (parameter.path("name").asText().equals("cursor"))
+        assertThat(parameter.path("description").asText())
+            .contains("계정·목록·version", "PLAYLIST_CHANGED");
+    var input = schemas.path("com.stelody.playlist.dto.PlaylistDtos.Order");
+    assertThat(input.path("required").toString()).contains("itemIds", "version");
+    assertThat(input.at("/properties/itemIds/uniqueItems").asBoolean()).isTrue();
+    assertThat(input.at("/properties/itemIds/items/format").asText()).isEqualTo("uuid");
+    assertThat(input.at("/properties/itemIds/description").asText())
+        .contains("전체 목록 항목 id", "songId", "이용 불가", "빈 목록");
+    assertThat(input.at("/properties/version/description").asText()).contains("전체 페이지", "1 증가");
+    var page = schemas.path("com.stelody.playlist.dto.PlaylistDtos.Items");
+    assertThat(page.at("/properties/version/description").asText()).contains("같은 version");
+    assertThat(page.at("/properties/nextCursor/description").asText()).contains("PLAYLIST_CHANGED");
+    var item = schemas.path("com.stelody.playlist.dto.PlaylistDtos.Item");
+    assertThat(item.at("/properties/id/description").asText()).contains("itemIds", "songId와 구분");
+    assertThat(item.at("/properties/position/minimum").asInt()).isZero();
+  }
+
+  @Test
   void documentsActualStatusesAndUniqueStableOperationIds() throws Exception {
     var api = contract();
     var ids = new java.util.HashSet<String>();

@@ -999,9 +999,28 @@ class PlaylistIntegrationTest {
             "SELECT id FROM app.playlist_item WHERE playlist_id = ? ORDER BY position",
             (rs, n) -> rs.getObject(1, UUID.class),
             id);
-    var order = new ArrayList<>(before);
+    var order = new ArrayList<UUID>();
+    String cursor = null;
+    int pages = 0;
+    long version;
+    do {
+      var page = entries(first, id, "?size=50" + (cursor == null ? "" : "&cursor=" + cursor));
+      version = page.get("version").asLong();
+      assertThat(version).isZero();
+      assertThat(page.get("totalCount").asLong()).isEqualTo(500);
+      assertThat(page.get("availableCount").asLong()).isZero();
+      for (var item : page.get("items")) {
+        assertThat(item.get("available").asBoolean()).isFalse();
+        assertThat(item.get("song").isNull()).isTrue();
+      }
+      order.addAll(itemIds(page));
+      cursor = page.get("hasNext").asBoolean() ? page.get("nextCursor").asText() : null;
+      pages++;
+    } while (cursor != null);
+    assertThat(pages).isEqualTo(10);
+    assertThat(order).containsExactlyElementsOf(before);
     java.util.Collections.reverse(order);
-    assertThat(reorder(first, id, 0, order).get("version").asLong()).isEqualTo(1);
+    assertThat(reorder(first, id, version, order).get("version").asLong()).isEqualTo(1);
     assertThat(
             writer.query(
                 "SELECT id FROM app.playlist_item WHERE playlist_id = ? ORDER BY position",
