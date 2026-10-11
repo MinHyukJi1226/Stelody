@@ -1,5 +1,6 @@
 package com.stelody.song.dto;
 
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -97,4 +98,17 @@ public final class SongDtos {
 
   @Schema(requiredProperties = {"items"})
   public record Recommendations(List<Card> items) {}
+
+  @Schema(requiredProperties = {"years"})
+  public record Years(
+      @ArraySchema(
+              uniqueItems = true,
+              arraySchema =
+                  @Schema(
+                      description =
+                          "공개 곡이 있는 검색 가능 연도(1900~2100)를 중복 없이 내림차순으로 반환합니다. 한국 시간 기준이며 해당 곡이 없으면 빈 배열입니다. 연도 선택의 전체 옵션이고 현재 검색어·필터와 무관합니다.",
+                      example = "[2026, 2025, 2023]"),
+              schema =
+                  @Schema(type = "integer", format = "int32", minimum = "1900", maximum = "2100"))
+          List<Integer> years) {}
 }

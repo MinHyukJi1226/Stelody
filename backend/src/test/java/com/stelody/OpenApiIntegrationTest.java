@@ -108,6 +108,31 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsPublicYearOptionsAndKoreanYearFilter() throws Exception {
+    var api = contract();
+    var operation = api.path("paths").path("/api/v1/songs/years").path("get");
+    assertThat(operation.path("security").isEmpty()).isTrue();
+    assertThat(operation.path("parameters").isEmpty()).isTrue();
+    assertThat(operation.path("description").asText())
+        .contains("일반 탐색", "대표 영상", "Asia/Seoul", "현재 검색 조건으로 좁히지");
+    assertThat(operation.at("/responses/200/content/application~1json/schema/$ref").asText())
+        .isEqualTo("#/components/schemas/com.stelody.song.dto.SongDtos.Years");
+    var schema = api.path("components").path("schemas").path("com.stelody.song.dto.SongDtos.Years");
+    assertThat(schema.path("required").toString()).contains("years");
+    var years = schema.path("properties").path("years");
+    assertThat(years.path("type").asText()).isEqualTo("array");
+    assertThat(years.path("uniqueItems").asBoolean()).isTrue();
+    assertThat(years.path("items").path("type").asText()).isEqualTo("integer");
+    assertThat(years.path("items").path("minimum").asInt()).isEqualTo(1900);
+    assertThat(years.path("items").path("maximum").asInt()).isEqualTo(2100);
+    assertThat(years.path("description").asText()).contains("내림차순", "빈 배열", "필터와 무관");
+    for (var parameter : api.path("paths").path("/api/v1/songs").path("get").path("parameters"))
+      if (parameter.path("name").asText().equals("year"))
+        assertThat(parameter.path("description").asText()).contains("Asia/Seoul", "/songs/years");
+    mvc.perform(get("/api/v1/songs/years")).andExpect(status().isOk());
+  }
+
+  @Test
   void documentsSessionCsrfAndConcreteAdminResponses() throws Exception {
     var api = contract();
     assertThat(api.at("/paths/~1api~1v1~1songs/get/security").isEmpty()).isTrue();

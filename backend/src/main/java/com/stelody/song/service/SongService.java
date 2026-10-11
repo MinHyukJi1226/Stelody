@@ -43,6 +43,10 @@ public class SongService {
     return new SongDtos.Page(songs.cards(page), next, more, totalCount);
   }
 
+  public SongDtos.Years years() {
+    return new SongDtos.Years(songs.years());
+  }
+
   public SongDtos.Detail detail(UUID id) {
     var publication = songs.publication();
     var row = songs.find(id, publication).orElseThrow(CatalogException::missing);

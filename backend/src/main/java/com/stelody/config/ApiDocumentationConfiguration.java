@@ -319,6 +319,8 @@ public class ApiDocumentationConfiguration {
       case "year" -> {
         schema.setMinimum(BigDecimal.valueOf(1900));
         schema.setMaximum(BigDecimal.valueOf(2100));
+        parameter.setDescription(
+            "대표 영상 공개일의 Asia/Seoul 기준 연도입니다. 전체 연도 선택지는 GET /api/v1/songs/years에서 조회합니다.");
       }
       case "q" -> schema.setMaxLength(200);
       case "type" -> {
