@@ -29,7 +29,10 @@ public final class MemberDtos {
       @Schema(description = "기수와 별도로 관리하는 유닛명. 미등록이면 null.", nullable = true) String unitName,
       @Schema(description = "치지직 HTTPS 링크. 미등록이면 null.", nullable = true) String chzzkUrl,
       @Schema(description = "X HTTPS 링크. 미등록이면 null.", nullable = true) String xUrl,
-      String activityStatus,
+      @Schema(
+              allowableValues = {"ACTIVE", "GRADUATED"},
+              description = "ACTIVE: 활동 중, GRADUATED: 졸업. 졸업 멤버의 공개 곡도 조회할 수 있습니다.")
+          String activityStatus,
       @Schema(nullable = true) String profileImageUrl,
       Counts songCounts) {}
 

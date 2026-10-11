@@ -28,6 +28,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.*;
@@ -871,6 +872,43 @@ class YouTubeExportIntegrationTest {
     assertThat(job(queued).path("status").asText()).isEqualTo("CANCELLED");
     provider.verify(1, postRequestedFor(urlPathEqualTo("/youtube/v3/playlists")));
     provider.verify(0, deleteRequestedFor(urlPathMatching("/youtube/v3/.*")));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "QUEUED,QUEUED,CANCELLED",
+    "RUNNING,RUNNING,CANCELLED",
+    "SUCCEEDED,SUCCEEDED,SUCCEEDED",
+    "FAILED,QUEUED,CANCELLED",
+    "UNCERTAIN,QUEUED,CANCELLED",
+    "CANCELLED,CANCELLED,CANCELLED"
+  })
+  void retryAndCancelRespectEveryPublicJobState(String initial, String retried, String cancelled)
+      throws Exception {
+    connected(U1);
+    UUID id = UUID.fromString(create(playlist(S1), UUID.randomUUID()).path("id").asText());
+    owner.update(
+        "UPDATE app.youtube_export SET status=?,error_code='YOUTUBE_REQUEST_FAILED' WHERE id=?",
+        initial,
+        id);
+    var before = job(id);
+    var retry = json(post(JOBS + id + "/retry"), first, initial.equals("CANCELLED") ? 409 : 200);
+    if (initial.equals("CANCELLED"))
+      assertThat(retry.path("code").asText()).isEqualTo("EXPORT_NOT_RETRYABLE");
+    var after = job(id);
+    assertThat(after.path("status").asText()).isEqualTo(retried);
+    for (String field :
+        List.of("id", "version", "totalCount", "copiedCount", "skippedCount", "remainingCount"))
+      assertThat(after.path(field)).isEqualTo(before.path(field));
+    if (List.of("FAILED", "UNCERTAIN").contains(initial))
+      assertThat(after.path("errorCode").isNull()).isTrue();
+    else assertThat(after.path("errorCode")).isEqualTo(before.path("errorCode"));
+    owner.update("UPDATE app.youtube_export SET status=? WHERE id=?", initial, id);
+    assertThat(json(post(JOBS + id + "/cancel"), first, 200).path("status").asText())
+        .isEqualTo(cancelled);
+    assertThat(json(post(JOBS + id + "/cancel"), first, 200).path("status").asText())
+        .isEqualTo(cancelled);
+    assertThat(provider.getAllServeEvents()).isEmpty();
   }
 
   @Test

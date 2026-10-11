@@ -425,6 +425,131 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsFrontendStateEnumsAndActionErrors() throws Exception {
+    var api = contract();
+    var schemas = api.path("components").path("schemas");
+    String song = "com.stelody.song.dto.SongDtos.";
+    String admin = "com.stelody.admin.dto.CatalogAdminDtos.";
+    String export = "com.stelody.export.dto.ExportDtos.";
+    for (var target : java.util.List.of(song + "Card", admin + "Song"))
+      assertEnum(schemas.path(target).at("/properties/type"), "ORIGINAL", "COVER");
+    for (var target : java.util.List.of("com.stelody.member.dto.MemberDtos.Card", admin + "Member"))
+      assertEnum(schemas.path(target).at("/properties/activityStatus"), "ACTIVE", "GRADUATED");
+    assertEnum(
+        schemas.path(song + "SearchHelp").at("/properties/visibility"),
+        "UNCHECKED",
+        "NORMAL",
+        "DIFFICULT");
+    assertEnum(
+        schemas.path(admin + "Song").at("/properties/searchVisibility"),
+        "UNCHECKED",
+        "NORMAL",
+        "DIFFICULT");
+    assertEnum(
+        schemas.path(admin + "Song").at("/properties/visibility"), "DRAFT", "PUBLISHED", "HIDDEN");
+    assertEnum(
+        schemas.path(export + "Connection").at("/properties/status"),
+        "DISABLED",
+        "DISCONNECTED",
+        "CONNECTED",
+        "RECONNECT_REQUIRED",
+        "REVOKING");
+    var job = schemas.path(export + "Job");
+    assertEnum(
+        job.at("/properties/status"),
+        "QUEUED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "UNCERTAIN",
+        "CANCELLED");
+    assertThat(job.at("/properties/status/description").asText())
+        .contains("건너뛴", "EXPORT_NOT_RETRYABLE", "삭제하지");
+    assertThat(job.at("/properties/version/description").asText()).contains("원본 플레이리스트", "작업 자체");
+    assertThat(job.at("/properties/remainingCount/description").asText()).contains("이미 반영");
+    assertThat(job.at("/properties/errorCode/description").asText())
+        .contains("ApiProblem.code", "YOUTUBE_RESULT_UNCONFIRMED", "REMOTE_PLAYLIST_CHANGED");
+    var retry = api.path("paths").path("/api/v1/me/youtube-exports/{id}/retry").path("post");
+    assertThat(retry.path("description").asText()).contains("외부", "대조", "CANCELLED", "작업 완료");
+    var cancel = api.path("paths").path("/api/v1/me/youtube-exports/{id}/cancel").path("post");
+    assertThat(cancel.path("description").asText()).contains("SUCCEEDED", "진행 중인", "삭제하지");
+    assertErrorCodes(api, "/api/v1/songs", "get", "409", "VIEW_PUBLICATION_CHANGED");
+    assertErrorCodes(api, "/api/v1/members/{id}/songs", "get", "409", "VIEW_PUBLICATION_CHANGED");
+    assertErrorCodes(api, "/api/v1/me/favorites/{songId}", "put", "409", "FAVORITE_LIMIT_REACHED");
+    assertErrorCodes(api, "/api/v1/me/playlists", "post", "409", "PLAYLIST_LIMIT_REACHED");
+    assertErrorCodes(
+        api,
+        "/api/v1/me/playlists/{id}/items",
+        "post",
+        "409",
+        "PLAYLIST_CHANGED",
+        "PLAYLIST_SONG_ALREADY_EXISTS",
+        "PLAYLIST_ITEM_LIMIT_REACHED");
+    assertErrorCodes(
+        api,
+        "/api/v1/admin/songs/{id}",
+        "put",
+        "409",
+        "CATALOG_VERSION_CONFLICT",
+        "CATALOG_DATA_CONFLICT");
+    assertErrorCodes(
+        api,
+        "/api/v1/me/playlists/{id}/youtube-exports",
+        "post",
+        "409",
+        "PLAYLIST_CHANGED",
+        "YOUTUBE_CONNECTION_REQUIRED",
+        "EXPORT_REQUEST_REUSED",
+        "EXPORT_ALREADY_ACTIVE",
+        "NO_EXPORTABLE_SONGS");
+    assertErrorCodes(
+        api,
+        "/api/v1/me/youtube-exports/{id}/retry",
+        "post",
+        "409",
+        "EXPORT_NOT_RETRYABLE",
+        "YOUTUBE_CONNECTION_REQUIRED");
+    assertThat(schemas.path("ApiProblem").at("/properties/code/description").asText())
+        .contains("x-error-codes", "fieldErrors", "Job.errorCode", "새 코드");
+  }
+
+  private static void assertEnum(JsonNode schema, String... values) {
+    var actual = new java.util.ArrayList<String>();
+    schema.path("enum").forEach(value -> actual.add(value.asText()));
+    assertThat(actual).containsExactly(values);
+    assertThat(schema.path("description").asText()).isNotBlank();
+  }
+
+  @Test
+  void nullableStatusEnumsAcceptExternalParticipantsAndUnclassifiedAdminResources()
+      throws Exception {
+    var schemas = contract().path("components").path("schemas");
+    for (var property :
+        java.util.List.of(
+            schemas
+                .path("com.stelody.song.dto.SongDtos.Participant")
+                .at("/properties/activityStatus"),
+            schemas
+                .path("com.stelody.admin.dto.CatalogAdminDtos.Summary")
+                .at("/properties/status"))) {
+      assertThat(property.path("type").toString()).contains("string", "null");
+      assertThat(property.path("enum").valueStream().anyMatch(JsonNode::isNull)).isTrue();
+      assertThat(property.path("description").asText()).contains("null");
+    }
+  }
+
+  private static void assertErrorCodes(
+      JsonNode api, String path, String method, String status, String... codes) {
+    var response = api.path("paths").path(path).path(method).path("responses").path(status);
+    var actual = new java.util.ArrayList<String>();
+    response.path("x-error-codes").forEach(value -> actual.add(value.asText()));
+    assertThat(actual).as(path + " " + method + " " + status).containsExactly(codes);
+    assertThat(response.path("description").asText()).contains(codes);
+    assertThat(response.at("/content/application~1problem+json/schema/$ref").asText())
+        .isEqualTo("#/components/schemas/ApiProblem");
+  }
+
+  @Test
   void documentsActualStatusesAndUniqueStableOperationIds() throws Exception {
     var api = contract();
     var ids = new java.util.HashSet<String>();

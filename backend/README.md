@@ -92,6 +92,52 @@ OpenAPI 파일은 Docker 실행 상태에서 `backend/`의 아래 명령으로 �
 </details>
 
 <details>
+<summary>프론트 연동용 상태값 · 오류 코드</summary>
+
+응답 필드의 가능한 값과 의미는 OpenAPI enum·description에 명시합니다. 콜라보는 곡 유형과 별도이며 검색 확인 상태와 사이트 공개 상태도 별도입니다.
+
+| 필드 | 값·의미 |
+| --- | --- |
+| 곡 `type` | `ORIGINAL` 오리지널, `COVER` 커버 |
+| 멤버 `activityStatus` | `ACTIVE` 활동 중, `GRADUATED` 졸업; 외부 참여자는 null |
+| 곡 `visibility`·관리자 곡 `status` | `DRAFT` 초안, `PUBLISHED` 공개 설정, `HIDDEN` 숨김; 실제 공개 API 조건은 별도로 적용 |
+| 검색 `visibility`·`searchVisibility` | `UNCHECKED` 미확인, `NORMAL` 정상 검색, `DIFFICULT` 검색 어려움 |
+| YouTube 연결 `status` | `DISABLED` 기능 비활성·연결 없음, `DISCONNECTED` 미연결, `CONNECTED` 연결됨, `RECONNECT_REQUIRED` 추가 동의 필요, `REVOKING` 철회 중 |
+
+내보내기 상태별 동작은 다음과 같습니다. retry 접수 성공은 작업 완료를 의미하지 않으며, 작업 상태를 다시 조회합니다.
+
+| 내보내기 `status` | 의미 | retry | cancel |
+| --- | --- | --- | --- |
+| `QUEUED` | 대기 | 현재 상태 유지 | `CANCELLED` |
+| `RUNNING` | 처리 중 | 현재 상태 유지 | `CANCELLED` |
+| `SUCCEEDED` | 완료; 건너뛴 곡 포함 가능 | 현재 상태 유지 | 현재 상태 유지 |
+| `FAILED` | 실패 | 연결 확인 후 `QUEUED` | `CANCELLED` |
+| `UNCERTAIN` | 외부 쓰기 결과 불확실 | 연결 확인 후 `QUEUED`, 원격 결과 대조 후 재개 | `CANCELLED` |
+| `CANCELLED` | 취소 | 409 `EXPORT_NOT_RETRYABLE` | 현재 상태 유지 |
+
+retry는 기능 활성화가 필요합니다. `UNCERTAIN`에서는 새 요청으로 반복하지 않고 같은 작업을 확인·재시도합니다. 확인되지 않으면 다시 `UNCERTAIN`에 머무를 수 있습니다. 취소해도 진행 중인 외부 요청은 반영될 수 있고 이미 만든 YouTube 목록·곡은 삭제하지 않습니다. `totalCount = copiedCount + skippedCount + remainingCount`이며 불확실 상태의 남은 수는 미반영 수로 단정하지 않습니다.
+
+HTTP 오류는 `ApiProblem.code`로 구분합니다. `fieldErrors[].code`는 입력칸 오류, `Job.errorCode`는 비동기 작업 사유입니다. OpenAPI의 오류 응답에 `x-error-codes`와 처리 의미를 제공합니다. 다음은 주요 안내 코드이며, 새 코드는 일반 오류 안내와 `traceId`로 처리합니다.
+
+| HTTP·코드 | 프론트 처리 |
+| --- | --- |
+| 401 `AUTHENTICATION_REQUIRED`·`SESSION_EXPIRED` | 다시 로그인 |
+| 403 `ACCESS_DENIED` | 권한·새 CSRF 확인 |
+| 400 `INVALID_CATALOG_QUERY`·`INVALID_FAVORITE_QUERY`·`INVALID_PLAYLIST_REQUEST`·`INVALID_CATALOG_REQUEST`·`INVALID_EXPORT_REQUEST` | 입력·커서 확인; `fieldErrors`가 있으면 입력칸에 표시 |
+| 409 `PLAYLIST_SONG_ALREADY_EXISTS` | 이미 담긴 곡 표시; 즐겨찾기 중복 저장은 204 성공 |
+| 409 `FAVORITE_LIMIT_REACHED`·`PLAYLIST_LIMIT_REACHED`·`PLAYLIST_ITEM_LIMIT_REACHED` | 저장·생성 한도 안내 |
+| 409 `PLAYLIST_CHANGED`·`CATALOG_VERSION_CONFLICT` | 최신 자료를 읽고 편집 내용 확인 |
+| 409 `CATALOG_DATA_CONFLICT` | 중복·연결 조건 확인 |
+| 409 `VIEW_PUBLICATION_CHANGED` | 조회수순 목록의 이전 커서를 버리고 첫 페이지부터 조회 |
+| 409 `YOUTUBE_CONNECTION_REQUIRED`·`YOUTUBE_REVOCATION_PENDING` | 추가 동의 또는 철회 완료 대기 |
+| 409 `EXPORT_REQUEST_REUSED`·`EXPORT_ALREADY_ACTIVE`·`NO_EXPORTABLE_SONGS` | 요청 ID 재사용 조건·기존 작업·공개 곡 확인 |
+| 404 `CATALOG_NOT_FOUND`·`PLAYLIST_NOT_FOUND`·`EXPORT_NOT_FOUND` | 접근 가능한 자료 없음 안내; 내보내기는 연결 해제·보관 기한 경과로도 삭제 가능 |
+| 503 `YOUTUBE_EXPORT_DISABLED`·`YOUTUBE_OAUTH_UNAVAILABLE` | 기능 비활성·설정 준비 중 안내 |
+
+</details>
+
+
+<details>
 <summary>DB · Render 배포 · 관리자 지정</summary>
 
 PostgreSQL 17을 사용합니다. Supabase는 프로젝트 Connect 화면의 **Session pooler 전체 호스트·5432**와 `sslmode=verify-full`을 사용합니다. 세션 잠금이 필요한 수집·내보내기·마이그레이션에는 Transaction pooler를 사용하지 않습니다.
