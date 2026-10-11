@@ -114,7 +114,7 @@ class MemberProfileMigrationIntegrationTest {
     var existing =
         owner.queryForList("SELECT id,name,generation,activity_status FROM app.member ORDER BY id");
     assertThat(cfg.target("20").load().migrate().migrationsExecuted).isEqualTo(1);
-    assertThat(cfg.load().migrate().migrationsExecuted).isZero();
+    assertThat(cfg.target("20").load().migrate().migrationsExecuted).isZero();
     assertThat(
             owner.queryForList(
                 "SELECT id,name,generation,activity_status FROM app.member ORDER BY id"))
