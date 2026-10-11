@@ -11,7 +11,17 @@ public final class SongDtos {
 
   @Schema(requiredProperties = {"id", "name", "kind", "activityStatus"})
   public record Participant(
-      UUID id, String name, String kind, @Schema(nullable = true) String activityStatus) {}
+      UUID id,
+      String name,
+      @Schema(
+              allowableValues = {"MEMBER", "EXTERNAL"},
+              description = "MEMBER: 스텔라이브 멤버, EXTERNAL: 외부 아티스트")
+          String kind,
+      @Schema(
+              nullable = true,
+              allowableValues = {"ACTIVE", "GRADUATED"},
+              description = "ACTIVE: 활동 중, GRADUATED: 졸업. 외부 아티스트는 null입니다.")
+          String activityStatus) {}
 
   @Schema(requiredProperties = {"id", "name"})
   public record Artist(UUID id, String name) {}
@@ -37,7 +47,10 @@ public final class SongDtos {
   public record Card(
       UUID id,
       String title,
-      String type,
+      @Schema(
+              allowableValues = {"ORIGINAL", "COVER"},
+              description = "ORIGINAL: 오리지널곡, COVER: 커버곡. 콜라보 여부는 collaboration으로 별도 표시합니다.")
+          String type,
       Instant publishedAt,
       @Schema(nullable = true) String thumbnailUrl,
       List<Participant> participants,
@@ -49,11 +62,24 @@ public final class SongDtos {
       @Schema(nullable = true) Instant viewsObservedAt) {}
 
   @Schema(requiredProperties = {"id", "youtubeId", "kind", "url", "embeddable"})
-  public record Video(UUID id, String youtubeId, String kind, String url, boolean embeddable) {}
+  public record Video(
+      UUID id,
+      String youtubeId,
+      @Schema(
+              allowableValues = {"OFFICIAL_MV", "OFFICIAL_COVER", "AUDIO", "REUPLOAD", "OTHER"},
+              description =
+                  "OFFICIAL_MV: 공식 MV, OFFICIAL_COVER: 공식 커버, AUDIO: 음원, REUPLOAD: 재업로드, OTHER: 기타")
+          String kind,
+      String url,
+      boolean embeddable) {}
 
   @Schema(requiredProperties = {"visibility", "recommendedQuery", "checkedAt"})
   public record SearchHelp(
-      String visibility,
+      @Schema(
+              allowableValues = {"UNCHECKED", "NORMAL", "DIFFICULT"},
+              description =
+                  "YouTube 검색 확인 상태. UNCHECKED: 미확인, NORMAL: 정상 검색, DIFFICULT: 검색 어려움. 사이트 공개 설정과 별개입니다.")
+          String visibility,
       @Schema(nullable = true) String recommendedQuery,
       @Schema(nullable = true) Instant checkedAt) {}
 
@@ -61,7 +87,13 @@ public final class SongDtos {
   public record ExternalLink(String platform, String url) {}
 
   @Schema(requiredProperties = {"provider", "status", "number"})
-  public record Karaoke(String provider, String status, @Schema(nullable = true) String number) {}
+  public record Karaoke(
+      @Schema(allowableValues = {"TJ", "KY"}) String provider,
+      @Schema(
+              allowableValues = {"UNKNOWN", "NOT_LISTED", "REGISTERED"},
+              description = "UNKNOWN: 미확인, NOT_LISTED: 미등록 확인, REGISTERED: 등록 확인")
+          String status,
+      @Schema(nullable = true) String number) {}
 
   @Schema(requiredProperties = {"workId", "links", "karaoke"})
   public record WorkResources(UUID workId, List<ExternalLink> links, List<Karaoke> karaoke) {}

@@ -28,6 +28,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.*;
@@ -698,6 +699,72 @@ class YouTubeExportIntegrationTest {
         .isTrue();
   }
 
+  @ParameterizedTest
+  @ValueSource(ints = {429, 500, 503})
+  void transientTokenRefreshFailureKeepsConnectionAndResumesTheSameJob(int providerStatus)
+      throws Exception {
+    connected(U1);
+    owner.execute("UPDATE app.youtube_connection SET expires_at=now()-interval '1 minute'");
+    String refresh =
+        runtime.queryForObject("SELECT refresh_token FROM app.youtube_connection", String.class);
+    UUID playlist = playlist(S1);
+    UUID id = UUID.fromString(create(playlist, UUID.randomUUID()).path("id").asText());
+    provider.stubFor(
+        WireMock.post(urlEqualTo("/token"))
+            .withRequestBody(containing("grant_type=refresh_token"))
+            .willReturn(
+                aResponse()
+                    .withStatus(providerStatus)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody("{\"error\":\"temporarily_unavailable\"}")));
+
+    worker.tick();
+    var failed = job(id);
+    assertThat(failed.path("status").asText()).isEqualTo("FAILED");
+    assertThat(failed.path("errorCode").asText()).isEqualTo("YOUTUBE_TOKEN_UNAVAILABLE");
+    assertThat(failed.path("copiedCount").asInt()).isZero();
+    assertThat(failed.path("remainingCount").asInt()).isEqualTo(1);
+    assertThat(connections.status(U1).status()).isEqualTo("CONNECTED");
+    assertThat(
+            runtime.queryForObject(
+                "SELECT refresh_token FROM app.youtube_connection", String.class))
+        .isEqualTo(refresh);
+    provider.verify(0, postRequestedFor(urlPathEqualTo("/youtube/v3/playlists")));
+    provider.verify(0, postRequestedFor(urlPathEqualTo("/youtube/v3/playlistItems")));
+    assertThat(
+            json(
+                    post("/api/v1/me/playlists/" + playlist + "/youtube-exports")
+                        .content(
+                            "{\"requestId\":\""
+                                + UUID.randomUUID()
+                                + "\",\"version\":"
+                                + failed.path("version").asLong()
+                                + "}"),
+                    first,
+                    409)
+                .path("code")
+                .asText())
+        .isEqualTo("EXPORT_ALREADY_ACTIVE");
+
+    provider.stubFor(
+        WireMock.post(urlEqualTo("/token"))
+            .withRequestBody(containing("grant_type=refresh_token"))
+            .willReturn(
+                okJson(
+                    "{\"access_token\":\"recovered-access\",\"token_type\":\"Bearer\",\"expires_in\":3600,\"scope\":\""
+                        + ExportSettings.SCOPE
+                        + "\"}")));
+    var queued = json(post(JOBS + id + "/retry"), first, 200);
+    assertThat(queued.path("id").asText()).isEqualTo(id.toString());
+    assertThat(queued.path("status").asText()).isEqualTo("QUEUED");
+    assertThat(queued.path("errorCode").isNull()).isTrue();
+    worker.tick();
+    assertThat(job(id).path("status").asText()).isEqualTo("SUCCEEDED");
+    assertThat(job(id).path("copiedCount").asInt()).isEqualTo(1);
+    provider.verify(1, postRequestedFor(urlPathEqualTo("/youtube/v3/playlists")));
+    provider.verify(1, postRequestedFor(urlPathEqualTo("/youtube/v3/playlistItems")));
+  }
+
   @Test
   void disconnectDeletesExportsAndRetriesRevocationWithoutLoggingOut() throws Exception {
     connected(U1);
@@ -871,6 +938,43 @@ class YouTubeExportIntegrationTest {
     assertThat(job(queued).path("status").asText()).isEqualTo("CANCELLED");
     provider.verify(1, postRequestedFor(urlPathEqualTo("/youtube/v3/playlists")));
     provider.verify(0, deleteRequestedFor(urlPathMatching("/youtube/v3/.*")));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "QUEUED,QUEUED,CANCELLED",
+    "RUNNING,RUNNING,CANCELLED",
+    "SUCCEEDED,SUCCEEDED,SUCCEEDED",
+    "FAILED,QUEUED,CANCELLED",
+    "UNCERTAIN,QUEUED,CANCELLED",
+    "CANCELLED,CANCELLED,CANCELLED"
+  })
+  void retryAndCancelRespectEveryPublicJobState(String initial, String retried, String cancelled)
+      throws Exception {
+    connected(U1);
+    UUID id = UUID.fromString(create(playlist(S1), UUID.randomUUID()).path("id").asText());
+    owner.update(
+        "UPDATE app.youtube_export SET status=?,error_code='YOUTUBE_REQUEST_FAILED' WHERE id=?",
+        initial,
+        id);
+    var before = job(id);
+    var retry = json(post(JOBS + id + "/retry"), first, initial.equals("CANCELLED") ? 409 : 200);
+    if (initial.equals("CANCELLED"))
+      assertThat(retry.path("code").asText()).isEqualTo("EXPORT_NOT_RETRYABLE");
+    var after = job(id);
+    assertThat(after.path("status").asText()).isEqualTo(retried);
+    for (String field :
+        List.of("id", "version", "totalCount", "copiedCount", "skippedCount", "remainingCount"))
+      assertThat(after.path(field)).isEqualTo(before.path(field));
+    if (List.of("FAILED", "UNCERTAIN").contains(initial))
+      assertThat(after.path("errorCode").isNull()).isTrue();
+    else assertThat(after.path("errorCode")).isEqualTo(before.path("errorCode"));
+    owner.update("UPDATE app.youtube_export SET status=? WHERE id=?", initial, id);
+    assertThat(json(post(JOBS + id + "/cancel"), first, 200).path("status").asText())
+        .isEqualTo(cancelled);
+    assertThat(json(post(JOBS + id + "/cancel"), first, 200).path("status").asText())
+        .isEqualTo(cancelled);
+    assertThat(provider.getAllServeEvents()).isEmpty();
   }
 
   @Test

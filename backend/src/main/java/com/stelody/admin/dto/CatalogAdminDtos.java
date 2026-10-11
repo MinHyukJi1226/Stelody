@@ -11,6 +11,7 @@ import java.util.UUID;
 public final class CatalogAdminDtos {
   private CatalogAdminDtos() {}
 
+  @Schema(description = "ACTIVE: 활동 중, GRADUATED: 졸업")
   public enum Activity {
     ACTIVE,
     GRADUATED
@@ -22,17 +23,24 @@ public final class CatalogAdminDtos {
     EXTERNAL
   }
 
+  @Schema(description = "ORIGINAL: 오리지널곡, COVER: 커버곡. 콜라보는 참여자 구성으로 별도 판단합니다.")
   public enum SongType {
     ORIGINAL,
     COVER
   }
 
+  @Schema(
+      description =
+          "사이트 노출 설정. DRAFT: 초안, PUBLISHED: 공개 설정, HIDDEN: 숨김. 정보 완성도와 독립적이며 공개 API의 영상·참여자 조건도 별도로 적용됩니다.")
   public enum Visibility {
     DRAFT,
     PUBLISHED,
     HIDDEN
   }
 
+  @Schema(
+      description =
+          "YouTube 검색 확인 상태. UNCHECKED: 미확인, NORMAL: 정상 검색, DIFFICULT: 검색 어려움. 사이트 노출 설정과 별개입니다.")
   public enum SearchVisibility {
     UNCHECKED,
     NORMAL,
@@ -154,7 +162,25 @@ public final class CatalogAdminDtos {
       @NotBlank @Size(max = 500) String reason) {}
 
   @Schema(requiredProperties = {"id", "name", "version", "status"})
-  public record Summary(UUID id, String name, long version, String status) {}
+  public record Summary(
+      UUID id,
+      String name,
+      long version,
+      @Schema(
+              nullable = true,
+              allowableValues = {
+                "ACTIVE",
+                "GRADUATED",
+                "DRAFT",
+                "PUBLISHED",
+                "HIDDEN",
+                "GROUP",
+                "MEMBER",
+                "EXTERNAL"
+              },
+              description =
+                  "대상별 상태. 멤버는 ACTIVE/GRADUATED, 곡은 DRAFT/PUBLISHED/HIDDEN, 채널은 GROUP(그룹)/MEMBER(멤버)/EXTERNAL(외부), 아티스트·원곡은 null입니다.")
+          String status) {}
 
   @Schema(requiredProperties = {"items", "page", "size", "hasNext"})
   public record Page(List<Summary> items, int page, int size, boolean hasNext) {}
@@ -232,7 +258,10 @@ public final class CatalogAdminDtos {
       @Schema(description = "기수와 별도로 관리하는 유닛명. 미등록이면 null.", nullable = true) String unitName,
       @Schema(description = "치지직 HTTPS 링크. 미등록이면 null.", nullable = true) String chzzkUrl,
       @Schema(description = "X HTTPS 링크. 미등록이면 null.", nullable = true) String xUrl,
-      String activityStatus,
+      @Schema(
+              allowableValues = {"ACTIVE", "GRADUATED"},
+              description = "ACTIVE: 활동 중, GRADUATED: 졸업")
+          String activityStatus,
       @Schema(nullable = true) String profileImageUrl,
       @Schema(nullable = true) LocalDate debutDate,
       @Schema(nullable = true) Integer birthdayMonth,
@@ -269,7 +298,10 @@ public final class CatalogAdminDtos {
       String youtubeId,
       String name,
       @Schema(nullable = true) UUID memberId,
-      String channelType,
+      @Schema(
+              allowableValues = {"GROUP", "MEMBER", "EXTERNAL"},
+              description = "GROUP: 그룹, MEMBER: 멤버, EXTERNAL: 외부 채널")
+          String channelType,
       boolean collectionEnabled) {}
 
   @Schema(
@@ -293,8 +325,16 @@ public final class CatalogAdminDtos {
       long version,
       UUID songId,
       String youtubeId,
-      String kind,
-      String availability,
+      @Schema(
+              allowableValues = {"OFFICIAL_MV", "OFFICIAL_COVER", "AUDIO", "REUPLOAD", "OTHER"},
+              description =
+                  "OFFICIAL_MV: 공식 MV, OFFICIAL_COVER: 공식 커버, AUDIO: 음원, REUPLOAD: 재업로드, OTHER: 기타")
+          String kind,
+      @Schema(
+              allowableValues = {"PUBLIC", "UNLISTED", "PRIVATE", "DELETED", "UNAVAILABLE"},
+              description =
+                  "PUBLIC: 공개, UNLISTED: 일부 공개, PRIVATE: 비공개, DELETED: 삭제 확인, UNAVAILABLE: 이용 불가")
+          String availability,
       @Schema(nullable = true) String sourceTitle,
       @Schema(nullable = true) Instant sourcePublishedAt,
       @Schema(nullable = true) String sourceThumbnailUrl,
@@ -329,16 +369,25 @@ public final class CatalogAdminDtos {
       UUID id,
       long version,
       String title,
-      String type,
+      @Schema(
+              allowableValues = {"ORIGINAL", "COVER"},
+              description = "ORIGINAL: 오리지널곡, COVER: 커버곡")
+          String type,
       @Schema(nullable = true) UUID workId,
-      String visibility,
+      @Schema(
+              allowableValues = {"DRAFT", "PUBLISHED", "HIDDEN"},
+              description = "사이트 노출 설정. DRAFT: 초안, PUBLISHED: 공개 설정, HIDDEN: 숨김. 검색 확인 상태와 별개입니다.")
+          String visibility,
       @Schema(nullable = true) UUID representativeVideoId,
       List<String> aliases,
       List<UUID> memberIds,
       List<UUID> externalArtistIds,
       boolean isSpecialEvent,
       @Schema(nullable = true) String specialEventLabel,
-      String searchVisibility,
+      @Schema(
+              allowableValues = {"UNCHECKED", "NORMAL", "DIFFICULT"},
+              description = "YouTube 검색 확인 상태. UNCHECKED: 미확인, NORMAL: 정상 검색, DIFFICULT: 검색 어려움")
+          String searchVisibility,
       @Schema(nullable = true) String recommendedSearchQuery,
       @Schema(nullable = true) Instant searchCheckedAt,
       List<Video> videos,
@@ -353,8 +402,11 @@ public final class CatalogAdminDtos {
   @Schema(requiredProperties = {"id", "provider", "status", "number", "sourceUrl", "checkedAt"})
   public record KaraokeView(
       UUID id,
-      String provider,
-      String status,
+      @Schema(allowableValues = {"TJ", "KY"}) String provider,
+      @Schema(
+              allowableValues = {"UNKNOWN", "NOT_LISTED", "REGISTERED"},
+              description = "UNKNOWN: 미확인, NOT_LISTED: 미등록 확인, REGISTERED: 등록 확인")
+          String status,
       @Schema(nullable = true) String number,
       @Schema(nullable = true) String sourceUrl,
       @Schema(nullable = true) Instant checkedAt) {}

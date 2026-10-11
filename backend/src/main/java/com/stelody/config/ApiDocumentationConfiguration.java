@@ -117,6 +117,7 @@ public class ApiDocumentationConfiguration {
                                   .addApiResponse("403", problem("권한 또는 CSRF 검증에 실패했습니다."));
                             correctSuccess(path, verb, operation);
                             playlistOrdering(path, verb, operation);
+                            frontendErrors(path, verb, operation);
                             operation
                                 .getResponses()
                                 .values()
@@ -188,6 +189,7 @@ public class ApiDocumentationConfiguration {
 
   // OpenAPI 3.1 applies $ref siblings conjunctively. A nullable reference needs a union.
   private static void normalizeNullableReferences(Schema<?> schema) {
+    allowNullableEnum(schema);
     if (schema.get$ref() != null
         && (Boolean.TRUE.equals(schema.getNullable())
             || schema.getTypes() != null && schema.getTypes().contains("null"))) {
@@ -213,13 +215,30 @@ public class ApiDocumentationConfiguration {
       schema.getOneOf().forEach(ApiDocumentationConfiguration::normalizeNullableReferences);
   }
 
+  // A nullable type still rejects null when enum lists only strings in OpenAPI 3.1.
+  @SuppressWarnings({"rawtypes", "unchecked"}) // Schema<?> cannot accept the extra null enum value.
+  private static void allowNullableEnum(Schema<?> schema) {
+    if (schema.getEnum() != null
+        && schema.getEnum().stream().noneMatch(java.util.Objects::isNull)
+        && (Boolean.TRUE.equals(schema.getNullable())
+            || schema.getTypes() != null && schema.getTypes().contains("null"))) {
+      var values = new java.util.ArrayList<Object>(schema.getEnum());
+      values.add(null);
+      ((Schema) schema).setEnum(values);
+    }
+  }
+
   private static Schema<?> problemSchema() {
     return new ObjectSchema()
         .addProperty("type", new StringSchema().example("about:blank"))
         .addProperty("title", new StringSchema())
         .addProperty("status", new IntegerSchema())
         .addProperty("instance", new StringSchema())
-        .addProperty("code", new StringSchema().description("기능별 오류 코드. 상세 의미는 각 API 계약을 참고합니다."))
+        .addProperty(
+            "code",
+            new StringSchema()
+                .description(
+                    "기능별 오류 코드. 각 API의 오류 응답 description·x-error-codes와 HTTP status로 분기합니다. fieldErrors[].code와 내보내기 Job.errorCode는 별도입니다. 새 코드는 추가될 수 있으므로 알 수 없는 코드는 일반 오류로 안내하고 traceId를 보관합니다."))
         .addProperty(
             "fieldErrors",
             new ArraySchema()
@@ -311,6 +330,133 @@ public class ApiDocumentationConfiguration {
             "409",
             problem(
                 "PLAYLIST_CHANGED: 조회·편집 중 목록 version이 변경되었습니다. 전체 페이지를 다시 조회하고 편집 내용을 확인하세요. version만 갱신해 기존 순서를 재전송하지 마세요."));
+  }
+
+  private static void frontendErrors(String path, String verb, Operation operation) {
+    if (operation.getResponses().containsKey("401"))
+      errorCodes(
+          operation,
+          "401",
+          "로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.",
+          "AUTHENTICATION_REQUIRED",
+          "SESSION_EXPIRED");
+    if (operation.getResponses().containsKey("403"))
+      errorCodes(operation, "403", "ADMIN 권한 또는 CSRF 토큰을 확인합니다.", "ACCESS_DENIED");
+    boolean songPage = path.equals("/api/v1/songs") || path.equals("/api/v1/members/{id}/songs");
+    if (songPage) {
+      errorCodes(operation, "400", "검색 조건·커서를 확인합니다.", "INVALID_CATALOG_QUERY");
+      errorCodes(
+          operation,
+          "409",
+          "VIEWS 정렬의 커서가 이전 조회수 집계를 가리킵니다. 커서를 버리고 첫 페이지부터 다시 조회합니다.",
+          "VIEW_PUBLICATION_CHANGED");
+    }
+    if (path.startsWith("/api/v1/me/favorites")) {
+      errorCodes(operation, "400", "곡 ID·페이지 크기·커서를 확인합니다.", "INVALID_FAVORITE_QUERY");
+      if (verb.equals("PUT")) {
+        errorCodes(operation, "404", "공개 곡을 찾을 수 없습니다.", "CATALOG_NOT_FOUND");
+        errorCodes(
+            operation,
+            "409",
+            "즐겨찾기 저장 한도입니다. 기존 곡 중복 저장은 성공하며 순서를 유지합니다.",
+            "FAVORITE_LIMIT_REACHED");
+      }
+    }
+    if (path.startsWith("/api/v1/me/playlists") && !path.endsWith("/youtube-exports")) {
+      errorCodes(operation, "400", "이름·항목·버전·커서를 확인합니다.", "INVALID_PLAYLIST_REQUEST");
+      if (path.contains("/{id}")) {
+        errorCodes(operation, "404", "현재 계정의 목록 또는 항목이 없습니다.", "PLAYLIST_NOT_FOUND");
+        if (!verb.equals("GET") || path.endsWith("/items"))
+          errorCodes(operation, "409", "현재 목록을 다시 조회하고 편집 내용을 확인합니다.", "PLAYLIST_CHANGED");
+      }
+      if (verb.equals("POST") && path.equals("/api/v1/me/playlists"))
+        errorCodes(operation, "409", "플레이리스트 생성 한도입니다.", "PLAYLIST_LIMIT_REACHED");
+      if (verb.equals("POST") && path.endsWith("/items")) {
+        errorCodes(operation, "404", "추가하려는 공개 곡이 없습니다.", "CATALOG_NOT_FOUND");
+        errorCodes(
+            operation,
+            "409",
+            "이미 담긴 곡은 중복 표시하고, 항목 한도이면 다른 항목을 정리합니다.",
+            "PLAYLIST_SONG_ALREADY_EXISTS",
+            "PLAYLIST_ITEM_LIMIT_REACHED");
+      }
+    }
+    if (path.matches("/api/v1/admin/(members|artists|works|songs|channels)(/.*)?")) {
+      errorCodes(
+          operation,
+          "400",
+          "관리자 입력이나 참조를 확인합니다. fieldErrors가 있으면 해당 입력칸에 표시합니다.",
+          "INVALID_CATALOG_REQUEST",
+          "INVALID_CATALOG_REFERENCE");
+      if (!verb.equals("GET"))
+        errorCodes(
+            operation,
+            "409",
+            "CATALOG_VERSION_CONFLICT: 최신 내용을 조회해 변경을 확인합니다. CATALOG_DATA_CONFLICT: 중복·연결 조건을 확인합니다.",
+            "CATALOG_VERSION_CONFLICT",
+            "CATALOG_DATA_CONFLICT");
+    }
+    boolean createExport = verb.equals("POST") && path.endsWith("/youtube-exports");
+    boolean retryExport = path.equals("/api/v1/me/youtube-exports/{id}/retry");
+    if (createExport || retryExport || path.equals("/api/v1/me/youtube/authorizations"))
+      errorCodes(operation, "503", "내보내기 기능이 비활성화되어 있습니다.", "YOUTUBE_EXPORT_DISABLED");
+    if (createExport) {
+      errorCodes(
+          operation,
+          "400",
+          "INVALID_EXPORT_REQUEST: 입력 확인. EXPORT_ITEM_LIMIT: 내보내기 상한 500개 초과.",
+          "INVALID_EXPORT_REQUEST",
+          "EXPORT_ITEM_LIMIT");
+      errorCodes(operation, "404", "현재 계정의 원본 목록이 없습니다.", "PLAYLIST_NOT_FOUND");
+      errorCodes(
+          operation,
+          "409",
+          "PLAYLIST_CHANGED: 원본 목록 재조회. YOUTUBE_CONNECTION_REQUIRED: 추가 동의. EXPORT_REQUEST_REUSED: 다른 목록·version에 requestId 재사용. EXPORT_ALREADY_ACTIVE: 기존 작업 확인. NO_EXPORTABLE_SONGS: 공개된 내보내기 가능 곡 없음.",
+          "PLAYLIST_CHANGED",
+          "YOUTUBE_CONNECTION_REQUIRED",
+          "EXPORT_REQUEST_REUSED",
+          "EXPORT_ALREADY_ACTIVE",
+          "NO_EXPORTABLE_SONGS");
+    }
+    if (path.startsWith("/api/v1/me/youtube-exports/")) {
+      errorCodes(
+          operation,
+          "404",
+          "현재 계정의 작업이 없습니다. 연결 해제·권한 무효화·보관 기한 경과로도 삭제될 수 있습니다.",
+          "EXPORT_NOT_FOUND");
+      if (retryExport)
+        errorCodes(
+            operation,
+            "409",
+            "EXPORT_NOT_RETRYABLE: 취소된 작업. YOUTUBE_CONNECTION_REQUIRED: 추가 동의 후 재시도합니다.",
+            "EXPORT_NOT_RETRYABLE",
+            "YOUTUBE_CONNECTION_REQUIRED");
+    }
+    if (path.equals("/api/v1/me/youtube/authorizations")) {
+      errorCodes(operation, "409", "권한 철회 완료 후 추가 동의를 다시 시작합니다.", "YOUTUBE_REVOCATION_PENDING");
+      errorCodes(operation, "503", "YouTube OAuth 설정이 없습니다.", "YOUTUBE_OAUTH_UNAVAILABLE");
+    }
+  }
+
+  private static void errorCodes(
+      Operation operation, String status, String description, String... codes) {
+    var response = operation.getResponses().get(status);
+    if (response == null) {
+      response = problem("");
+      operation.getResponses().addApiResponse(status, response);
+    }
+    String previous = response.getDescription();
+    response.setDescription(
+        (previous == null || previous.isBlank() ? "" : previous + "\n")
+            + String.join(", ", codes)
+            + ": "
+            + description);
+    var combined = new java.util.ArrayList<String>();
+    if (response.getExtensions() != null
+        && response.getExtensions().get("x-error-codes") instanceof List<?> existing)
+      existing.forEach(code -> combined.add(code.toString()));
+    combined.addAll(List.of(codes));
+    response.addExtension("x-error-codes", combined.stream().distinct().toList());
   }
 
   @SuppressWarnings("unchecked") // Swagger exposes raw schemas on Parameter.
