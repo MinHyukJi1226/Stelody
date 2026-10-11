@@ -19,6 +19,16 @@ final class SongSqlQueries {
   static final String PUBLICATION =
       "SELECT view_publication_id FROM app.catalog_state WHERE singleton";
 
+  static final String YEARS =
+      PublicCatalogSql.SONGS
+          + """
+          SELECT DISTINCT year FROM (
+            SELECT EXTRACT(YEAR FROM published_at AT TIME ZONE 'Asia/Seoul')::integer AS year
+            FROM public_songs
+          ) years
+          WHERE year BETWEEN 1900 AND 2100 ORDER BY year DESC
+          """;
+
   static final String RECOMMENDATION_CANDIDATES =
       PublicCatalogSql.SONGS
           + """

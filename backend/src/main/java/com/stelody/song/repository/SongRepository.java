@@ -55,6 +55,10 @@ public class SongRepository {
 
   private record Publication(UUID id) {}
 
+  public List<Integer> years() {
+    return jdbc.sql(SongSqlQueries.YEARS).query(Integer.class).list();
+  }
+
   public List<Candidate> recommendationCandidates() {
     var members = new LinkedHashMap<UUID, List<UUID>>();
     jdbc.sql(SongSqlQueries.RECOMMENDATION_CANDIDATES)

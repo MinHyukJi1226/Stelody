@@ -617,6 +617,80 @@ class PublicCatalogIntegrationTest {
     assertThat(request("/api/v1/songs?year=2025").get("totalCount").asLong()).isEqualTo(1);
   }
 
+  List<Integer> years() throws Exception {
+    var result = new ArrayList<Integer>();
+    request("/api/v1/songs/years").get("years").forEach(year -> result.add(year.asInt()));
+    return result;
+  }
+
+  @Test
+  void yearOptionsUseRepresentativeDatesKoreanBoundariesAndSourceFallback() throws Exception {
+    writer.update(
+        "UPDATE app.video SET published_at = '2025-12-31T15:00:00Z' WHERE song_id = ?", S1);
+    writer.update(
+        "UPDATE app.video SET published_at = '2025-12-31T14:59:59Z' WHERE song_id = ?", S2);
+    writer.update(
+        "UPDATE app.video SET published_at = null, source_published_at = '2023-12-31T14:59:59Z' WHERE song_id = ?",
+        S3);
+    writer.update(
+        "INSERT INTO app.video(id, song_id, youtube_id, video_kind, availability, source_title, published_at) VALUES (?, ?, '99999999999', 'REUPLOAD', 'PUBLIC', 'Reupload', '2030-01-01T00:00:00Z')",
+        id(999),
+        S1);
+    assertThat(years()).containsExactly(2026, 2025, 2023);
+    for (int year : years())
+      assertThat(request("/api/v1/songs?year=" + year).get("totalCount").asLong()).isPositive();
+  }
+
+  @Test
+  void yearOptionsFollowPublicSongEligibilityAndReflectChanges() throws Exception {
+    for (int i = 105; i <= 108; i++)
+      writer.update(
+          "UPDATE app.video SET published_at = ?::timestamptz WHERE song_id = ?",
+          (2000 + i - 105) + "-01-01T00:00:00Z",
+          id(i));
+    writer.update(
+        "UPDATE app.video SET published_at = '2018-01-01T00:00:00Z' WHERE song_id = ?", S1);
+    assertThat(years()).containsExactly(2026, 2018);
+    for (String state : List.of("PRIVATE", "UNLISTED", "DELETED", "UNAVAILABLE")) {
+      writer.update("UPDATE app.video SET availability = ? WHERE song_id = ?", state, S1);
+      assertThat(years()).containsExactly(2026);
+    }
+    writer.update("UPDATE app.video SET availability = 'PUBLIC' WHERE song_id = ?", S1);
+    for (String state : List.of("HIDDEN", "DRAFT")) {
+      writer.update("UPDATE app.song_entry SET visibility = ? WHERE id = ?", state, S1);
+      assertThat(years()).containsExactly(2026);
+    }
+    writer.update("UPDATE app.song_entry SET visibility = 'PUBLISHED' WHERE id = ?", S1);
+    writer.update("UPDATE app.song_member SET confirmed = false WHERE song_id = ?", S1);
+    assertThat(years()).containsExactly(2026);
+    writer.update("UPDATE app.song_member SET confirmed = true WHERE song_id = ?", S1);
+    writer.update(
+        "UPDATE app.video SET published_at = null, source_published_at = null WHERE song_id = ?",
+        S1);
+    assertThat(years()).containsExactly(2026);
+    writer.update(
+        "UPDATE app.video SET published_at = '2018-01-01T00:00:00Z' WHERE song_id = ?", S1);
+    assertThat(years()).containsExactly(2026, 2018);
+    writer.update("UPDATE app.song_entry SET representative_video_id = null WHERE id = ?", S1);
+    assertThat(years()).containsExactly(2026);
+  }
+
+  @Test
+  void yearOptionsStayWithinSupportedFilterRangeAndCanBeEmpty() throws Exception {
+    var songs = List.of(S1, S2, S3, S4);
+    var dates = List.of("1899", "1900", "2100", "2101");
+    for (int i = 0; i < songs.size(); i++)
+      writer.update(
+          "UPDATE app.video SET published_at = ?::timestamptz WHERE song_id = ?",
+          dates.get(i) + "-01-01T00:00:00Z",
+          songs.get(i));
+    assertThat(years()).containsExactly(2100, 1900);
+    assertThat(request("/api/v1/songs?year=1900").get("totalCount").asLong()).isEqualTo(1);
+    assertThat(request("/api/v1/songs?year=2100").get("totalCount").asLong()).isEqualTo(1);
+    writer.update("UPDATE app.song_entry SET visibility = 'HIDDEN'");
+    assertThat(years()).isEmpty();
+  }
+
   @Test
   void graduatedAndEmptyMembersAreDiscoverableAndPaginated() throws Exception {
     assertThat(request("/api/v1/members/" + M2).get("member").get("activityStatus").asText())
