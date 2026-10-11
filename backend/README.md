@@ -117,6 +117,8 @@ OpenAPI 파일은 Docker 실행 상태에서 `backend/`의 아래 명령으로 �
 
 retry는 기능 활성화가 필요합니다. `UNCERTAIN`에서는 새 요청으로 반복하지 않고 같은 작업을 확인·재시도합니다. 확인되지 않으면 다시 `UNCERTAIN`에 머무를 수 있습니다. 취소해도 진행 중인 외부 요청은 반영될 수 있고 이미 만든 YouTube 목록·곡은 삭제하지 않습니다. `totalCount = copiedCount + skippedCount + remainingCount`이며 불확실 상태의 남은 수는 미반영 수로 단정하지 않습니다.
 
+`Job.errorCode=YOUTUBE_TOKEN_UNAVAILABLE`은 토큰 갱신 중 외부 오류입니다. 기존 연결·작업을 유지하므로 잠시 후 같은 작업의 retry를 호출합니다. 새 내보내기를 접수하지 않습니다. `invalid_grant`로 연결이 `RECONNECT_REQUIRED`가 되면 추가 동의가 필요합니다.
+
 HTTP 오류는 `ApiProblem.code`로 구분합니다. `fieldErrors[].code`는 입력칸 오류, `Job.errorCode`는 비동기 작업 사유입니다. OpenAPI의 오류 응답에 `x-error-codes`와 처리 의미를 제공합니다. 다음은 주요 안내 코드이며, 새 코드는 일반 오류 안내와 `traceId`로 처리합니다.
 
 | HTTP·코드 | 프론트 처리 |

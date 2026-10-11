@@ -468,7 +468,13 @@ class OpenApiIntegrationTest {
     assertThat(job.at("/properties/version/description").asText()).contains("원본 플레이리스트", "작업 자체");
     assertThat(job.at("/properties/remainingCount/description").asText()).contains("이미 반영");
     assertThat(job.at("/properties/errorCode/description").asText())
-        .contains("ApiProblem.code", "YOUTUBE_RESULT_UNCONFIRMED", "REMOTE_PLAYLIST_CHANGED");
+        .contains(
+            "ApiProblem.code",
+            "YOUTUBE_RESULT_UNCONFIRMED",
+            "REMOTE_PLAYLIST_CHANGED",
+            "YOUTUBE_TOKEN_UNAVAILABLE",
+            "연결을 유지",
+            "잠시 후 같은 작업의 retry");
     var retry = api.path("paths").path("/api/v1/me/youtube-exports/{id}/retry").path("post");
     assertThat(retry.path("description").asText()).contains("외부", "대조", "CANCELLED", "작업 완료");
     var cancel = api.path("paths").path("/api/v1/me/youtube-exports/{id}/cancel").path("post");

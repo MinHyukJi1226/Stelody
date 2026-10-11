@@ -76,7 +76,7 @@ public final class ExportDtos {
       @Schema(
               nullable = true,
               description =
-                  "작업 실패·불확실 사유. HTTP 요청 오류의 ApiProblem.code와 구분합니다. YOUTUBE_QUOTA_EXCEEDED: 할당량, YOUTUBE_RATE_LIMITED: 호출 제한, YOUTUBE_CHANNEL_REQUIRED: YouTube 채널 필요, YOUTUBE_RECONNECT_REQUIRED·YOUTUBE_CONNECTION_REQUIRED: 연결 필요, REMOTE_PLAYLIST_MISSING: 외부 목록 없음, REMOTE_PLAYLIST_CHANGED: 외부 순서·내용 변경, YOUTUBE_RESULT_UNCONFIRMED·YOUTUBE_RESPONSE_UNCERTAIN: 결과 미확정, YOUTUBE_INVALID_RESPONSE·YOUTUBE_REQUEST_FAILED: 외부 응답 오류, EXPORT_PROCESSING_FAILED: 처리 실패, YOUTUBE_DISCONNECTED: 철회로 취소. 복구 후 같은 작업을 재시도하며 미확정 결과를 성공이나 미반영으로 단정하지 않습니다.")
+                  "작업 실패·불확실 사유. HTTP 요청 오류의 ApiProblem.code와 구분합니다. YOUTUBE_QUOTA_EXCEEDED: 할당량, YOUTUBE_RATE_LIMITED: 호출 제한, YOUTUBE_CHANNEL_REQUIRED: YouTube 채널 필요, YOUTUBE_TOKEN_UNAVAILABLE: 토큰 갱신 실패(일시적 외부 장애 등). 연결을 유지하므로 잠시 후 같은 작업의 retry를 호출하며 새 내보내기 요청으로 반복하지 않습니다. YOUTUBE_RECONNECT_REQUIRED·YOUTUBE_CONNECTION_REQUIRED: 연결 필요, REMOTE_PLAYLIST_MISSING: 외부 목록 없음, REMOTE_PLAYLIST_CHANGED: 외부 순서·내용 변경, YOUTUBE_RESULT_UNCONFIRMED·YOUTUBE_RESPONSE_UNCERTAIN: 결과 미확정, YOUTUBE_INVALID_RESPONSE·YOUTUBE_REQUEST_FAILED: 외부 응답 오류, EXPORT_PROCESSING_FAILED: 처리 실패, YOUTUBE_DISCONNECTED: 철회로 취소. 복구 후 같은 작업을 재시도하며 미확정 결과를 성공이나 미반영으로 단정하지 않습니다.")
           String errorCode,
       Instant createdAt,
       Instant updatedAt) {}
