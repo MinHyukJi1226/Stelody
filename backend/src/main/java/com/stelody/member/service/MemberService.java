@@ -36,8 +36,14 @@ public class MemberService {
       try {
         if (cursor.isEmpty() || cursor.length() > 2048) throw CatalogException.invalid();
         position = mapper.readValue(Base64.getUrlDecoder().decode(cursor), Position.class);
-        if (position.version() != 1
+        if (position.version() != 2
             || !status.equals(position.filter())
+            || position.generationOrder() < 1
+            || position.generationOrder() > 32768
+            || position.displayOrder() < 1
+            || position.debutOrder() == null
+            || position.debutOrder().getYear() < 1
+            || position.debutOrder().getYear() > 9999
             || position.id() == null
             || position.searchName() == null
             || position.searchName().length() > 200
@@ -59,7 +65,14 @@ public class MemberService {
               .encodeToString(
                   mapper.writeValueAsBytes(
                       new Position(
-                          1, status, last.activityOrder(), last.searchName(), last.card().id())));
+                          2,
+                          status,
+                          last.activityOrder(),
+                          last.generationOrder(),
+                          last.displayOrder(),
+                          last.debutOrder(),
+                          last.searchName(),
+                          last.card().id())));
     }
     return new MemberDtos.Page(page.stream().map(MemberRepository.Row::card).toList(), next, more);
   }

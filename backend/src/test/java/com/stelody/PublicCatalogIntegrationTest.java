@@ -691,6 +691,90 @@ class PublicCatalogIntegrationTest {
     assertThat(years()).isEmpty();
   }
 
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2, 3})
+  void memberOrderAndCursorUseGenerationDebutNameAndIdWithGraduatesLast(int size) throws Exception {
+    writer.execute("TRUNCATE app.member CASCADE");
+    String[] names = {"하", "가", "다", "나", "라", "마", "바", "사", "아", "다"};
+    Integer[] generations = {1, 1, 2, 2, 2, 4, null, null, 1, 2};
+    String[] dates = {
+      "2022-01-08",
+      "2025-09-20",
+      "2023-06-10",
+      "2023-06-10",
+      null,
+      "2026-10-17",
+      "2020-01-01",
+      null,
+      "2001-01-01",
+      "2023-06-10"
+    };
+    for (int n = 0; n < names.length; n++)
+      writer.update(
+          "INSERT INTO app.member(id,name,search_name,generation,debut_date,activity_status) VALUES(?,?,?,?,CAST(? AS date),?)",
+          id(901 + n),
+          names[n],
+          names[n],
+          generations[n],
+          dates[n],
+          n == 8 ? "GRADUATED" : "ACTIVE");
+    writer.update("UPDATE app.member SET display_order=2 WHERE id=?", id(901));
+    writer.update("UPDATE app.member SET display_order=1 WHERE id=?", id(902));
+    writer.update("UPDATE app.member SET display_order=2 WHERE id=?", id(904));
+    writer.update("UPDATE app.member SET display_order=1 WHERE id=?", id(903));
+    var order = List.of(902, 901, 903, 904, 910, 905, 906, 907, 908, 909);
+    for (String filter : List.of("ALL", "ACTIVE", "GRADUATED")) {
+      var expected =
+          order.stream()
+              .filter(n -> filter.equals("ALL") || (filter.equals("GRADUATED") == (n == 909)))
+              .map(n -> id(n).toString())
+              .toList();
+      var all = new ArrayList<String>();
+      String cursor = null;
+      do {
+        var req =
+            get("/api/v1/members").param("size", String.valueOf(size)).param("status", filter);
+        if (cursor != null) req.param("cursor", cursor);
+        var page =
+            mapper.readTree(
+                mvc.perform(req)
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString());
+        all.addAll(ids(page));
+        cursor = page.path("nextCursor").isNull() ? null : page.path("nextCursor").asText();
+        assertThat(all.size()).isLessThanOrEqualTo(expected.size());
+      } while (cursor != null);
+      assertThat(all).containsExactlyElementsOf(expected).doesNotHaveDuplicates();
+      assertThat(ids(request("/api/v1/members?size=50&status=" + filter)))
+          .containsExactlyElementsOf(expected);
+    }
+  }
+
+  @Test
+  void oldMemberOrderCursorRequiresRestartingTheList() throws Exception {
+    String old =
+        java.util.Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(
+                mapper.writeValueAsBytes(
+                    java.util.Map.of(
+                        "version",
+                        1,
+                        "filter",
+                        "ALL",
+                        "activityOrder",
+                        1,
+                        "searchName",
+                        "member",
+                        "id",
+                        M1)));
+    mvc.perform(get("/api/v1/members").param("cursor", old))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"));
+  }
+
   @Test
   void graduatedAndEmptyMembersAreDiscoverableAndPaginated() throws Exception {
     assertThat(request("/api/v1/members/" + M2).get("member").get("activityStatus").asText())
