@@ -129,7 +129,7 @@ class AbyssMemberMigrationIntegrationTest {
     jdbc.execute(
         "INSERT INTO app.channel(id,youtube_id,name,channel_type,collection_enabled) VALUES('00000000-0000-0000-0000-000000000002','UCaaaaaaaaaaaaaaaaaaaaaa','keep','GROUP',false)");
     assertThat(cfg.target("21").load().migrate().migrationsExecuted).isEqualTo(1);
-    assertThat(cfg.load().migrate().migrationsExecuted).isZero();
+    assertThat(cfg.target("21").load().migrate().migrationsExecuted).isZero();
     assertThat(
             jdbc.queryForList(
                 "SELECT id,name,search_name,generation,activity_status,unit_name,profile_image_url FROM app.member WHERE generation IS DISTINCT FROM 4 ORDER BY id"))
@@ -183,6 +183,91 @@ class AbyssMemberMigrationIntegrationTest {
     assertThat(jdbc.queryForObject("SELECT count(*) FROM app.channel", Integer.class)).isEqualTo(5);
     assertThat(jdbc.queryForList("SELECT * FROM app.member_alias")).isEqualTo(aliases);
     assertThat(jdbc.queryForList("SELECT * FROM app.song_member")).isEqualTo(relationships);
+    assertThat(cfg.target("22").load().migrate().migrationsExecuted).isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("808c2423-aff5-5311-930a-ffcb2c7ff69d")))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("ae936a73-eda5-5c3c-a59d-33ee34d7576d")))
+        .isEqualTo(2);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("4360bf14-2f89-536b-bae3-e8a66b2a58b9")))
+        .isEqualTo(2);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("87a9538a-dade-571b-b249-ce12099fd04b")))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("e2d35b29-639f-5509-a0fb-515c5da88900")))
+        .isEqualTo(3);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("c115d377-9edf-5b22-a6b6-58f2e589826b")))
+        .isEqualTo(4);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("a75974b0-e1de-50ae-a76e-c5eaf209c3f1")))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("1cbb407e-162d-40fa-8091-08e0a9582faf")))
+        .isEqualTo(2);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("bd27574c-1aea-5517-a014-e854a8eb15b8")))
+        .isEqualTo(3);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("52e2098e-5593-4d53-b599-2ed7063a22a0")))
+        .isEqualTo(4);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("e45fafbd-eda4-5d6c-b67b-b41999b2ad03")))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("b715a5e0-b10f-5a79-8405-9703e0543716")))
+        .isEqualTo(2);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("4fdb54c3-bfd5-5ef8-9b04-2e016b33d475")))
+        .isEqualTo(3);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_order FROM app.member WHERE id=?",
+                Integer.class,
+                UUID.fromString("6ac3f9a8-90d3-5f90-91fb-37ccf645a8b9")))
+        .isEqualTo(4);
   }
 
   @ParameterizedTest

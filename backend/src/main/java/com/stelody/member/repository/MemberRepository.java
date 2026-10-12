@@ -4,6 +4,7 @@ import com.stelody.catalog.repository.PublicCatalogSql;
 import com.stelody.member.dto.MemberDtos;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -13,10 +14,23 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class MemberRepository {
-  public record Row(MemberDtos.Card card, String searchName, int activityOrder) {}
+  public record Row(
+      MemberDtos.Card card,
+      String searchName,
+      int activityOrder,
+      int generationOrder,
+      int displayOrder,
+      LocalDate debutOrder) {}
 
   public record Position(
-      int version, String filter, int activityOrder, String searchName, UUID id) {}
+      int version,
+      String filter,
+      int activityOrder,
+      int generationOrder,
+      int displayOrder,
+      LocalDate debutOrder,
+      String searchName,
+      UUID id) {}
 
   private final JdbcClient jdbc;
 
@@ -37,7 +51,10 @@ public class MemberRepository {
       ), members AS (
         SELECT m.*, coalesce(c.total, 0) AS total, coalesce(c.originals, 0) AS originals,
           coalesce(c.covers, 0) AS covers, coalesce(c.collaborations, 0) AS collaborations,
-          CASE WHEN m.activity_status = 'ACTIVE' THEN 1 ELSE 2 END AS activity_order
+          CASE WHEN m.activity_status = 'ACTIVE' THEN 1 ELSE 2 END AS activity_order,
+          coalesce(m.generation, 32768) AS generation_order,
+          coalesce(m.display_order, 2147483647) AS display_order_key,
+          coalesce(m.debut_date, DATE '9999-12-31') AS debut_order
         FROM app.member m LEFT JOIN counts c ON c.member_id = m.id
       ) SELECT * FROM members m WHERE true
       """;
@@ -46,20 +63,24 @@ public class MemberRepository {
     var sql = new StringBuilder(CARDS);
     var params = new HashMap<String, Object>();
     if (!status.equals("ALL")) {
-      sql.append(" AND m.activity_status = :status");
+      sql.append(" AND m.activity_status = :status ");
       params.put("status", status);
     }
     if (cursor != null) {
       sql.append(
           """
-          AND (m.activity_order > :activity OR (m.activity_order = :activity AND
-            (m.search_name COLLATE "C" > :name COLLATE "C" OR (m.search_name = :name AND m.id > :id))))
+          AND (m.activity_order, m.generation_order, m.display_order_key, m.debut_order, m.search_name COLLATE "C", m.id)
+              > (:activity, :generation, :display, CAST(:debut AS date), :name COLLATE "C", :id)
           """);
       params.put("activity", cursor.activityOrder());
+      params.put("generation", cursor.generationOrder());
+      params.put("display", cursor.displayOrder());
+      params.put("debut", cursor.debutOrder().toString());
       params.put("name", cursor.searchName());
       params.put("id", cursor.id());
     }
-    sql.append(" ORDER BY m.activity_order, m.search_name COLLATE \"C\", m.id LIMIT :limit");
+    sql.append(
+        " ORDER BY m.activity_order, m.generation_order, m.display_order_key, m.debut_order, m.search_name COLLATE \"C\", m.id LIMIT :limit");
     params.put("limit", size + 1);
     return jdbc.sql(sql.toString()).params(params).query(this::map).list();
   }
@@ -103,6 +124,9 @@ public class MemberRepository {
                 rs.getLong("covers"),
                 rs.getLong("collaborations"))),
         rs.getString("search_name"),
-        rs.getInt("activity_order"));
+        rs.getInt("activity_order"),
+        rs.getInt("generation_order"),
+        rs.getInt("display_order_key"),
+        rs.getDate("debut_order").toLocalDate());
   }
 }
