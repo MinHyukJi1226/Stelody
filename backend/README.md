@@ -210,7 +210,7 @@ java -jar backend/build/libs/stelody-0.0.1-SNAPSHOT.jar --admin-account \
 
 웹 프로필에 collector를 추가하지 않습니다. 기동 1분 후 현재 시간 슬롯·당일 탐색을 보충하고 미완료·실패 작업은 15분 뒤 다시 확인합니다. 완료되면 추가 확인을 예약하지 않습니다. 관리자 재시도는 다음 정각 또는 보충 실행에서 처리하며 과거 조회수는 만들어 채우지 않습니다.
 
-Render 수집 성공 후 GitHub Variable `COLLECTOR_SCHEDULE_OWNER=render`로 이중 예약을 막습니다. GitHub 수집 Secrets는 수동 실행용으로 유지합니다. 복귀할 때는 Render의 `COLLECTOR_SCHEDULED_ENABLED=false`를 먼저 적용한 뒤 owner를 제거합니다. GitHub 기존 예약은 조회수 매시간 :17·탐색 2시간 간격입니다.
+정기 수집은 Render의 Spring에서 실행합니다. GitHub Actions의 수집 workflow는 제거했으며 수동 수집·과거 탐색은 아래 로컬 실행 명령을 사용합니다.
 
 자체 요청은 실행 중인 서버에서만 동작하며 절전 방지를 보장하지 않습니다. 실제 수집은 로그와 `/api/v1/admin/collection-status`에서 확인합니다. 수집 환경변수와 jar를 준비한 뒤 수동으로 실행할 수 있습니다.
 
