@@ -9,7 +9,33 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.select.outputs.frontend }}
+      backend: ${{ steps.select.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select checks for changed paths
+        id: select
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/select_checks.py
+      - name: Verify path selection and required checks
+        run: python3 -B -m unittest discover -s .github/scripts -v
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    uses: ./.github/workflows/frontend-ci.yml
+
   backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -68,7 +94,7 @@ jobs:
 
   publish-image:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [backend]
+    needs: [backend, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -110,16 +136,32 @@ jobs:
 
   required-checks:
     if: always()
-    needs: [backend, publish-image]
+    needs: [changes, backend, frontend, publish-image]
     runs-on: ubuntu-latest
     steps:
-      - name: Require successful backend checks and main image publication
+      - name: Require successful frontend and backend checks and main image publication
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          BACKEND_REQUIRED: ${{ needs.changes.outputs.backend }}
+          FRONTEND_REQUIRED: ${{ needs.changes.outputs.frontend }}
           BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
           IMAGE_RESULT: ${{ needs.publish-image.result }}
           CI_EVENT: ${{ github.event_name }}
         run: |
-          test "$BACKEND_RESULT" = success
+          test "$CHANGES_RESULT" = success
+          if [ "$BACKEND_REQUIRED" = true ]; then
+            test "$BACKEND_RESULT" = success
+          else
+            test "$BACKEND_REQUIRED" = false
+            test "$BACKEND_RESULT" = skipped
+          fi
+          if [ "$FRONTEND_REQUIRED" = true ]; then
+            test "$FRONTEND_RESULT" = success
+          else
+            test "$FRONTEND_REQUIRED" = false
+            test "$FRONTEND_RESULT" = skipped
+          fi
           if [ "$CI_EVENT" = push ]; then
             test "$IMAGE_RESULT" = success
           else
