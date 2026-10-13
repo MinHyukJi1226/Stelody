@@ -1260,8 +1260,7 @@
                 "FAILED",
                 "QUOTA_EXHAUSTED",
                 "TIMED_OUT"
-              ],
-              "maxLength": 200
+              ]
             }
           }
         ],
@@ -2254,14 +2253,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
+              "enum": ["REVIEW", "EXCLUDED", "DEFERRED"]
             }
           }
         ],
@@ -4226,17 +4218,7 @@
             "in": "query",
             "name": "cursor",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -4483,17 +4465,7 @@
             "in": "query",
             "name": "cursor",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           },
           {
             "description": "포함 여부를 확인할 곡 UUID. 생략하면 containsSong은 null입니다. 이용 불가 곡도 저장되어 있으면 true이며, 저장되지 않은 곡이나 존재하지 않는 UUID는 false입니다.",
@@ -4884,17 +4856,7 @@
             "in": "query",
             "name": "cursor",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -5723,33 +5685,13 @@
             "in": "query",
             "name": "code",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           },
           {
             "in": "query",
             "name": "error",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -5870,7 +5812,7 @@
     },
     "/api/v1/members": {
       "get": {
-        "description": "업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "description": "활동 중 멤버를 먼저, 졸업 멤버를 마지막에 표시합니다. 각 상태 내에서 기수·지정 표시 순서 오름차순(미지정은 데뷔일·이름·ID 순)입니다. 기수·표시 순서·데뷔일 미등록은 해당 그룹의 마지막입니다. 다음 페이지에는 nextCursor를 그대로 전달하며, 이전 이름순 커서는 400 INVALID_CATALOG_QUERY이므로 첫 페이지부터 다시 조회합니다.\n\n업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
         "operationId": "get_members",
         "parameters": [
           {
@@ -5900,17 +5842,7 @@
             "in": "query",
             "name": "cursor",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -5990,17 +5922,7 @@
             "in": "query",
             "name": "type",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string", "enum": ["ALL", "COVER", "ORIGINAL"] }
           },
           {
             "in": "query",
@@ -6015,14 +5937,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
+              "enum": ["LATEST", "RELEVANCE", "VIEWS"]
             }
           },
           {
@@ -6042,17 +5957,7 @@
             "in": "query",
             "name": "cursor",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {
@@ -6107,33 +6012,13 @@
             "in": "query",
             "name": "q",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string", "maxLength": 200 }
           },
           {
             "in": "query",
             "name": "type",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string", "enum": ["ALL", "COVER", "ORIGINAL"] }
           },
           {
             "description": "참여 멤버 ID. 중복을 제외하고 최대 20개입니다.",
@@ -6171,14 +6056,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
+              "enum": ["LATEST", "RELEVANCE", "VIEWS"]
             }
           },
           {
@@ -6198,34 +6076,14 @@
             "in": "query",
             "name": "mode",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string", "enum": ["BROWSE", "SEARCH"] }
           },
           {
             "description": "직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.",
             "in": "query",
             "name": "cursor",
             "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "RUNNING",
-                "SUCCEEDED",
-                "FAILED",
-                "QUOTA_EXHAUSTED",
-                "TIMED_OUT"
-              ],
-              "maxLength": 200
-            }
+            "schema": { "type": "string" }
           }
         ],
         "responses": {

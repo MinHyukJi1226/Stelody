@@ -1305,7 +1305,9 @@ export interface paths {
     }
     /**
      * 멤버 목록
-     * @description 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     * @description 활동 중 멤버를 먼저, 졸업 멤버를 마지막에 표시합니다. 각 상태 내에서 기수·지정 표시 순서 오름차순(미지정은 데뷔일·이름·ID 순)입니다. 기수·표시 순서·데뷔일 미등록은 해당 그룹의 마지막입니다. 다음 페이지에는 nextCursor를 그대로 전달하며, 이전 이름순 커서는 400 INVALID_CATALOG_QUERY이므로 첫 페이지부터 다시 조회합니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_members']
     put?: never
@@ -4572,8 +4574,7 @@ export interface operations {
         page?: number
         size?: number
         status?: 'PENDING' | 'IGNORED' | 'REGISTERED'
-        disposition?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        disposition?: 'REVIEW' | 'EXCLUDED' | 'DEFERRED'
       }
       header?: never
       path?: never
@@ -6277,8 +6278,7 @@ export interface operations {
       query?: {
         size?: number
         /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정의 최근 저장순 커서이며 size는 변경할 수 있습니다. 새 저장 항목은 첫 페이지를 새로 조회해 확인합니다. 잘못된 커서·다른 계정의 커서는 400 INVALID_FAVORITE_QUERY입니다. */
-        cursor?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        cursor?: string
       }
       header?: never
       path?: never
@@ -6526,8 +6526,7 @@ export interface operations {
       query?: {
         size?: number
         /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다. */
-        cursor?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        cursor?: string
         /** @description 포함 여부를 확인할 곡 UUID. 생략하면 containsSong은 null입니다. 이용 불가 곡도 저장되어 있으면 true이며, 저장되지 않은 곡이나 존재하지 않는 UUID는 false입니다. */
         songId?: string
       }
@@ -6889,8 +6888,7 @@ export interface operations {
       query?: {
         size?: number
         /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정·목록·version에 묶이며 size는 변경할 수 있습니다. 목록 변경 시 409 PLAYLIST_CHANGED이므로 첫 페이지부터 다시 조회합니다. */
-        cursor?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        cursor?: string
       }
       header?: never
       path: {
@@ -7701,10 +7699,8 @@ export interface operations {
     parameters: {
       query: {
         state: string
-        code?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
-        error?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        code?: string
+        error?: string
       }
       header?: never
       path?: never
@@ -7844,8 +7840,7 @@ export interface operations {
         status?: 'ALL' | 'ACTIVE' | 'GRADUATED'
         size?: number
         /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다. */
-        cursor?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        cursor?: string
       }
       header?: never
       path?: never
@@ -7907,16 +7902,13 @@ export interface operations {
   get_members_id_songs: {
     parameters: {
       query?: {
-        type?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        type?: 'ALL' | 'COVER' | 'ORIGINAL'
         collaboration?: boolean
         /** @description 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다. */
-        sort?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        sort?: 'LATEST' | 'RELEVANCE' | 'VIEWS'
         size?: number
         /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다. */
-        cursor?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        cursor?: string
       }
       header?: never
       path: {
@@ -7967,24 +7959,20 @@ export interface operations {
   get_songs: {
     parameters: {
       query?: {
-        q?: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
-        type?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        q?: string
+        type?: 'ALL' | 'COVER' | 'ORIGINAL'
         /** @description 참여 멤버 ID. 중복을 제외하고 최대 20개입니다. */
         memberIds?: string[]
         /** @description 대표 영상 공개일의 Asia/Seoul 기준 연도입니다. 전체 연도 선택지는 GET /api/v1/songs/years에서 조회합니다. */
         year?: number
         collaboration?: boolean
         /** @description 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다. */
-        sort?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        sort?: 'LATEST' | 'RELEVANCE' | 'VIEWS'
         size?: number
         /** @description 생략 시 q 미지정은 BROWSE, q 지정은 SEARCH입니다. BROWSE에 검색어는 지정할 수 없습니다. */
-        mode?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        mode?: 'BROWSE' | 'SEARCH'
         /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다. */
-        cursor?:
-          'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'QUOTA_EXHAUSTED' | 'TIMED_OUT'
+        cursor?: string
       }
       header?: never
       path?: never
