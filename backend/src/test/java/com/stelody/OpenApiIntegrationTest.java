@@ -80,6 +80,55 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void parameterConstraintsStayIsolated() throws Exception {
+    var api = contract();
+    for (var path : new String[] {"/api/v1/songs", "/api/v1/members/{id}/songs"}) {
+      var parameters = api.path("paths").path(path).path("get").path("parameters");
+      for (var parameter : parameters) {
+        var name = parameter.path("name").asText();
+        var schema = parameter.path("schema");
+        switch (name) {
+          case "q" -> {
+            assertThat(schema.path("type").asText()).isEqualTo("string");
+            assertThat(schema.has("enum")).isFalse();
+            assertThat(schema.path("maxLength").asInt()).isEqualTo(200);
+          }
+          case "type" -> assertParameterEnum(schema, "ALL", "COVER", "ORIGINAL");
+          case "sort" -> assertParameterEnum(schema, "LATEST", "RELEVANCE", "VIEWS");
+          case "mode" -> assertParameterEnum(schema, "BROWSE", "SEARCH");
+          default -> {}
+        }
+      }
+    }
+    api.path("paths")
+        .properties()
+        .forEach(
+            entry -> {
+              entry
+                  .getValue()
+                  .properties()
+                  .forEach(
+                      operation -> {
+                        for (var parameter : operation.getValue().path("parameters")) {
+                          var name = parameter.path("name").asText();
+                          if (name.equals("cursor") || entry.getKey().contains("callback")) {
+                            var schema = parameter.path("schema");
+                            assertThat(schema.path("type").asText())
+                                .as(entry.getKey() + " " + name)
+                                .isEqualTo("string");
+                            assertThat(schema.has("enum"))
+                                .as(entry.getKey() + " " + name)
+                                .isFalse();
+                            assertThat(schema.has("maxLength"))
+                                .as(entry.getKey() + " " + name)
+                                .isFalse();
+                          }
+                        }
+                      });
+            });
+  }
+
+  @Test
   void publicMemberRoutesAreNotClassifiedAsPersonalAccountRoutes() throws Exception {
     var api = contract();
     for (var path :
@@ -517,6 +566,13 @@ class OpenApiIntegrationTest {
         "YOUTUBE_CONNECTION_REQUIRED");
     assertThat(schemas.path("ApiProblem").at("/properties/code/description").asText())
         .contains("x-error-codes", "fieldErrors", "Job.errorCode", "새 코드");
+  }
+
+  private static void assertParameterEnum(JsonNode schema, String... values) {
+    assertThat(schema.path("type").asText()).isEqualTo("string");
+    assertThat(schema.path("enum").valueStream().map(JsonNode::asText).toList())
+        .containsExactly(values);
+    assertThat(schema.has("maxLength")).isFalse();
   }
 
   private static void assertEnum(JsonNode schema, String... values) {
