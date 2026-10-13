@@ -463,6 +463,9 @@ public class ApiDocumentationConfiguration {
   private static void queryConstraints(String path, Parameter parameter) {
     var schema = parameter.getSchema();
     if (schema == null) return;
+    // springdoc may share schemas across parameters; constrain an independent deep copy.
+    schema = io.swagger.v3.core.util.Json31.mapper().convertValue(schema, Schema.class);
+    parameter.setSchema(schema);
     if (parameter.getName().equals("kind") && path.contains("/collection-"))
       schema.setEnum(List.of("VIDEO", "DISCOVERY"));
     if (!"query".equals(parameter.getIn())) return;
