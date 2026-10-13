@@ -34,3 +34,5 @@ React와 TypeScript 기반의 웹 화면, Java와 Spring Boot 기반의 서버, 
 - `AGENTS.md`: 개발 절차, 커밋 및 브랜치 규칙
 
 실행·인증·API 연동·운영 안내는 [백엔드 README](backend/README.md)를 참고하세요.
+
+프론트 로컬 실행과 API 타입 생성·검증은 [프론트엔드 README](frontend/README.md)를 참고하세요.
