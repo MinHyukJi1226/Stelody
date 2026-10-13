@@ -16,7 +16,7 @@ import tempfile
 import uuid
 
 MAX_AGE = timedelta(days=7)
-SUPPORTED_SCHEMA_VERSIONS = (19, 20)
+SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22)
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
@@ -118,7 +118,8 @@ def create_backup(root, descriptor):
         raise OperationError('Connect as the app/session schema owner')
     version = sql("SELECT max(version::int) FROM app.flyway_schema_history WHERE success;")
     if version not in tuple(str(value) for value in SUPPORTED_SCHEMA_VERSIONS):
-        raise OperationError('This backup procedure is validated for schemas V19 and V20')
+        raise OperationError('Unsupported database schema; validated versions: ' +
+                             ', '.join(f'V{value}' for value in SUPPORTED_SCHEMA_VERSIONS))
     created = now()
     expires = created + MAX_AGE
     source_expiry = sql("""SELECT min(expires_at)::text FROM (

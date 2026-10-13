@@ -36,15 +36,28 @@ class BackupGuardsTest(unittest.TestCase):
         path.write_text(json.dumps(self.metadata))
         path.chmod(0o600)
 
-    def test_v19_and_v20_archives_remain_valid_but_unknown_schema_is_rejected(self):
-        for version in (19, 20):
+    def test_validated_archives_remain_valid_but_unknown_schema_is_rejected(self):
+        for version in (19, 20, 21, 22):
             self.metadata['schemaVersion'] = version
             self.save_manifest()
             self.assertEqual(version, backup.validate_archive(self.bundle)['schemaVersion'])
-        self.metadata['schemaVersion'] = 21
+        self.metadata['schemaVersion'] = 23
         self.save_manifest()
         with self.assertRaisesRegex(backup.OperationError, 'Unsupported backup format/schema'):
             backup.validate_archive(self.bundle)
+
+    def test_unvalidated_database_schema_rejected_before_dump(self):
+        with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner'}), \
+             patch.object(backup, 'sql', return_value='23'), patch.object(backup, 'run') as command:
+            with self.assertRaisesRegex(backup.OperationError, 'Unsupported database schema'):
+                backup.backup(self.root)
+            command.assert_not_called()
+
+    def test_latest_repository_migration_requires_backup_validation(self):
+        migrations = Path(__file__).resolve().parents[2] / 'backend/src/main/resources/db/migration'
+        latest = max(int(path.name.split('__')[0][1:]) for path in migrations.glob('V*__*.sql'))
+        self.assertIn(latest, backup.SUPPORTED_SCHEMA_VERSIONS,
+                      'Validate backup/restore and update supported schemas with every migration')
 
     def ledger(self, **overrides):
         timestamp = backup.now().isoformat()
