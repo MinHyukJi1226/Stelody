@@ -1,6 +1,6 @@
 # Stelody 프론트엔드
 
-React SPA의 실행·API 연동·검증 기반입니다. Figma 화면과 기능별 API 연동은 다음 작업에서 구현합니다.
+React SPA의 실행·API 연동·검증 기반과 라이트·다크 공통 UI입니다. 기능별 화면과 API 연동은 후속 작업에서 구현합니다.
 
 ## 로컬 실행
 
@@ -25,7 +25,16 @@ npm run dev
 - `src/test`: Vitest·React Testing Library·MSW 기반
 - `e2e`: Playwright 브라우저 검증
 
-Tailwind Vite 플러그인과 shadcn/ui의 `components.json`·경로 별칭을 준비했습니다. Figma 토큰, 실제 컴포넌트, 테마 전환은 공통 UI 작업에서 추가합니다. 폼·차트·드래그 패키지도 해당 기능을 시작할 때 추가합니다.
+Tailwind Vite 플러그인과 shadcn/ui의 `components.json`·경로 별칭을 준비했습니다. 공통 `Button`은 Radix Slot과 cva를 사용하며 링크에도 같은 스타일을 적용합니다. 폼·차트·드래그 패키지는 해당 기능을 시작할 때 추가합니다.
+
+## 공통 UI 진행 상태
+
+- 디자인 출처: [데스크톱 다크 헤더 38:6069](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-6069), [수정된 모바일 헤더 8:30](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=8-30), [UI KIT 7:2](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=7-2), [보관함 선택 버튼 17:3186](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=17-3186). MCP 한도 이후에는 사용자 승인에 따라 Figma 데스크톱 앱의 변수·레이어 속성·캔버스로 확인했습니다.
+- `Stelody · Color`와 `Stelody · Dark` 변수, Noto Sans KR 가변 폰트, 공통 버튼 변형, 입력의 기본·오류·비활성 상태, 키보드로 이동 가능한 탭을 적용했습니다.
+- 로고·해 아이콘은 Figma MCP 제공 에셋이며, 달 아이콘(75:9684)과 햄버거 버튼(165:10769)은 앱에서 SVG로 복사해 그대로 저장했습니다. 햄버거는 원본 SVG를 마스크로 사용해 테마별 ink 색상을 적용합니다. 에셋은 `src/shared/assets`에 보관합니다.
+- 모바일 헤더는 브랜드·테마·햄버거 버튼의 한 줄 구조입니다. 확인된 규격은 높이 93px, 여백 20px, 요소 간격 8px입니다. 햄버거 버튼은 테두리 없는 44×44px 터치 영역입니다. 메뉴의 닫힘·외부 클릭·Escape·포커스 복귀는 Radix Popover로 처리합니다. 모바일 메뉴 모듈은 해당 화면에서만 로드합니다.
+- 기본 테마는 시스템 설정을 따릅니다. 직접 선택한 값만 `stelody-theme`에 저장하며 저장소가 차단돼도 화면 전환은 가능합니다. 계정 데이터는 저장하지 않습니다.
+- 공통 헤더와 메뉴 이동, 본문 건너뛰기, 단일 main 영역을 구성했습니다. 검색·멤버·보관함·로그인 화면은 준비 중 상태입니다. 실제 계정 상태나 로그인 요청은 아직 연결하지 않았습니다.
 
 ## API 계약
 
@@ -58,4 +67,4 @@ npm run test:e2e
 
 CI는 기존 Backend CI에서 재사용 Frontend CI를 호출합니다. 최종 `required-checks`와 main 이미지 게시가 프론트 검증 성공도 요구합니다. 배포 방식과 프론트 배포 산출물 연결은 아직 변경하지 않았습니다.
 
-기본 앱 화면은 실행 확인용이며 Figma 메인 화면의 구현 결과가 아닙니다. 실제 Google·YouTube·관리자 계정 연동은 후속 기능에서 검증합니다.
+홈 본문은 실행 확인용이며 Figma 메인 화면의 구현 결과가 아닙니다. 실제 Google·YouTube·관리자 계정 연동은 후속 기능에서 검증합니다.
