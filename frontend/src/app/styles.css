@@ -1,14 +1,145 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/noto-sans-kr';
+
+/* Figma: Stelody · Color / Stelody · Dark / Stelody · Layout. */
+:root {
+  color-scheme: light;
+  --bg: #f7f8fc;
+  --surface: #fff;
+  --ink: #18213b;
+  --muted: #616a80;
+  --line: #dce1eb;
+  --brand: #6450d8;
+  --brand-fill: #6450d8;
+  --on-accent: #fff;
+  --tint: #efebff;
+  --night: #151d35;
+  --mint: #dcf5ed;
+  --green: #20755a;
+  --amber: #fff3d8;
+  --warning: #865a12;
+  --rose: #fce8ec;
+  --error: #b52b4a;
+  --blue: #dfeeff;
+  --subtle: #a7aec1;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #101320;
+  --surface: #1a2030;
+  --ink: #f2f3fb;
+  --muted: #b4bdd0;
+  --line: #354057;
+  --brand: #a897ff;
+  --brand-fill: #7560d9;
+  --tint: #2c2546;
+  --night: #0b0e18;
+  --mint: #173b32;
+  --green: #88ddbb;
+  --amber: #3b2f1c;
+  --warning: #f3c97a;
+  --rose: #422431;
+  --error: #ff9ab0;
+  --blue: #203347;
+  --subtle: #8290ac;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-fill: var(--brand-fill);
+  --color-on-accent: var(--on-accent);
+  --color-tint: var(--tint);
+  --color-night: var(--night);
+  --color-mint: var(--mint);
+  --color-green: var(--green);
+  --color-amber: var(--amber);
+  --color-warning: var(--warning);
+  --color-rose: var(--rose);
+  --color-error: var(--error);
+  --color-blue: var(--blue);
+  --color-subtle: var(--subtle);
+  --font-sans: 'Noto Sans KR Variable', system-ui, sans-serif;
+}
 
 @layer base {
   body {
     margin: 0;
-    font-family: system-ui, sans-serif;
-    background: #fff;
-    color: #171717;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--ink);
   }
   :focus-visible {
-    outline: 3px solid #4338ca;
+    outline: 3px solid var(--brand);
     outline-offset: 4px;
+  }
+}
+
+@layer components {
+  .site-header {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    padding: 24px;
+    background: var(--surface);
+  }
+  .site-brand {
+    flex: 1;
+  }
+  .site-nav {
+    display: flex;
+    gap: 32px;
+  }
+  .mobile-menu-trigger {
+    display: none;
+  }
+  .menu-icon {
+    mask: url('../shared/assets/hamburger.svg') center / contain no-repeat;
+  }
+  .mobile-menu {
+    width: min(240px, calc(100vw - 40px));
+  }
+  .page-content {
+    flex: 1;
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding: 48px clamp(24px, 8.333333vw, 120px);
+  }
+
+  /* Figma Header 8:30: 390 × 93, padding 20, gap 8. */
+  @media (width < 768px) {
+    .site-header {
+      min-height: 93px;
+      gap: 8px;
+      padding: 20px;
+    }
+    .desktop-nav {
+      display: none;
+    }
+    .mobile-menu-trigger {
+      display: inline-flex;
+    }
+    .page-content {
+      padding: 24px 20px 48px;
+    }
+  }
+  @media (width >= 768px) {
+    .mobile-menu {
+      display: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0s !important;
+      animation-duration: 0s !important;
+    }
   }
 }
