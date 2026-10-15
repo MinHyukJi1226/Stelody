@@ -21,16 +21,27 @@ export function LatestSongs() {
     >
       {query.isPending ? (
         <SongGridSkeleton />
-      ) : query.isError ? (
+      ) : query.isError && !query.data ? (
         <StatePanel
           title="노래를 불러오지 못했습니다"
           description="잠시 후 다시 시도해 주세요."
           onRetry={() => void query.refetch()}
         />
-      ) : query.data.items.length === 0 ? (
-        <StatePanel title="아직 공개된 노래가 없습니다" />
       ) : (
-        <SongGrid songs={query.data.items} />
+        <>
+          {query.data?.items.length ? (
+            <SongGrid songs={query.data.items} />
+          ) : (
+            <StatePanel title="아직 공개된 노래가 없습니다" />
+          )}
+          {query.isError && query.data && (
+            <StatePanel
+              title="최신곡을 갱신하지 못했습니다"
+              description="이전에 불러온 결과를 표시하고 있습니다."
+              onRetry={() => void query.refetch()}
+            />
+          )}
+        </>
       )}
     </HomeSection>
   )
