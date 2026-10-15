@@ -75,7 +75,9 @@ public class SongCursor {
                 query.collaboration(),
                 query.sort(),
                 query.emptySearch(),
-                query.requiredMember()));
+                query.requiredMember(),
+                query.startDate(),
+                query.endDate()));
     try {
       return HexFormat.of()
           .formatHex(
@@ -93,5 +95,11 @@ public class SongCursor {
       boolean collaboration,
       String sort,
       boolean emptySearch,
-      UUID requiredMember) {}
+      UUID requiredMember,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          java.time.LocalDate startDate,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          java.time.LocalDate endDate) {}
 }

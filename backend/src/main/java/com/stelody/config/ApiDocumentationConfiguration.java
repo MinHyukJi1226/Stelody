@@ -259,12 +259,16 @@ public class ApiDocumentationConfiguration {
                                         "INVALID_SIZE",
                                         "OUT_OF_RANGE",
                                         "DUPLICATE",
-                                        "INVALID_VALUE")))
+                                        "INVALID_VALUE",
+                                        "INVALID_DATE",
+                                        "DATE_OUT_OF_RANGE",
+                                        "INVALID_DATE_RANGE",
+                                        "CONFLICTING_FILTER")))
                         .addProperty(
                             "message", new StringSchema().description("입력값을 포함하지 않는 고정 안내 문구"))
                         .required(List.of("field", "code", "message")))
                 .description(
-                    "DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다."))
+                    "DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 날짜 검색은 INVALID_DATE: 형식·존재 오류, DATE_OUT_OF_RANGE: 연도 범위, INVALID_DATE_RANGE: 시작일·종료일 역전, CONFLICTING_FILTER: year와 날짜 범위 중복입니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다."))
         .addProperty("traceId", new StringSchema().format("uuid"))
         .required(List.of("type", "title", "status", "instance", "code", "fieldErrors", "traceId"));
   }
@@ -345,6 +349,12 @@ public class ApiDocumentationConfiguration {
     boolean songPage = path.equals("/api/v1/songs") || path.equals("/api/v1/members/{id}/songs");
     if (songPage) {
       errorCodes(operation, "400", "검색 조건·커서를 확인합니다.", "INVALID_CATALOG_QUERY");
+      if (path.equals("/api/v1/songs"))
+        errorCodes(
+            operation,
+            "400",
+            "날짜 범위는 totalCount와 모든 커서 페이지에 동일하게 적용됩니다. 날짜 형식·존재 오류: fieldErrors[].code=INVALID_DATE, 허용 연도 밖: DATE_OUT_OF_RANGE, 시작일>종료일: INVALID_DATE_RANGE(startDate·endDate), year와 범위 동시 사용: CONFLICTING_FILTER(year·지정 날짜 필드). fieldErrors[].field로 입력칸을 식별하며 입력값은 반환하지 않습니다. 기간 변경 후 기존 커서도 INVALID_CATALOG_QUERY입니다.",
+            "INVALID_CATALOG_QUERY");
       errorCodes(
           operation,
           "409",
@@ -494,6 +504,14 @@ public class ApiDocumentationConfiguration {
         schema.setMaximum(BigDecimal.valueOf(2100));
         parameter.setDescription(
             "대표 영상 공개일의 Asia/Seoul 기준 연도입니다. 전체 연도 선택지는 GET /api/v1/songs/years에서 조회합니다.");
+      }
+      case "startDate", "endDate" -> {
+        if (path.equals("/api/v1/songs")) {
+          schema.setFormat("date");
+          schema.setPattern("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+          parameter.setDescription(
+              "YYYY-MM-DD. 대표 영상 publishedAt의 Asia/Seoul 날짜 기준, 1900-01-01~2100-12-31. 시작일은 한국 시간 00:00 이상, 종료일은 다음날 00:00 미만으로 양 끝 날짜를 포함합니다. 한쪽만 지정할 수 있습니다. 둘 다 생략하면 기간 제한이 없습니다. year와 함께 지정하면 400 INVALID_CATALOG_QUERY입니다. 기간을 변경하면 이전 커서는 사용할 수 없습니다.");
+        }
       }
       case "q" -> schema.setMaxLength(200);
       case "type" -> {

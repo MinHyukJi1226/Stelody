@@ -20,7 +20,13 @@ public class CatalogExceptionHandler {
   @ExceptionHandler(CatalogException.class)
   void catalog(CatalogException exception, HttpServletRequest request, HttpServletResponse response)
       throws IOException {
-    problems.write(request, response, exception.status(), exception.code(), exception.getMessage());
+    problems.write(
+        request,
+        response,
+        exception.status(),
+        exception.code(),
+        exception.getMessage(),
+        exception.fieldErrors());
   }
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)

@@ -96,6 +96,9 @@ OpenAPI 파일은 Docker 실행 상태에서 `backend/`의 아래 명령으로 �
 <details>
 <summary>프론트 연동용 상태값 · 오류 코드</summary>
 
+곡 검색 `GET /api/v1/songs`는 선택 날짜 `startDate`·`endDate`(`YYYY-MM-DD`, 1900~2100)를 지원합니다. 대표 영상 공개일의 한국 날짜 기준으로 양 끝을 포함하며 한쪽만 지정할 수 있습니다. `year`와 함께 지정할 수 없습니다. 기간은 `totalCount`·커서에도 적용하며 기간을 바꾸면 커서를 버립니다. 잘못된 날짜는 400 `INVALID_CATALOG_QUERY`와 `fieldErrors`로 반환합니다(`INVALID_DATE`·`DATE_OUT_OF_RANGE`·`INVALID_DATE_RANGE`·`CONFLICTING_FILTER`).
+
+
 응답 필드의 가능한 값과 의미는 OpenAPI enum·description에 명시합니다. 콜라보는 곡 유형과 별도이며 검색 확인 상태와 사이트 공개 상태도 별도입니다.
 
 | 필드 | 값·의미 |

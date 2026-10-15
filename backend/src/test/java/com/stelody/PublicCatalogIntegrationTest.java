@@ -225,6 +225,108 @@ class PublicCatalogIntegrationTest {
     return mapper.readTree(response.getContentAsString());
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"LATEST", "RELEVANCE", "VIEWS"})
+  void dateRangeUsesRepresentativeVideoKoreanDatesAndCountAcrossPages(String sort)
+      throws Exception {
+    writer.update(
+        "UPDATE app.video SET published_at=?::timestamptz WHERE song_id=?",
+        "2025-08-31T14:59:59.999999Z",
+        S1);
+    writer.update(
+        "UPDATE app.video SET published_at=?::timestamptz WHERE song_id=?",
+        "2025-08-31T15:00:00Z",
+        S2);
+    writer.update(
+        "UPDATE app.video SET published_at=?::timestamptz WHERE song_id=?",
+        "2025-09-30T14:59:59.999999Z",
+        S3);
+    writer.update(
+        "UPDATE app.video SET published_at=?::timestamptz WHERE song_id=?",
+        "2025-09-30T15:00:00Z",
+        S4);
+    // A second upload must not affect the representative video's period or duplicate counts.
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,video_kind,availability,source_title,published_at) VALUES (?,?,'ZZZZZZZZZZZ','AUDIO','PUBLIC','Other upload','2025-09-15T00:00:00Z')",
+        id(9999),
+        S1);
+    var range = "/api/v1/songs?startDate=2025-09-01&endDate=2025-09-30&size=1&sort=" + sort;
+    var first = request(range);
+    assertThat(ids(first)).containsExactly(S3.toString());
+    assertThat(first.path("totalCount").asLong()).isEqualTo(2);
+    assertThat(first.path("hasNext").asBoolean()).isTrue();
+    var second =
+        mapper.readTree(
+            mvc.perform(get(range).param("cursor", first.path("nextCursor").asText()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(ids(second)).containsExactly(S2.toString());
+    assertThat(second.path("totalCount").asLong()).isEqualTo(2);
+    assertThat(second.path("hasNext").asBoolean()).isFalse();
+    for (var changed :
+        new String[] {
+          "startDate=2025-09-02&endDate=2025-09-30", "startDate=2025-09-01&endDate=2025-09-29", ""
+        })
+      mvc.perform(
+              get("/api/v1/songs?" + changed)
+                  .param("sort", sort)
+                  .param("cursor", first.path("nextCursor").asText()))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"));
+    assertThat(ids(request("/api/v1/songs?endDate=2025-08-31"))).containsExactly(S1.toString());
+    assertThat(ids(request("/api/v1/songs?startDate=2025-10-01"))).containsExactly(S4.toString());
+    assertThat(ids(request("/api/v1/songs?startDate=2025-09-01&endDate=2025-09-01")))
+        .containsExactly(S2.toString());
+    assertThat(request("/api/v1/songs").path("totalCount").asLong()).isEqualTo(4);
+    var filtered =
+        request(
+            "/api/v1/songs?startDate=2025-09-01&endDate=2025-09-30&q=sky&type=COVER&memberIds="
+                + M2
+                + "&sort=RELEVANCE");
+    assertThat(ids(filtered)).containsExactly(S2.toString());
+    assertThat(filtered.path("totalCount").asLong()).isEqualTo(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {"2025-02-29", "2025-13-01", "2025-9-01", "2025-09-01T00:00:00", "", "not-a-date"})
+  void rejectsInvalidDatesWithFieldErrors(String date) throws Exception {
+    for (var field : List.of("startDate", "endDate"))
+      mvc.perform(get("/api/v1/songs").param(field, date))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"))
+          .andExpect(jsonPath("$.fieldErrors[0].field").value(field))
+          .andExpect(jsonPath("$.fieldErrors[0].code").value("INVALID_DATE"))
+          .andExpect(jsonPath("$.fieldErrors[0].rejectedValue").doesNotExist());
+  }
+
+  @Test
+  void validatesDateBoundsConflictsAndLeapDates() throws Exception {
+    for (var field : List.of("startDate", "endDate")) {
+      for (var date : List.of("1899-12-31", "2101-01-01"))
+        mvc.perform(get("/api/v1/songs").param(field, date))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors[0].field").value(field))
+            .andExpect(jsonPath("$.fieldErrors[0].code").value("DATE_OUT_OF_RANGE"));
+      mvc.perform(get("/api/v1/songs").param(field, "2025-09-01").param("year", "2025"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.fieldErrors[1].field").value("year"))
+          .andExpect(jsonPath("$.fieldErrors[0].code").value("CONFLICTING_FILTER"))
+          .andExpect(jsonPath("$.fieldErrors[0].field").value(field));
+    }
+    mvc.perform(get("/api/v1/songs?startDate=2025-09-30&endDate=2025-09-01"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("INVALID_DATE_RANGE"))
+        .andExpect(jsonPath("$.fieldErrors[1].field").value("startDate"))
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("endDate"));
+    for (var range :
+        List.of(
+            "startDate=1900-01-01&endDate=2100-12-31", "startDate=2024-02-29&endDate=2024-02-29"))
+      mvc.perform(get("/api/v1/songs?" + range)).andExpect(status().isOk());
+  }
+
   @Test
   void trendingIsDisabledByDefaultWithoutLogin() throws Exception {
     var data = request("/api/v1/songs/trending");
