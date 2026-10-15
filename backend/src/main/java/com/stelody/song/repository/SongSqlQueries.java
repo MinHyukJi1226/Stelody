@@ -189,6 +189,14 @@ final class SongSqlQueries {
       params.put("start", Timestamp.from(query.yearStart()));
       params.put("end", Timestamp.from(query.yearEnd()));
     }
+    if (query.startDate() != null) {
+      sql.append(" AND s.published_at >= :rangeStart");
+      params.put("rangeStart", Timestamp.from(query.rangeStart()));
+    }
+    if (query.endDate() != null) {
+      sql.append(" AND s.published_at < :rangeEnd");
+      params.put("rangeEnd", Timestamp.from(query.rangeEndExclusive()));
+    }
     if (query.collaboration()) sql.append(" AND s.participant_count > 1");
   }
 

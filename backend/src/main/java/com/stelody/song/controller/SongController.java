@@ -26,13 +26,17 @@ public class SongController {
       @RequestParam(required = false) String type,
       @RequestParam(required = false) List<UUID> memberIds,
       @RequestParam(required = false) Integer year,
+      @RequestParam(required = false) String startDate,
+      @RequestParam(required = false) String endDate,
       @RequestParam(defaultValue = "false") boolean collaboration,
       @RequestParam(required = false) String sort,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String mode,
       @RequestParam(required = false) String cursor) {
     return songs.list(
-        SongQuery.create(q, type, memberIds, year, collaboration, sort, size, mode, null), cursor);
+        SongQuery.create(
+            q, type, memberIds, year, collaboration, sort, size, mode, null, startDate, endDate),
+        cursor);
   }
 
   @GetMapping("/api/v1/songs/{id}")

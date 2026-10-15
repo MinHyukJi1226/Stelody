@@ -80,6 +80,42 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsDateRangeAndValidationWithoutPollutingOtherParameters() throws Exception {
+    var api = contract();
+    assertThat(
+            api.at(
+                    "/components/schemas/ApiProblem/properties/fieldErrors/items/properties/code/enum")
+                .toString())
+        .contains("INVALID_DATE", "DATE_OUT_OF_RANGE", "INVALID_DATE_RANGE", "CONFLICTING_FILTER");
+    var operation = api.path("paths").path("/api/v1/songs").path("get");
+    var names = new java.util.ArrayList<String>();
+    for (var p : operation.path("parameters")) {
+      var name = p.path("name").asText();
+      if (name.equals("startDate") || name.equals("endDate")) {
+        names.add(name);
+        assertThat(p.path("required").asBoolean()).isFalse();
+        assertThat(p.at("/schema/type").asText()).isEqualTo("string");
+        assertThat(p.at("/schema/format").asText()).isEqualTo("date");
+        assertThat(p.path("schema").has("enum")).isFalse();
+        assertThat(p.path("description").asText())
+            .contains("Asia/Seoul", "1900", "2100", "year", "커서");
+      } else if (java.util.List.of("q", "cursor", "type", "sort", "mode").contains(name)) {
+        assertThat(p.path("schema").has("format")).isFalse();
+        assertThat(p.path("schema").has("pattern")).isFalse();
+      }
+    }
+    assertThat(names).containsExactlyInAnyOrder("startDate", "endDate");
+    assertThat(operation.at("/responses/400/description").asText())
+        .contains(
+            "INVALID_CATALOG_QUERY",
+            "INVALID_DATE",
+            "DATE_OUT_OF_RANGE",
+            "INVALID_DATE_RANGE",
+            "CONFLICTING_FILTER",
+            "totalCount");
+  }
+
+  @Test
   void parameterConstraintsStayIsolated() throws Exception {
     var api = contract();
     for (var path : new String[] {"/api/v1/songs", "/api/v1/members/{id}/songs"}) {
