@@ -227,6 +227,74 @@ class PublicCatalogIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"LATEST", "RELEVANCE", "VIEWS"})
+  void whitespaceAndCaseShareMatchingRankingCountsFiltersAndCursorPages(String sort)
+      throws Exception {
+    writer.update(
+        "UPDATE app.song_entry SET title='Milky Way',search_title='milky way' WHERE id=?", S1);
+    writer.update("INSERT INTO app.song_alias VALUES (?, '밀키 웨이', '밀키 웨이')", S1);
+    writer.update("INSERT INTO app.song_alias VALUES (?, 'MilkyWay', 'milkyway')", S1);
+    writer.update(
+        "UPDATE app.musical_work SET title='MILKY WAY',search_title='milky way' WHERE id=?", W1);
+    // Both title and alias match S1; shared original work also matches S2, without duplicates.
+    var first =
+        request(
+            "/api/v1/songs?q=Milky Way&sort="
+                + sort
+                + "&size=1&startDate=2026-01-01&endDate=2026-01-02&type=COVER&memberIds="
+                + M2);
+    assertThat(first.path("totalCount").asLong()).isEqualTo(2);
+    var compact =
+        request(
+            "/api/v1/songs?q=mILkYwAY&sort="
+                + sort
+                + "&size=1&startDate=2026-01-01&endDate=2026-01-02&type=COVER&memberIds="
+                + M2);
+    assertThat(ids(first)).isEqualTo(ids(compact));
+    var after =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs")
+                        .param("q", "m i L k Y w A y")
+                        .param("sort", sort)
+                        .param("size", "1")
+                        .param("startDate", "2026-01-01")
+                        .param("endDate", "2026-01-02")
+                        .param("type", "COVER")
+                        .param("memberIds", M2.toString())
+                        .param("cursor", first.path("nextCursor").asText()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(after.path("totalCount").asLong()).isEqualTo(2);
+    var all = new ArrayList<>(ids(first));
+    all.addAll(ids(after));
+    assertThat(all).containsExactlyInAnyOrder(S1.toString(), S2.toString()).doesNotHaveDuplicates();
+    assertThat(after.path("hasNext").asBoolean()).isFalse();
+    assertThat(ids(request("/api/v1/songs?q=밀키웨이"))).containsExactly(S1.toString());
+    assertThat(ids(request("/api/v1/songs?q=밀키　웨이"))).containsExactly(S1.toString());
+  }
+
+  @Test
+  void whitespaceInsensitiveSearchCoversWorkAliasesParticipantsAndTheirAliases() throws Exception {
+    writer.update("INSERT INTO app.work_alias VALUES (?, '점묘의 노래', '점묘의 노래')", W1);
+    writer.update("INSERT INTO app.member_alias VALUES (?, '가수 별칭', '가수 별칭')", M1);
+    writer.update("INSERT INTO app.artist_alias VALUES (?, '외부 별칭', '외부 별칭')", A1);
+    for (var term : List.of("점묘의노래", "점 묘 의 노 래"))
+      assertThat(ids(request("/api/v1/songs?q=" + term)))
+          .containsExactly(S2.toString(), S1.toString());
+    for (var term : List.of("가수Alpha", "가수ALPHA", "가수별칭", "외부Singer", "외부SINGER", "외부별칭")) {
+      var path = "/api/v1/songs?q=" + term;
+      assertThat(ids(request(path))).contains(S1.toString(), S3.toString()).doesNotHaveDuplicates();
+      assertThat(request(path).path("totalCount").asLong()).isEqualTo(ids(request(path)).size());
+    }
+    assertThat(request("/api/v1/songs?q=  ").path("totalCount").asLong()).isZero();
+    mvc.perform(get("/api/v1/songs").param("q", "a" + " ".repeat(200)))
+        .andExpect(status().isBadRequest());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"LATEST", "RELEVANCE", "VIEWS"})
   void dateRangeUsesRepresentativeVideoKoreanDatesAndCountAcrossPages(String sort)
       throws Exception {
     writer.update(

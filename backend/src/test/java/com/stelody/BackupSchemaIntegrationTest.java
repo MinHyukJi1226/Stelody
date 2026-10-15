@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22})
+  @ValueSource(ints = {19, 20, 21, 22, 23})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -144,6 +144,13 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 23)
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM pg_indexes WHERE schemaname='app' AND (indexname LIKE '%_compact_trgm_idx' OR indexname='song_search_compact_title_idx')",
+                  Integer.class))
+          .isEqualTo(9);
+
     assertThat(runtime.queryForList("SELECT * FROM app.member ORDER BY id")).isEqualTo(profiles);
     assertThat(runtime.queryForList("SELECT * FROM app.channel ORDER BY id")).isEqualTo(channels);
     for (String table :

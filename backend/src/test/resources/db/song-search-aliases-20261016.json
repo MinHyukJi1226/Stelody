@@ -1,0 +1,1740 @@
+[
+  {
+    "songId": "2bd06841-2164-56f0-9a5d-81d83a6bd1c1",
+    "title": "「Orange",
+    "newTitle": "「Orange",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "「Orange(オレンジ) / 4월은 너의 거짓말 ED」",
+      "オレンジ"
+    ],
+    "addAliases": [
+      "오렌지"
+    ]
+  },
+  {
+    "songId": "9029de9e-a17e-5c64-82fd-c798e7427d7d",
+    "title": "✧Alice in Musicland✧",
+    "newTitle": "✧Alice in Musicland✧",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "앨리스 인 뮤직랜드"
+    ]
+  },
+  {
+    "songId": "fd3cfe7c-1406-5077-83ac-fd1023bc8269",
+    "title": "Acacia",
+    "newTitle": "Acacia",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "아카시아"
+    ]
+  },
+  {
+    "songId": "52cc49ed-b0eb-55f1-bfd5-3d1917d2de36",
+    "title": "ADDICT!ON",
+    "newTitle": "ADDICT!ON",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "애딕션"
+    ]
+  },
+  {
+    "songId": "f58aa78b-1d5d-5831-bfac-bc17eebda9fc",
+    "title": "AIZO",
+    "newTitle": "AIZO",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "아이조"
+    ]
+  },
+  {
+    "songId": "37177d5f-32a8-53dc-bf36-c4d0788ddc54",
+    "title": "Alive 2",
+    "newTitle": "Alive 2",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "4k"
+    ],
+    "addAliases": [
+      "얼라이브 2"
+    ]
+  },
+  {
+    "songId": "ed81e33b-a74f-55ad-936c-dc52e3256692",
+    "title": "All I Want For Christmas Is You",
+    "newTitle": "All I Want For Christmas Is You",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "올 아이 원트 포 크리스마스 이즈 유"
+    ]
+  },
+  {
+    "songId": "57d22e16-eb34-5b89-bd82-3e458040725a",
+    "title": "APT.",
+    "newTitle": "APT.",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "아파트"
+    ]
+  },
+  {
+    "songId": "f6cf73da-70a7-5c61-b7d5-712193c0b8be",
+    "title": "BE SOMEBODY",
+    "newTitle": "BE SOMEBODY",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "비 섬바디"
+    ]
+  },
+  {
+    "songId": "07e3dde1-3c86-5b21-8978-b40d6c812023",
+    "title": "Beyond the way",
+    "newTitle": "Beyond the way",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "비욘드 더 웨이"
+    ]
+  },
+  {
+    "songId": "989658fa-c433-572c-95ee-41d4757c6827",
+    "title": "BLACKHOLE",
+    "newTitle": "BLACKHOLE",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "블랙홀"
+    ]
+  },
+  {
+    "songId": "00b4670f-1f64-56dd-bf6b-a9644c0a6498",
+    "title": "Booo!",
+    "newTitle": "Booo!",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "부"
+    ]
+  },
+  {
+    "songId": "eac7f21e-74c0-50e3-bf04-a4cb2fbbfd3d",
+    "title": "Born To Run",
+    "newTitle": "Born To Run",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "본 투 런"
+    ]
+  },
+  {
+    "songId": "2fe93abd-5cb5-50c5-9119-7c2d959a8722",
+    "title": "BOW AND ARROW",
+    "newTitle": "BOW AND ARROW",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "보우 앤 애로우"
+    ]
+  },
+  {
+    "songId": "99a0bf97-4547-5ef3-9f54-bd245c32e269",
+    "title": "Bunny Girl",
+    "newTitle": "Bunny Girl",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "버니 걸"
+    ]
+  },
+  {
+    "songId": "5cd58c84-606a-5252-97e7-bd900bac66ef",
+    "title": "CHEWING LUV",
+    "newTitle": "CHEWING LUV",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "츄잉 러브"
+    ]
+  },
+  {
+    "songId": "fe472fc8-366b-528f-8124-54995f916ed9",
+    "title": "chocolate box",
+    "newTitle": "chocolate box",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "초콜릿 박스"
+    ]
+  },
+  {
+    "songId": "def0153d-39d1-596d-b555-08c54cdfbe88",
+    "title": "Colorful Tempo",
+    "newTitle": "Colorful Tempo",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "명조 OST"
+    ],
+    "addAliases": [
+      "컬러풀 템포"
+    ]
+  },
+  {
+    "songId": "5e6b34a9-9afe-55c4-be13-8b19246e366f",
+    "title": "Confrontation",
+    "newTitle": "Confrontation",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "4k"
+    ],
+    "addAliases": [
+      "컨프런테이션"
+    ]
+  },
+  {
+    "songId": "f5cd3ba9-bf58-5de5-b2d5-b194a0b7aed3",
+    "title": "Dance The Night Away",
+    "newTitle": "Dance The Night Away",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "댄스 더 나이트 어웨이"
+    ]
+  },
+  {
+    "songId": "f480e49b-2ed7-5b6a-9080-57b6acdc60cf",
+    "title": "DAYBREAK FRONTLINE",
+    "newTitle": "DAYBREAK FRONTLINE",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "데이브레이크 프론트라인"
+    ]
+  },
+  {
+    "songId": "d305ed8c-aebe-5453-a590-0309ddaab043",
+    "title": "Dear my fairy",
+    "newTitle": "Dear my fairy",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "디어 마이 페어리"
+    ]
+  },
+  {
+    "songId": "281e6e3a-2527-5b9f-935d-2d0614142c13",
+    "title": "Deja vu",
+    "newTitle": "Deja vu",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "데자뷔"
+    ]
+  },
+  {
+    "songId": "de6e3d44-3c43-5271-af5e-bc624f9c23db",
+    "title": "drivers license",
+    "newTitle": "drivers license",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "드라이버스 라이선스"
+    ]
+  },
+  {
+    "songId": "986777b6-4f81-5912-a1ac-5e89983ca954",
+    "title": "Drowning",
+    "newTitle": "Drowning",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "드라우닝"
+    ]
+  },
+  {
+    "songId": "baf9b044-997e-5665-b9ab-d2a855eae294",
+    "title": "Dynamite",
+    "newTitle": "Dynamite",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "다이너마이트"
+    ]
+  },
+  {
+    "songId": "4aaa152d-afe7-5bd6-8b13-52de9d4e1e2c",
+    "title": "Dynamite",
+    "newTitle": "Dynamite",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "다이너마이트"
+    ]
+  },
+  {
+    "songId": "81c9c5c0-d977-5c39-84f6-6adb88796634",
+    "title": "Enemy",
+    "newTitle": "Enemy",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "에너미"
+    ]
+  },
+  {
+    "songId": "6543f0c0-84ef-5523-8c5c-ea7421ddc771",
+    "title": "Enemy",
+    "newTitle": "Enemy",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "에너미"
+    ]
+  },
+  {
+    "songId": "8b6fd4fa-7f80-553d-a415-88bd0ed5c15c",
+    "title": "Festa!",
+    "newTitle": "Festa!",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "페스타"
+    ]
+  },
+  {
+    "songId": "e39ba223-c019-5676-abc0-d278db99b4e7",
+    "title": "Frozen Eclipse",
+    "newTitle": "Frozen Eclipse",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "프로즌 이클립스"
+    ]
+  },
+  {
+    "songId": "70bbc22a-9a5a-5d86-b86e-24bf80e7fd62",
+    "title": "GETCHA!",
+    "newTitle": "GETCHA!",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "겟챠"
+    ]
+  },
+  {
+    "songId": "3d358493-b4e6-540b-b432-5fe85ab1fdbd",
+    "title": "Golden",
+    "newTitle": "Golden",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Golden (KPop Demon Hunters)",
+      "KPop Demon Hunters"
+    ],
+    "addAliases": [
+      "골든"
+    ]
+  },
+  {
+    "songId": "91045dc0-060d-5bfd-ac72-b077cc0d1c1b",
+    "title": "Grand Escape",
+    "newTitle": "Grand Escape",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "그랜드 이스케이프"
+    ]
+  },
+  {
+    "songId": "0cb5cd5e-4457-5fb9-8bf0-3ae6b821517b",
+    "title": "Healer",
+    "newTitle": "Healer",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "힐러"
+    ]
+  },
+  {
+    "songId": "1f82ab94-913d-5b69-ad1e-fd8a2b1b0ce4",
+    "title": "Henceforth",
+    "newTitle": "Henceforth",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "헨스포스"
+    ]
+  },
+  {
+    "songId": "23ab1efa-7747-515e-a4d3-4e3ab000b67d",
+    "title": "Henceforth",
+    "newTitle": "Henceforth",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "헨스포스"
+    ]
+  },
+  {
+    "songId": "cffb39cf-6e63-522d-8ae3-e5b451e29c1c",
+    "title": "HERO",
+    "newTitle": "HERO",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "히어로"
+    ]
+  },
+  {
+    "songId": "1d05ff16-bc44-5c0b-8a17-f53a9e061433",
+    "title": "High Hopes",
+    "newTitle": "High Hopes",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "하이 호프스"
+    ]
+  },
+  {
+    "songId": "1077c6ea-9ef5-511e-a029-96beb08d38b0",
+    "title": "Hit On Shot",
+    "newTitle": "Hit On Shot",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "히트 온 샷"
+    ]
+  },
+  {
+    "songId": "7d56f1a4-8c2e-58b4-ad42-2bf8c5f18690",
+    "title": "Hollowness",
+    "newTitle": "Hollowness",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "홀로니스"
+    ]
+  },
+  {
+    "songId": "a4a78d75-0b01-5111-a325-57eaed2ef84c",
+    "title": "Hush Trap",
+    "newTitle": "Hush Trap",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "허쉬 트랩"
+    ]
+  },
+  {
+    "songId": "16f97403-e975-5962-b1fa-055e9da964b0",
+    "title": "I Really Want to Stay At Your House",
+    "newTitle": "I Really Want to Stay At Your House",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "아이 리얼리 원트 투 스테이 앳 유어 하우스"
+    ]
+  },
+  {
+    "songId": "8a0ac50a-6f53-5497-b214-40c62da09ab3",
+    "title": "IRIS OUT",
+    "newTitle": "IRIS OUT",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "IRIS OUT(アイリスアウト)",
+      "アイリスアウト"
+    ],
+    "addAliases": [
+      "아이리스 아웃"
+    ]
+  },
+  {
+    "songId": "591fb4a2-6131-5114-9c17-f2513d89c490",
+    "title": "IRIS OUT",
+    "newTitle": "IRIS OUT",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "IRIS OUT(アイリスアウト)",
+      "アイリスアウト"
+    ],
+    "addAliases": [
+      "아이리스 아웃"
+    ]
+  },
+  {
+    "songId": "8a7c6f13-b6bb-5077-84cd-32973b2521f4",
+    "title": "J-POP Mashup!",
+    "newTitle": "J-POP Mashup!",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "제이팝 매시업",
+      "제이팝 매쉬업"
+    ]
+  },
+  {
+    "songId": "37b383c9-88d7-5901-8f19-b58641592c66",
+    "title": "JANE DOE",
+    "newTitle": "JANE DOE",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "제인 도"
+    ]
+  },
+  {
+    "songId": "fac9d405-3e66-5496-850b-505d9e9ff9c9",
+    "title": "JANE DOE",
+    "newTitle": "JANE DOE",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "제인 도"
+    ]
+  },
+  {
+    "songId": "c7b3c3e0-cf5a-5160-9c0e-6b0caf9b862f",
+    "title": "Joker",
+    "newTitle": "Joker",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "조커"
+    ]
+  },
+  {
+    "songId": "177c65a6-768a-5c1a-956f-beed7ecf2607",
+    "title": "KICK BACK",
+    "newTitle": "KICK BACK",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "킥 백"
+    ]
+  },
+  {
+    "songId": "2133aa04-057f-5d69-b7dc-f47f3df6c91e",
+    "title": "KING",
+    "newTitle": "KING",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "킹"
+    ]
+  },
+  {
+    "songId": "8295917c-90e8-5635-a249-975a1ae4ba4a",
+    "title": "LADY",
+    "newTitle": "LADY",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "레이디"
+    ]
+  },
+  {
+    "songId": "4efdfe94-6a67-5e32-addb-119727532079",
+    "title": "LADY",
+    "newTitle": "LADY",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "米津玄師"
+    ],
+    "addAliases": [
+      "레이디"
+    ]
+  },
+  {
+    "songId": "71a3fd7e-ae6d-5f82-a5fc-74d79e2ab533",
+    "title": "LADY",
+    "newTitle": "LADY",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "요네즈 켄시",
+      "Arahashi Tabi"
+    ],
+    "addAliases": [
+      "레이디"
+    ]
+  },
+  {
+    "songId": "cd47080d-5dee-5abe-9561-916cbae3c3ad",
+    "title": "Land of Lola",
+    "newTitle": "Land of Lola",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "4k"
+    ],
+    "addAliases": [
+      "랜드 오브 롤라"
+    ]
+  },
+  {
+    "songId": "910a51a8-8c03-5580-9ed6-b24e5eebe505",
+    "title": "LAST STARDUST",
+    "newTitle": "LAST STARDUST",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "라스트 스타더스트"
+    ]
+  },
+  {
+    "songId": "4fe93bcd-abfb-50f5-a694-94001cc88ba9",
+    "title": "Leo",
+    "newTitle": "Leo",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Leo (レオ)",
+      "レオ"
+    ],
+    "addAliases": [
+      "레오"
+    ]
+  },
+  {
+    "songId": "d8798294-a357-5bf4-a119-7f3c1d93f0b6",
+    "title": "Lilac",
+    "newTitle": "Lilac",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Lilac (ライラック)",
+      "ライラック"
+    ],
+    "addAliases": [
+      "라일락"
+    ]
+  },
+  {
+    "songId": "14b8c85a-a83e-5040-a152-5cbb86ff3f08",
+    "title": "Lonely Universe",
+    "newTitle": "Lonely Universe",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Lonely Universe(ロンリーユニバース)",
+      "ロンリーユニバース"
+    ],
+    "addAliases": [
+      "론리 유니버스"
+    ]
+  },
+  {
+    "songId": "a422c169-55c7-48c7-9f35-5d6bbcee5ca8",
+    "title": "Loop in June",
+    "newTitle": "Loop in June",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "루프 인 준"
+    ]
+  },
+  {
+    "songId": "d230a2a5-f0c1-5dd4-9b66-85b9afa8410d",
+    "title": "Love wins all",
+    "newTitle": "Love wins all",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "러브 윈즈 올"
+    ]
+  },
+  {
+    "songId": "faaf304b-9c76-5259-befb-265664ee4cfa",
+    "title": "Loveit?",
+    "newTitle": "Loveit?",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "러빗"
+    ]
+  },
+  {
+    "songId": "8950bb6c-4b04-58e0-ac54-01c425e68a53",
+    "title": "Maid My Way",
+    "newTitle": "Maid My Way",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "메이드 마이 웨이"
+    ]
+  },
+  {
+    "songId": "426d2c7c-8ff7-5f5a-a7a7-3ae2e5e57625",
+    "title": "Mela!",
+    "newTitle": "Mela!",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "멜라"
+    ]
+  },
+  {
+    "songId": "984599cf-bb36-56fb-b5f2-7a390eb35163",
+    "title": "Mela!",
+    "newTitle": "Mela!",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "緑黄色社会"
+    ],
+    "addAliases": [
+      "멜라"
+    ]
+  },
+  {
+    "songId": "83e51643-cbcb-5013-b031-8c45272a8b40",
+    "title": "Melt",
+    "newTitle": "Melt",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "メルト/supercell "
+    ],
+    "addAliases": [
+      "멜트"
+    ]
+  },
+  {
+    "songId": "6da7c60b-e7bf-5889-a7d3-bb903f217ec0",
+    "title": "Melt",
+    "newTitle": "Melt",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "멜트"
+    ]
+  },
+  {
+    "songId": "8d760e04-57b5-5c57-88f6-dd8c63309903",
+    "title": "Melt",
+    "newTitle": "Melt",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Melt(メルト)",
+      "メルト"
+    ],
+    "addAliases": [
+      "멜트"
+    ]
+  },
+  {
+    "songId": "785741b0-c8c3-511a-8d24-490c5602b915",
+    "title": "Melt CPK! Remix",
+    "newTitle": "Melt CPK! Remix",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "멜트 CPK 리믹스",
+      "멜트 씨피케이 리믹스"
+    ]
+  },
+  {
+    "songId": "9d51cb87-b651-5674-acfa-b453bff6bdca",
+    "title": "Milky Way",
+    "newTitle": "Milky Way",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "밀키 웨이"
+    ]
+  },
+  {
+    "songId": "74ea7bd0-a66b-54e9-ad1b-ea5dec4d45c0",
+    "title": "mosi mosi?",
+    "newTitle": "mosi mosi?",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "모시모시"
+    ]
+  },
+  {
+    "songId": "887bfbdb-1d9a-54e9-9c81-e35e3d96634a",
+    "title": "No title",
+    "newTitle": "No title",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "노 타이틀"
+    ]
+  },
+  {
+    "songId": "d53d6640-0e78-5ad8-8af9-70500a3b9ea2",
+    "title": "Number one rockstar",
+    "newTitle": "Number one rockstar",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "넘버 원 록스타"
+    ]
+  },
+  {
+    "songId": "b7fc73bb-2766-5429-90e5-b6910f261269",
+    "title": "Oddloop",
+    "newTitle": "Oddloop",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Oddloop",
+      "FREDERIC"
+    ],
+    "addAliases": [
+      "오드루프",
+      "오도루프"
+    ]
+  },
+  {
+    "songId": "c785fe98-a188-54dc-a232-100fd50bdeae",
+    "title": "Oh...",
+    "newTitle": "Oh...",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "오"
+    ]
+  },
+  {
+    "songId": "d361e352-c4cd-55dc-9a12-6379b7865125",
+    "title": "One Last Kiss",
+    "newTitle": "One Last Kiss",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "원 라스트 키스"
+    ]
+  },
+  {
+    "songId": "8fc45d60-d1a7-5f05-a52b-14d4d15c407a",
+    "title": "Orange",
+    "newTitle": "Orange",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Orange(オレンジ)",
+      "オレンジ"
+    ],
+    "addAliases": [
+      "오렌지"
+    ]
+  },
+  {
+    "songId": "43219a7b-61d7-5dce-8980-6b5c938fa0dc",
+    "title": "orion",
+    "newTitle": "orion",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "오리온"
+    ]
+  },
+  {
+    "songId": "48eda3b4-16da-5711-9a95-c32896badfa8",
+    "title": "Our Tales",
+    "newTitle": "Our Tales",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "아워 테일즈"
+    ]
+  },
+  {
+    "songId": "2ff91630-0da1-5545-9b23-6cb4f76f7008",
+    "title": "Overdose",
+    "newTitle": "Overdose",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "오버도즈"
+    ]
+  },
+  {
+    "songId": "322bc493-278a-5ea8-b71a-a1fafcab170e",
+    "title": "Pale",
+    "newTitle": "Pale",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "페일"
+    ]
+  },
+  {
+    "songId": "6abeed4a-773f-55f2-8b37-0e1d6178f349",
+    "title": "POP IN 2",
+    "newTitle": "POP IN 2",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "POP IN 2 (최애의 아이 OST)"
+    ],
+    "addAliases": [
+      "팝 인 투"
+    ]
+  },
+  {
+    "songId": "4b15b976-542f-5d96-a4fd-944ac1e3158c",
+    "title": "POP/STARS",
+    "newTitle": "POP/STARS",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "네리사 레이븐크로프트"
+    ],
+    "addAliases": [
+      "팝스타",
+      "팝 스타즈"
+    ]
+  },
+  {
+    "songId": "1469df4b-b62e-55bc-9c4a-cd7f45bc1b12",
+    "title": "RAIN",
+    "newTitle": "RAIN",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "레인"
+    ]
+  },
+  {
+    "songId": "ae6775e8-c767-5201-b971-11c60e7353aa",
+    "title": "ray",
+    "newTitle": "ray",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "레이"
+    ]
+  },
+  {
+    "songId": "7923b72b-7cce-5936-a8b8-0be62d2dfdf7",
+    "title": "Ready to Fire!",
+    "newTitle": "Ready to Fire!",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "World of Tanks"
+    ],
+    "addAliases": [
+      "레디 투 파이어"
+    ]
+  },
+  {
+    "songId": "9cf62a7f-8e4d-579e-896b-8cfcb58af963",
+    "title": "Ref:rain",
+    "newTitle": "Ref:rain",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "레프 레인",
+      "레프레인"
+    ]
+  },
+  {
+    "songId": "8548105e-deec-5177-bcae-125838a26321",
+    "title": "Rumor ルーマー",
+    "newTitle": "Rumor ルーマー",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "루머"
+    ]
+  },
+  {
+    "songId": "2e55612b-c30b-5edd-b9aa-448e6f1e4967",
+    "title": "Sabotage",
+    "newTitle": "Sabotage",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "사보타주"
+    ]
+  },
+  {
+    "songId": "1ecc25d7-eb6f-50c7-8a5c-d4a6b363f762",
+    "title": "SEKAI",
+    "newTitle": "SEKAI",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "SEKAI"
+    ],
+    "addAliases": [
+      "세카이",
+      "세계"
+    ]
+  },
+  {
+    "songId": "6a12d592-41be-546d-a153-1946e3abb447",
+    "title": "SODA POP",
+    "newTitle": "SODA POP",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "소다 팝"
+    ]
+  },
+  {
+    "songId": "b940e939-7123-55c9-b23c-a4b188ec0f41",
+    "title": "SOS",
+    "newTitle": "SOS",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "에스오에스"
+    ]
+  },
+  {
+    "songId": "8273bc10-856e-5748-af8a-3023e9fe2a00",
+    "title": "SPECIALZ",
+    "newTitle": "SPECIALZ",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "스페셜즈"
+    ]
+  },
+  {
+    "songId": "b1b016de-8a16-5661-9a13-b9b8a9d356b2",
+    "title": "Stand By You",
+    "newTitle": "Stand By You",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "스탠드 바이 유"
+    ]
+  },
+  {
+    "songId": "bf8e0cd9-cc1c-5702-b520-13db2e9b2aad",
+    "title": "STAR TRAIL",
+    "newTitle": "STAR TRAIL",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "STAR TRAIL (스타트레일)",
+      "스타트레일"
+    ],
+    "addAliases": [
+      "스타 트레일"
+    ]
+  },
+  {
+    "songId": "1602f9c9-bf53-533c-b2f2-41a95624e10f",
+    "title": "STAR WALKIN'",
+    "newTitle": "STAR WALKIN'",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Live cover"
+    ],
+    "addAliases": [
+      "스타 워킨"
+    ]
+  },
+  {
+    "songId": "60bef374-4f1c-56a3-a874-10568516fb57",
+    "title": "Starry Way",
+    "newTitle": "Starry Way",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "스타리 웨이"
+    ]
+  },
+  {
+    "songId": "f33a94bf-ae48-52d7-a18f-c17c61761528",
+    "title": "Stars Align",
+    "newTitle": "Stars Align",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "스타즈 얼라인"
+    ]
+  },
+  {
+    "songId": "5e0f1ddb-de3b-58a6-a57a-e9adbdde4196",
+    "title": "StaRt",
+    "newTitle": "StaRt",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Mrs. GREEN APPLE "
+    ],
+    "addAliases": [
+      "스타트"
+    ]
+  },
+  {
+    "songId": "d160380b-edca-504c-9f93-d6404710dba1",
+    "title": "STAY",
+    "newTitle": "STAY",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "스테이"
+    ]
+  },
+  {
+    "songId": "793c2736-282c-51f9-a734-72adda3c8347",
+    "title": "Stellar Stellar",
+    "newTitle": "Stellar Stellar",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "스텔라 스텔라"
+    ]
+  },
+  {
+    "songId": "8aa04f91-40e7-5be1-9b76-5c6d7539c86f",
+    "title": "Stranger",
+    "newTitle": "Stranger",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "스트레인저"
+    ]
+  },
+  {
+    "songId": "7624f024-0a9d-5180-ab65-b0ae77e304c9",
+    "title": "Summer",
+    "newTitle": "Summer",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "서머",
+      "썸머"
+    ]
+  },
+  {
+    "songId": "0be8ae5c-583b-528d-ad31-ae9f9d121556",
+    "title": "Summertime",
+    "newTitle": "Summertime",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "서머타임",
+      "썸머타임"
+    ]
+  },
+  {
+    "songId": "2c0c32de-8c40-54d5-931e-c3062a4bed1e",
+    "title": "Summertime",
+    "newTitle": "Summertime",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "서머타임",
+      "썸머타임"
+    ]
+  },
+  {
+    "songId": "e07a5f26-6f43-5031-b8bb-c98f91927d75",
+    "title": "SUPADOPA",
+    "newTitle": "SUPADOPA",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "수파도파"
+    ]
+  },
+  {
+    "songId": "5cbc8b7d-9b19-5de1-98af-da380d5043bb",
+    "title": "SUPERPOWER (Arrange Ver.)",
+    "newTitle": "SUPERPOWER (Arrange Ver.)",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "SUPERPOWER"
+    ],
+    "addAliases": [
+      "슈퍼파워",
+      "슈퍼파워 어레인지 버전"
+    ]
+  },
+  {
+    "songId": "fcd6f349-96c4-55fb-9175-99112e1c82dd",
+    "title": "Surges",
+    "newTitle": "Surges",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "서지스"
+    ]
+  },
+  {
+    "songId": "418d3c18-6e76-5f51-ace4-1eb403992396",
+    "title": "Sweet Dreams, My Dear",
+    "newTitle": "Sweet Dreams, My Dear",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Sweet Dreams, My Dear(Lost Ark)"
+    ],
+    "addAliases": [
+      "스위트 드림스 마이 디어"
+    ]
+  },
+  {
+    "songId": "93da3d32-438a-53f7-ab61-758571e1b70f",
+    "title": "Tell Your World",
+    "newTitle": "Tell Your World",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "텔 유어 월드"
+    ]
+  },
+  {
+    "songId": "d5483362-effd-5a36-a6ec-d3930ec6612c",
+    "title": "That's Right Frank!",
+    "newTitle": "That's Right Frank!",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "댓츠 라이트 프랭크"
+    ]
+  },
+  {
+    "songId": "1ed799c8-7a9e-5b6b-a048-4421d3839a29",
+    "title": "To You, My Light",
+    "newTitle": "To You, My Light",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "투 유 마이 라이트"
+    ]
+  },
+  {
+    "songId": "b9230986-c5f7-5c21-9f05-4245991d103f",
+    "title": "To. X",
+    "newTitle": "To. X",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "투 엑스"
+    ]
+  },
+  {
+    "songId": "9adcb709-3cbf-5564-a846-0af76f4f39a9",
+    "title": "TOMBOY",
+    "newTitle": "TOMBOY",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "톰보이"
+    ]
+  },
+  {
+    "songId": "7451dba9-8305-5bff-8582-a7e5de4ec5f5",
+    "title": "Twinkle",
+    "newTitle": "Twinkle",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "트윙클"
+    ]
+  },
+  {
+    "songId": "b7b0180c-e4c3-5619-9827-89cdf29f13d4",
+    "title": "Unbreakable Sphere",
+    "newTitle": "Unbreakable Sphere",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "언브레이커블 스피어"
+    ]
+  },
+  {
+    "songId": "02f55416-243e-5d68-9a9d-ee388ac35897",
+    "title": "UNDEAD",
+    "newTitle": "UNDEAD",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "언데드"
+    ]
+  },
+  {
+    "songId": "41d44a78-9934-5f8a-a2c5-e34d4113b444",
+    "title": "Universe",
+    "newTitle": "Universe",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "유니버스"
+    ]
+  },
+  {
+    "songId": "cc52a8c5-30d7-5635-b0b7-cef86a592570",
+    "title": "Viva La Vida",
+    "newTitle": "Viva La Vida",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "비바 라 비다"
+    ]
+  },
+  {
+    "songId": "ea9a88c2-ebe8-58d0-a30c-36f176c52ac0",
+    "title": "W/X/Y",
+    "newTitle": "W/X/Y",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "더블유 엑스 와이"
+    ]
+  },
+  {
+    "songId": "18186603-92c5-583a-b7ed-c77ab4e33238",
+    "title": "Ｗ●ＲＫ",
+    "newTitle": "Ｗ●ＲＫ",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "워크"
+    ]
+  },
+  {
+    "songId": "3bddfc8b-100c-5e67-89c1-e3ddd5ffdea3",
+    "title": "Yin and Yang",
+    "newTitle": "Yin and Yang",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "인 앤 양",
+      "음과 양"
+    ]
+  },
+  {
+    "songId": "571e2add-283a-54e3-ac93-abf5bf4b8eb7",
+    "title": "괴수의 꽃노래",
+    "newTitle": "괴수의 꽃노래",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "카이쥬노 하나우타"
+    ]
+  },
+  {
+    "songId": "5145fcec-309e-5f31-96cd-ba7385ef4593",
+    "title": "괴수의 꽃노래",
+    "newTitle": "괴수의 꽃노래",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "카이쥬노 하나우타"
+    ]
+  },
+  {
+    "songId": "77c9233f-7bce-5074-8e26-fd95e6c6f156",
+    "title": "괴수의 꽃노래",
+    "newTitle": "괴수의 꽃노래",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "카이쥬노 하나우타"
+    ]
+  },
+  {
+    "songId": "799fc23f-657e-5d8c-9f72-f2af3cb7c000",
+    "title": "굿바이 선언",
+    "newTitle": "굿바이 선언",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "굿바이 센겐"
+    ]
+  },
+  {
+    "songId": "de8acc4d-387e-560c-9458-896f3482a959",
+    "title": "내일의 밤하늘 초계반",
+    "newTitle": "내일의 밤하늘 초계반",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "아스노 요조라 쇼카이한"
+    ]
+  },
+  {
+    "songId": "be3dcdbf-76cf-4781-8861-d482cedd6e61",
+    "title": "브레인 롯",
+    "newTitle": "브레인 롯",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "브레인롯"
+    ]
+  },
+  {
+    "songId": "d7e3265f-26a8-5906-b37f-e6ec97cd98b8",
+    "title": "역몽",
+    "newTitle": "역몽",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "역몽(逆夢)",
+      "逆夢"
+    ],
+    "addAliases": [
+      "사카유메"
+    ]
+  },
+  {
+    "songId": "450ebf0d-59e9-5518-969f-224a2dcca504",
+    "title": "연애서큘레이션",
+    "newTitle": "연애서큘레이션",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "Kana Hanazawa - 연애서큘레이션"
+    ],
+    "addAliases": [
+      "렌아이 서큘레이션"
+    ]
+  },
+  {
+    "songId": "f381f6d2-da63-57fb-830d-113a4ce34792",
+    "title": "오네가이 달링",
+    "newTitle": "오네가이 달링",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "오네가이 달링(おねがいダーリン)",
+      "おねがいダーリン"
+    ],
+    "addAliases": [
+      "부탁해 달링"
+    ]
+  },
+  {
+    "songId": "cf574f02-6562-4826-abfe-add1eb3fac7b",
+    "title": "오버라이드",
+    "newTitle": "오버라이드",
+    "expectedVersion": 2,
+    "expectedAliases": [
+      "オーバーライド",
+      "Override"
+    ],
+    "addAliases": [
+      "오바라이도"
+    ]
+  },
+  {
+    "songId": "f3eb4845-ee79-5c7f-ac5e-13a856611a84",
+    "title": "유령도쿄",
+    "newTitle": "유령도쿄",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "유레이 도쿄"
+    ]
+  },
+  {
+    "songId": "43e2ab37-a01b-57ff-86a3-b7eb12e87233",
+    "title": "점묘의 노래",
+    "newTitle": "점묘의 노래",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "점묘의 노래 (点描の唄)",
+      "点描の唄"
+    ],
+    "addAliases": [
+      "텐뵤노 우타"
+    ]
+  },
+  {
+    "songId": "d178e655-4ca3-5b41-9fc4-1a700e374f6e",
+    "title": "주름 맞추기",
+    "newTitle": "주름 맞추기",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "주름 맞추기 (しわあわせ)",
+      "しわあわせ"
+    ],
+    "addAliases": [
+      "시와아와세"
+    ]
+  },
+  {
+    "songId": "032a8953-f359-57b2-a7a2-b7e01e4fd740",
+    "title": "주름맞추기",
+    "newTitle": "주름맞추기",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "주름맞추기 (しわあわせ)",
+      "しわあわせ"
+    ],
+    "addAliases": [
+      "시와아와세"
+    ]
+  },
+  {
+    "songId": "ec3f7186-3726-5d5f-a9c1-f131a3c84438",
+    "title": "최종화",
+    "newTitle": "최종화",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "사이슈카"
+    ]
+  },
+  {
+    "songId": "d0115817-bd59-5cb5-a5f6-a2ebfaecb577",
+    "title": "취한 줄을 모르고",
+    "newTitle": "취한 줄을 모르고",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "취한 줄을 모르고(酔いどれ知らず)",
+      "酔いどれ知らず"
+    ],
+    "addAliases": [
+      "요이도레 시라즈"
+    ]
+  },
+  {
+    "songId": "a2734515-feba-50d4-8d7f-bbd4e579036a",
+    "title": "케세라세라",
+    "newTitle": "케세라세라",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "케 세라 세라"
+    ]
+  },
+  {
+    "songId": "38b92569-55b6-5354-af05-403ff4f193d5",
+    "title": "케세라세라",
+    "newTitle": "케세라세라",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "케세라세라(ケセラセラ)",
+      "ケセラセラ"
+    ],
+    "addAliases": [
+      "케 세라 세라"
+    ]
+  },
+  {
+    "songId": "75d89c33-5f28-5859-8316-2d098b4d32c9",
+    "title": "큐 큐라링",
+    "newTitle": "큐 큐라링",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "두근어질",
+      "큐 쿠라링"
+    ]
+  },
+  {
+    "songId": "1835a193-176a-5373-a4b1-aaf93c9112c3",
+    "title": "푸른 보석과 어린 용",
+    "newTitle": "푸른 보석과 어린 용",
+    "expectedVersion": 1,
+    "expectedAliases": [],
+    "addAliases": [
+      "아오이 호세키토 류노 코"
+    ]
+  },
+  {
+    "songId": "01c0aeb4-7548-5689-9d0e-dfb49f8d8a13",
+    "title": "호시아이",
+    "newTitle": "호시아이",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "ホシアイ"
+    ],
+    "addAliases": [
+      "별의 만남"
+    ]
+  },
+  {
+    "songId": "2fa6df90-32ec-5447-b782-ec73abc53b1b",
+    "title": "アイデンティティ",
+    "newTitle": "아이덴티티",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "アイデンティティ(아이덴티티)",
+      "아이덴티티"
+    ],
+    "addAliases": [
+      "정체성",
+      "アイデンティティ"
+    ]
+  },
+  {
+    "songId": "e4f48086-1a89-5874-bd49-6aba83515ed7",
+    "title": "サムライハート",
+    "newTitle": "사무라이 하트",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "サムライハート(Some Like It Hot!!)",
+      "Some Like It Hot!!"
+    ],
+    "addAliases": [
+      "사무라이 하트",
+      "サムライハート"
+    ]
+  },
+  {
+    "songId": "c19ac479-179e-530f-aafe-c2bdb1c08288",
+    "title": "さよーならまたいつか！",
+    "newTitle": "안녕, 또 언젠가!",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "さよーならまたいつか！(안녕, 또 언젠가!)",
+      "안녕, 또 언젠가!"
+    ],
+    "addAliases": [
+      "안녕 또 언젠가",
+      "사요나라 마타 이츠카",
+      "さよーならまたいつか！"
+    ]
+  },
+  {
+    "songId": "1990944b-93f7-5215-8d19-f10b2fa5f462",
+    "title": "シャンティ",
+    "newTitle": "샨티",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "シャンティ(SHANTI)",
+      "SHANTI"
+    ],
+    "addAliases": [
+      "샨티",
+      "シャンティ"
+    ]
+  },
+  {
+    "songId": "a2dcdaaf-2815-5959-9fd0-40c932b70c73",
+    "title": "シル・ヴ・プレジデント",
+    "newTitle": "실・부・프레지던트",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "シル・ヴ・プレジデント (실・부・프레지던트)",
+      "실・부・프레지던트"
+    ],
+    "addAliases": [
+      "실 부 프레지던트",
+      "실부플레 프레지던트",
+      "シル・ヴ・プレジデント"
+    ]
+  },
+  {
+    "songId": "04c023d2-0f2c-5c21-9fce-1e6b4c90ec26",
+    "title": "セカイ",
+    "newTitle": "세카이",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "セカイ(SEKAI)",
+      "SEKAI"
+    ],
+    "addAliases": [
+      "세카이",
+      "세계",
+      "セカイ"
+    ]
+  },
+  {
+    "songId": "3bf7c328-2543-5af7-bd14-9d4673e9fc1e",
+    "title": "とんとんまーえ！",
+    "newTitle": "쿵쿵 앞-으로!",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "とんとんまーえ！(쿵쿵 앞-으로!)",
+      "쿵쿵 앞-으로!"
+    ],
+    "addAliases": [
+      "쿵쿵 앞-으로",
+      "톤톤 마에",
+      "とんとんまーえ！"
+    ]
+  },
+  {
+    "songId": "4a2f6122-e19f-529b-a436-ec2502c8a283",
+    "title": "ハッピーエンド",
+    "newTitle": "해피엔드",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "ハッピーエンド (Happy End)",
+      "Happy End"
+    ],
+    "addAliases": [
+      "해피 엔드",
+      "해피 엔딩",
+      "ハッピーエンド"
+    ]
+  },
+  {
+    "songId": "cac50605-5acf-54a0-94c0-53ec5b6c9fdf",
+    "title": "プレイ",
+    "newTitle": "플레이",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "プレイ (PLAY)",
+      "PLAY"
+    ],
+    "addAliases": [
+      "플레이",
+      "プレイ"
+    ]
+  },
+  {
+    "songId": "5e578c35-9c7c-5747-b3f6-83ef02927602",
+    "title": "ラビットホール",
+    "newTitle": "래빗 홀",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "ラビットホール(래빗 홀)",
+      "래빗 홀"
+    ],
+    "addAliases": [
+      "토끼굴",
+      "ラビットホール"
+    ]
+  },
+  {
+    "songId": "3cde4567-9481-52e5-9b21-40dc34f45a1c",
+    "title": "ラブレター",
+    "newTitle": "러브레터",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "ラブレター(Love Letter)",
+      "Love Letter"
+    ],
+    "addAliases": [
+      "러브 레터",
+      "연애편지",
+      "ラブレター"
+    ]
+  },
+  {
+    "songId": "e792a117-b1b8-5bba-941c-5a0c35de7734",
+    "title": "心予報",
+    "newTitle": "마음 예보",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "心予報(마음 예보)",
+      "마음 예보"
+    ],
+    "addAliases": [
+      "코코로 요호",
+      "心予報"
+    ]
+  },
+  {
+    "songId": "a2285a7b-60be-59ab-948c-b30f19bc3b07",
+    "title": "死神",
+    "newTitle": "사신",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "死神(사신)",
+      "사신"
+    ],
+    "addAliases": [
+      "시니가미",
+      "死神"
+    ]
+  },
+  {
+    "songId": "1d329165-ee27-58b8-a04e-0679eea810ed",
+    "title": "神っぽいな",
+    "newTitle": "신 같네",
+    "expectedVersion": 1,
+    "expectedAliases": [
+      "神っぽいな(신 같네)",
+      "신 같네"
+    ],
+    "addAliases": [
+      "카밋포이나",
+      "神っぽいな"
+    ]
+  }
+]

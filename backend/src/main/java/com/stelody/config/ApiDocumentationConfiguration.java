@@ -513,7 +513,12 @@ public class ApiDocumentationConfiguration {
               "YYYY-MM-DD. 대표 영상 publishedAt의 Asia/Seoul 날짜 기준, 1900-01-01~2100-12-31. 시작일은 한국 시간 00:00 이상, 종료일은 다음날 00:00 미만으로 양 끝 날짜를 포함합니다. 한쪽만 지정할 수 있습니다. 둘 다 생략하면 기간 제한이 없습니다. year와 함께 지정하면 400 INVALID_CATALOG_QUERY입니다. 기간을 변경하면 이전 커서는 사용할 수 없습니다.");
         }
       }
-      case "q" -> schema.setMaxLength(200);
+      case "q" -> {
+        schema.setMaxLength(200);
+        if (path.equals("/api/v1/songs") || path.equals("/api/v1/members/{id}/songs"))
+          parameter.setDescription(
+              "최대 200자. NFKC 정규화 후 공백·영어 대소문자를 무시하여 곡 제목·곡 별칭·원곡 제목과 별칭·참여 멤버 및 아티스트 이름과 별칭을 검색합니다. 정식 제목은 바뀌지 않으며 같은 곡은 한 번만 반환합니다. totalCount·정렬·커서에 같은 검색 규칙을 적용합니다. 생략은 전체 탐색, 명시한 빈 검색어는 기존 SEARCH 계약에 따라 빈 결과입니다.");
+      }
       case "type" -> {
         if (!path.contains("/admin/")) schema.setEnum(List.of("ALL", "COVER", "ORIGINAL"));
       }

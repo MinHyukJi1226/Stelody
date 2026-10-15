@@ -60,28 +60,28 @@ final class SongSqlQueries {
   private static final String SEARCH_RANK =
       """
       CASE WHEN :q = '' THEN 3
-        WHEN s.search_title = :q
-          OR EXISTS (SELECT 1 FROM app.song_alias a WHERE a.song_id = s.id AND a.search_alias = :q)
-          OR EXISTS (SELECT 1 FROM app.musical_work w WHERE w.id = s.work_id AND w.search_title = :q)
-          OR EXISTS (SELECT 1 FROM app.work_alias a WHERE a.work_id = s.work_id AND a.search_alias = :q) THEN 1
-        WHEN s.search_title LIKE :pattern ESCAPE '!'
-          OR EXISTS (SELECT 1 FROM app.song_alias a WHERE a.song_id = s.id AND a.search_alias LIKE :pattern ESCAPE '!')
-          OR EXISTS (SELECT 1 FROM app.musical_work w WHERE w.id = s.work_id AND w.search_title LIKE :pattern ESCAPE '!')
-          OR EXISTS (SELECT 1 FROM app.work_alias a WHERE a.work_id = s.work_id AND a.search_alias LIKE :pattern ESCAPE '!') THEN 2
+        WHEN replace(s.search_title, ' ', '') = :q
+          OR EXISTS (SELECT 1 FROM app.song_alias a WHERE a.song_id = s.id AND replace(a.search_alias, ' ', '') = :q)
+          OR EXISTS (SELECT 1 FROM app.musical_work w WHERE w.id = s.work_id AND replace(w.search_title, ' ', '') = :q)
+          OR EXISTS (SELECT 1 FROM app.work_alias a WHERE a.work_id = s.work_id AND replace(a.search_alias, ' ', '') = :q) THEN 1
+        WHEN replace(s.search_title, ' ', '') LIKE :pattern ESCAPE '!'
+          OR EXISTS (SELECT 1 FROM app.song_alias a WHERE a.song_id = s.id AND replace(a.search_alias, ' ', '') LIKE :pattern ESCAPE '!')
+          OR EXISTS (SELECT 1 FROM app.musical_work w WHERE w.id = s.work_id AND replace(w.search_title, ' ', '') LIKE :pattern ESCAPE '!')
+          OR EXISTS (SELECT 1 FROM app.work_alias a WHERE a.work_id = s.work_id AND replace(a.search_alias, ' ', '') LIKE :pattern ESCAPE '!') THEN 2
         ELSE 3 END AS search_rank
       """;
 
   private static final String PARTICIPANT_MATCH =
       """
       EXISTS (SELECT 1 FROM app.song_member sm JOIN app.member m ON m.id = sm.member_id
-        WHERE sm.song_id = s.id AND sm.confirmed AND (m.search_name LIKE :pattern ESCAPE '!'
-          OR EXISTS (SELECT 1 FROM app.member_alias a WHERE a.member_id = m.id AND a.search_alias LIKE :pattern ESCAPE '!')))
+        WHERE sm.song_id = s.id AND sm.confirmed AND (replace(m.search_name, ' ', '') LIKE :pattern ESCAPE '!'
+          OR EXISTS (SELECT 1 FROM app.member_alias a WHERE a.member_id = m.id AND replace(a.search_alias, ' ', '') LIKE :pattern ESCAPE '!')))
       OR EXISTS (SELECT 1 FROM app.song_external_artist ea JOIN app.artist a ON a.id = ea.artist_id
-        WHERE ea.song_id = s.id AND ea.confirmed AND (a.search_name LIKE :pattern ESCAPE '!'
-          OR EXISTS (SELECT 1 FROM app.artist_alias aa WHERE aa.artist_id = a.id AND aa.search_alias LIKE :pattern ESCAPE '!')))
+        WHERE ea.song_id = s.id AND ea.confirmed AND (replace(a.search_name, ' ', '') LIKE :pattern ESCAPE '!'
+          OR EXISTS (SELECT 1 FROM app.artist_alias aa WHERE aa.artist_id = a.id AND replace(aa.search_alias, ' ', '') LIKE :pattern ESCAPE '!')))
       OR EXISTS (SELECT 1 FROM app.work_artist wa JOIN app.artist a ON a.id = wa.artist_id
-        WHERE wa.work_id = s.work_id AND (a.search_name LIKE :pattern ESCAPE '!'
-          OR EXISTS (SELECT 1 FROM app.artist_alias aa WHERE aa.artist_id = a.id AND aa.search_alias LIKE :pattern ESCAPE '!')))
+        WHERE wa.work_id = s.work_id AND (replace(a.search_name, ' ', '') LIKE :pattern ESCAPE '!'
+          OR EXISTS (SELECT 1 FROM app.artist_alias aa WHERE aa.artist_id = a.id AND replace(aa.search_alias, ' ', '') LIKE :pattern ESCAPE '!')))
       """;
 
   private static final String RANKED_CTE =
@@ -154,6 +154,7 @@ final class SongSqlQueries {
 
   private static Map<String, Object> baseParameters(String text, UUID publication) {
     var params = new HashMap<String, Object>();
+    text = SearchText.searchKey(text);
     params.put("q", text);
     params.put("pattern", SearchText.likePattern(text));
     params.put("publication", publication);

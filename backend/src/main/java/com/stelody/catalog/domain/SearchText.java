@@ -19,6 +19,11 @@ public final class SearchText {
         .toLowerCase(Locale.ROOT);
   }
 
+  /** Search-only key: leave display normalization and content classification unchanged. */
+  public static String searchKey(String value) {
+    return normalize(value).replace(" ", "");
+  }
+
   public static String likePattern(String normalized) {
     return "%" + normalized.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
   }
