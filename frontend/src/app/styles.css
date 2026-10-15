@@ -64,6 +64,21 @@
   --color-error: var(--error);
   --color-blue: var(--blue);
   --color-subtle: var(--subtle);
+  --color-member-yuni: #857fd8;
+  --color-member-huya: #8166a1;
+  --color-member-hina: #f2dcbf;
+  --color-member-mashiro: #25282a;
+  --color-member-lize: #971b2f;
+  --color-member-tabi: #9adaff;
+  --color-member-shibuki: #c2afe6;
+  --color-member-rin: #2b66c0;
+  --color-member-nana: #df7685;
+  --color-member-riko: #a6d0a6;
+  --color-member-toa: #513661;
+  --color-member-rang: #c19731;
+  --color-member-hiyori: #f89bbd;
+  --color-member-meri: #efd06e;
+  --color-member-kanna: #373584;
   --font-sans: 'Noto Sans KR Variable', system-ui, sans-serif;
 }
 

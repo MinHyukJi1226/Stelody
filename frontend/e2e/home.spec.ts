@@ -1,0 +1,204 @@
+import { test, expect, makeSong, emptyPage } from './fixtures'
+
+test('홈 데이터와 KST 공개일을 표시하고 최신곡 전체 목록으로 이동한다', async ({
+  page,
+}) => {
+  const songs = [
+    makeSong(1, {
+      title: '자정 이후 공개곡',
+      collaboration: true,
+      isSpecialEvent: true,
+      specialEventLabel: '생일',
+    }),
+    makeSong(2),
+  ]
+  await page.route('**/api/v1/songs?*', (route) =>
+    route.fulfill({ json: { ...emptyPage, items: songs, totalCount: 2 } }),
+  )
+  await page.goto('/')
+  const latest = page.getByRole('region', {
+    name: '새로 공개된 노래',
+    exact: true,
+  })
+  await expect(latest.getByRole('article')).toHaveCount(2)
+  await expect(latest.getByText('2026.10.15')).toHaveCount(2)
+  await expect(latest.getByText('콜라보', { exact: true })).toBeVisible()
+  await expect(latest.getByText('생일', { exact: true })).toBeVisible()
+  await expect(latest.getByText('원곡 · 정보 준비 중')).toHaveCount(2)
+  await expect(
+    page.getByRole('region', { name: '최근 24시간 급상승' }),
+  ).toContainText('준비 중입니다.')
+  await page.getByRole('link', { name: '최신곡 전체 보기' }).click()
+  await expect(page).toHaveURL('/songs')
+})
+
+test('검색 폼은 한글과 특수문자를 보존해 검색 주소로 이동한다', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page
+    .getByRole('searchbox', { name: '곡명, 원곡, 멤버 검색' })
+    .fill('노래 & 멤버')
+  await page
+    .getByRole('search', { name: '노래 검색' })
+    .getByRole('button', { name: '검색', exact: true })
+    .click()
+  await expect(page).toHaveURL(/\/search\?q=/)
+  expect(new URL(page.url()).searchParams.get('q')).toBe('노래 & 멤버')
+})
+
+test('추천을 다시 불러오다가 실패하면 기존 추천과 재시도를 유지한다', async ({
+  page,
+}) => {
+  let fail = false
+  await page.route('**/api/v1/songs/recommendations?*', (route) =>
+    route.fulfill(
+      fail
+        ? { status: 503, json: { code: 'SERVICE_UNAVAILABLE' } }
+        : { json: { items: [makeSong(3, { title: '기존 추천곡' })] } },
+    ),
+  )
+  await page.goto('/')
+  const section = page.getByRole('region', { name: '우연히 만나는 한 곡' })
+  await expect(
+    section.getByRole('heading', { name: '기존 추천곡' }),
+  ).toBeVisible()
+  fail = true
+  await section.getByRole('button', { name: '다시 추천' }).click()
+  await expect(section.getByText('새 추천을 불러오지 못했습니다')).toBeVisible()
+  await expect(
+    section.getByRole('heading', { name: '기존 추천곡' }),
+  ).toBeVisible()
+  fail = false
+  await section.getByRole('button', { name: '다시 시도' }).click()
+  await expect(section.getByText('새 추천을 불러오지 못했습니다')).toHaveCount(
+    0,
+  )
+})
+
+test('최신곡 오류가 다른 영역을 막지 않고 재시도로 회복한다', async ({
+  page,
+}) => {
+  let fail = true
+  await page.route('**/api/v1/songs?*', (route) =>
+    route.fulfill(
+      fail
+        ? { status: 503, json: { code: 'UNAVAILABLE' } }
+        : { json: { ...emptyPage, items: [makeSong(5)], totalCount: 1 } },
+    ),
+  )
+  await page.route('**/api/v1/songs/recommendations?*', (route) =>
+    route.fulfill({ json: { items: [makeSong(6)] } }),
+  )
+  await page.goto('/')
+  const latest = page.getByRole('region', {
+    name: '새로 공개된 노래',
+    exact: true,
+  })
+  await expect(latest.getByText('노래를 불러오지 못했습니다')).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: '테스트 노래 6' }),
+  ).toBeVisible()
+  fail = false
+  await latest.getByRole('button', { name: '다시 시도' }).click()
+  await expect(
+    latest.getByRole('heading', { name: '테스트 노래 5' }),
+  ).toBeVisible()
+})
+
+test('처음 불러오는 동안 스켈레톤을 표시하고 빈 결과를 안내한다', async ({
+  page,
+}) => {
+  let release: () => void = () => {}
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/v1/songs?*', async (route) => {
+    await waiting
+    await route.fulfill({ json: emptyPage })
+  })
+  await page.goto('/')
+  const latest = page.getByRole('region', {
+    name: '새로 공개된 노래',
+    exact: true,
+  })
+  await expect(
+    latest.getByRole('status', { name: '노래 불러오는 중' }),
+  ).toBeVisible()
+  release()
+  await expect(latest.getByText('아직 공개된 노래가 없습니다')).toBeVisible()
+})
+
+test('멤버의 졸업 상태와 이미지 누락을 처리하고 화면이 넘치지 않는다', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/members?*', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: 'member',
+            name: '테스트 멤버 이름',
+            activityStatus: 'GRADUATED',
+            profileImageUrl: null,
+            generation: 1,
+            unitName: null,
+            chzzkUrl: null,
+            xUrl: null,
+            songCounts: {
+              total: 0,
+              originals: 0,
+              covers: 0,
+              collaborations: 0,
+            },
+          },
+        ],
+        nextCursor: null,
+        hasNext: false,
+      },
+    }),
+  )
+  await page.goto('/')
+  await expect(
+    page.getByRole('link', { name: '테스트 멤버 이름 (졸업)' }),
+  ).toBeVisible()
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true)
+})
+
+test('썸네일 로드가 실패해도 카드 정보와 화면 규격을 유지한다', async ({
+  page,
+}) => {
+  await page.route('**/missing-thumbnail.jpg', (route) =>
+    route.fulfill({ status: 404 }),
+  )
+  await page.route('**/api/v1/songs?*', (route) =>
+    route.fulfill({
+      json: {
+        ...emptyPage,
+        items: [makeSong(200, { thumbnailUrl: '/missing-thumbnail.jpg' })],
+        totalCount: 1,
+      },
+    }),
+  )
+  await page.goto('/')
+  const latest = page.getByRole('region', {
+    name: '새로 공개된 노래',
+    exact: true,
+  })
+  await expect(latest.getByText('이미지 준비 중')).toBeVisible()
+  await expect(
+    latest.getByRole('heading', { name: '테스트 노래 200' }),
+  ).toBeVisible()
+  const mobile = (page.viewportSize()?.width ?? 0) < 768
+  const hero = page.getByRole('region', { name: /좋아하는 목소리/ })
+  await expect(hero).toHaveCSS('padding-top', mobile ? '24px' : '48px')
+  await expect(hero).toHaveCSS('padding-left', mobile ? '24px' : '40px')
+  await expect(page.locator('header')).toHaveCSS(
+    'padding-left',
+    mobile ? '20px' : '24px',
+  )
+})

@@ -1,15 +1,15 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 test('직접 접근한 주소와 알 수 없는 경로에서 홈으로 복귀한다', async ({
   page,
 }) => {
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: 'Stelody', exact: true }),
+    page.getByRole('heading', { name: /좋아하는 목소리/ }),
   ).toBeVisible()
   await page.reload()
   await expect(
-    page.getByRole('heading', { name: 'Stelody', exact: true }),
+    page.getByRole('heading', { name: /좋아하는 목소리/ }),
   ).toBeVisible()
   await page.goto('/unknown-page')
   await expect(
@@ -23,7 +23,7 @@ test('직접 접근한 주소와 알 수 없는 경로에서 홈으로 복귀한
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL('/')
   await expect(
-    page.getByRole('heading', { name: 'Stelody', exact: true }),
+    page.getByRole('heading', { name: /좋아하는 목소리/ }),
   ).toBeVisible()
 })
 
@@ -156,7 +156,7 @@ test('브라우저 저장소가 차단되어도 테마 전환을 사용할 수 �
     .click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(
-    page.getByRole('heading', { name: 'Stelody', exact: true }),
+    page.getByRole('heading', { name: /좋아하는 목소리/ }),
   ).toBeVisible()
 })
 
