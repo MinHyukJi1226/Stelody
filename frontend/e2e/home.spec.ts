@@ -291,3 +291,159 @@ test('썸네일 로드가 실패해도 카드 정보와 화면 규격을 유지�
     mobile ? '20px' : '24px',
   )
 })
+
+test('멤버 명단 전체 페이지로 유닛 전원을 판정하고 혼합곡을 축약한다', async ({
+  page,
+}) => {
+  const names = ['히나', '마시로', '리제', '타비']
+  const participants = names.map((name, index) => ({
+    id: `member-${index}`,
+    name,
+    kind: 'MEMBER' as const,
+    activityStatus: 'ACTIVE' as const,
+  }))
+  const songs = [
+    makeSong(1, { title: '유닛 전원곡', participants }),
+    makeSong(2, {
+      title: '유닛 일부곡',
+      participants: participants.slice(0, 3),
+    }),
+    makeSong(3, {
+      title: '혼합 단체곡',
+      participants: [
+        { ...participants[0]!, id: 'yuni', name: '아야츠노 유니' },
+        ...participants,
+      ],
+    }),
+    makeSong(4, {
+      title: '솔로 오리지널',
+      type: 'ORIGINAL',
+      participants: participants.slice(0, 1),
+    }),
+    makeSong(5, {
+      title: '듀엣 오리지널',
+      type: 'ORIGINAL',
+      participants: participants.slice(0, 2),
+    }),
+    makeSong(6, {
+      title: '삼인 오리지널',
+      type: 'ORIGINAL',
+      participants: participants.slice(0, 3),
+    }),
+    makeSong(7, {
+      title: '유닛 오리지널',
+      type: 'ORIGINAL',
+      participants,
+    }),
+    makeSong(8, {
+      title: '점묘의 노래',
+      publishedAt: '2024-12-01T12:00:00+09:00',
+      participants: ['아야츠노 유니', '아이리 칸나'].map((name) => ({
+        ...participants[0]!,
+        id: name,
+        name,
+      })),
+    }),
+    makeSong(9, {
+      title: 'Alice in Musicland',
+      publishedAt: '2024-11-24T12:00:00+09:00',
+      participants: [
+        ...participants,
+        ...['아야츠노 유니', '아이리 칸나'].map((name) => ({
+          ...participants[0]!,
+          id: name,
+          name,
+        })),
+      ],
+    }),
+  ]
+  await page.route('**/api/v1/songs?*', (route) =>
+    route.fulfill({
+      json: { ...emptyPage, items: songs, totalCount: songs.length },
+    }),
+  )
+  let secondPage = false
+  await page.route('**/api/v1/members?*', (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    secondPage ||= cursor === 'members-next'
+    const members = participants.map((p) => ({
+      id: p.id,
+      name: p.name,
+      generation: 2,
+      unitName: 'Universe',
+      activityStatus: 'ACTIVE',
+      chzzkUrl: null,
+      xUrl: null,
+      profileImageUrl: null,
+      songCounts: { total: 0, covers: 0, originals: 0, collaborations: 0 },
+    }))
+    return route.fulfill({
+      json: cursor
+        ? {
+            items: [
+              ...members.slice(2),
+              {
+                ...members[0]!,
+                id: 'third-member',
+                name: '시부키',
+                generation: 3,
+                unitName: 'Cliché',
+              },
+            ],
+            hasNext: false,
+            nextCursor: null,
+          }
+        : {
+            items: members.slice(0, 2),
+            hasNext: true,
+            nextCursor: 'members-next',
+          },
+    })
+  })
+  await page.goto('/songs')
+  const full = page.getByRole('article').filter({ hasText: '유닛 전원곡' })
+  await expect(full.getByText('Universe', { exact: true })).toBeVisible()
+  expect(secondPage).toBe(true)
+  await expect(
+    page.getByRole('article').filter({ hasText: '유닛 일부곡' }),
+  ).toContainText('히나 · 마시로 · 리제')
+  await expect(
+    page.getByRole('article').filter({ hasText: '혼합 단체곡' }),
+  ).toContainText('아야츠노 유니 외 4명')
+  for (const [title, label] of [
+    ['솔로 오리지널', '히나'],
+    ['듀엣 오리지널', '히나 · 마시로'],
+    ['삼인 오리지널', '스텔라이브'],
+    ['유닛 오리지널', 'Universe'],
+    ['점묘의 노래', 'Mystic'],
+    ['Alice in Musicland', 'Mystic · Universe'],
+  ]) {
+    const card = page.getByRole('article').filter({ hasText: title! })
+    await expect(card.getByText(label!, { exact: true })).toBeVisible()
+  }
+})
+
+test('멤버 명단 조회가 실패해도 단체곡 카드와 첫 참여자 축약을 유지한다', async ({
+  page,
+}) => {
+  const participants = ['첫 멤버', '둘째', '셋째', '넷째'].map((name, i) => ({
+    id: `member-${i}`,
+    name,
+    kind: 'MEMBER' as const,
+    activityStatus: 'ACTIVE' as const,
+  }))
+  await page.route('**/api/v1/songs?*', (route) =>
+    route.fulfill({
+      json: {
+        ...emptyPage,
+        items: [makeSong(1, { participants })],
+        totalCount: 1,
+      },
+    }),
+  )
+  await page.route('**/api/v1/members?*', (route) =>
+    route.fulfill({ status: 400, json: { code: 'UNAVAILABLE' } }),
+  )
+  await page.goto('/songs')
+  await expect(page.getByRole('article')).toContainText('첫 멤버 외 3명')
+})

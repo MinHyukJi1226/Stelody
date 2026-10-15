@@ -1,6 +1,9 @@
 import { Link } from 'react-router'
 import { Artwork } from '@/shared/ui/artwork'
 import type { Song } from './api'
+import type { MemberCard } from '@/shared/api/types'
+import { useMemberDirectory } from '@/features/members/use-member-directory'
+import { participantLabel } from './participant-label'
 
 const publishedDate = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
@@ -9,7 +12,13 @@ const publishedDate = new Intl.DateTimeFormat('ko-KR', {
   day: '2-digit',
 })
 
-export function SongCard({ song }: { song: Song }) {
+export function SongCard({
+  song,
+  members,
+}: {
+  song: Song
+  members?: readonly MemberCard[] | undefined
+}) {
   const date = publishedDate.format(new Date(song.publishedAt))
   const origin = song.work?.artists.map(({ name }) => name).join(' · ')
   return (
@@ -27,8 +36,7 @@ export function SongCard({ song }: { song: Song }) {
           {song.title}
         </h3>
         <p className="break-words text-sm leading-[1.5] text-muted">
-          {song.participants.map(({ name }) => name).join(' · ') ||
-            '참여자 정보 준비 중'}
+          {participantLabel(song, members)}
         </p>
         <p className="break-words text-xs leading-[1.5] text-muted">
           {song.type === 'ORIGINAL'
@@ -55,10 +63,13 @@ export function SongCard({ song }: { song: Song }) {
 }
 
 export function SongGrid({ songs }: { songs: readonly Song[] }) {
+  const members = useMemberDirectory(
+    songs.some(({ participants }) => participants.length >= 2),
+  )
   return (
     <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2 lg:grid-cols-4">
       {songs.map((song) => (
-        <SongCard key={song.id} song={song} />
+        <SongCard key={song.id} song={song} members={members} />
       ))}
     </div>
   )
