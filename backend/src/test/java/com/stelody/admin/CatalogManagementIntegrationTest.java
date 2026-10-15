@@ -183,6 +183,31 @@ class CatalogManagementIntegrationTest {
     return b;
   }
 
+  @Test
+  void existingSongAliasesCanBeAddedReplacedAndRemovedWithoutChangingDisplayTitle()
+      throws Exception {
+    var member = member();
+    var song = song(member, "COVER");
+    long version = 0;
+    for (var aliases :
+        List.of(List.of("점묘의 노래", "텐뵤노 우타"), List.of("새 검색 별칭"), List.<String>of())) {
+      var body = songBody(member, "COVER");
+      body.put("version", version++);
+      body.put("aliases", aliases);
+      mvc.perform(json(put(ROOT + "/songs/" + song), body)).andExpect(status().isOk());
+      var saved =
+          mapper.readTree(
+              mvc.perform(auth(get(ROOT + "/songs/" + song), admin))
+                  .andExpect(status().isOk())
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString());
+      assertThat(saved.path("title").asText()).isEqualTo("Manual title");
+      assertThat(saved.path("aliases").valueStream().map(JsonNode::asText).toList())
+          .containsExactlyInAnyOrderElementsOf(aliases);
+    }
+  }
+
   UUID attach(UUID song, UUID review, long reviewVersion, long songVersion, String kind)
       throws Exception {
     return UUID.fromString(

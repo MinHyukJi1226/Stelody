@@ -68,7 +68,7 @@ public class SongCursor {
     String value =
         mapper.writeValueAsString(
             new QueryIdentity(
-                query.text(),
+                com.stelody.catalog.domain.SearchText.searchKey(query.text()),
                 query.type(),
                 query.memberIds(),
                 query.year(),

@@ -80,6 +80,25 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsWhitespaceInsensitiveSearchAndExistingSongAliasEditing() throws Exception {
+    var api = contract();
+    for (var p : api.path("paths").path("/api/v1/songs").path("get").path("parameters"))
+      if (p.path("name").asText().equals("q")) {
+        assertThat(p.path("description").asText())
+            .contains("공백", "대소문자", "별칭", "200", "totalCount");
+        assertThat(p.at("/schema/maxLength").asInt()).isEqualTo(200);
+      }
+    var alias =
+        api.path("components")
+            .path("schemas")
+            .path("com.stelody.admin.dto.CatalogAdminDtos.SongInput")
+            .path("properties")
+            .path("aliases");
+    assertThat(alias.path("description").asText())
+        .contains("번역명", "발음", "PUT", "빈 배열", "50", "300");
+  }
+
+  @Test
   void documentsDateRangeAndValidationWithoutPollutingOtherParameters() throws Exception {
     var api = contract();
     assertThat(

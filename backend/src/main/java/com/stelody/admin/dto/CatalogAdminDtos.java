@@ -129,7 +129,12 @@ public final class CatalogAdminDtos {
       UUID workId,
       @NotNull Visibility visibility,
       UUID representativeVideoId,
-      @NotNull @Size(max = 50) List<@NotBlank @Size(max = 300) String> aliases,
+      @Schema(
+              description =
+                  "곡 검색용 별칭. 한국어 번역명·발음·통용명을 최대 50개, 각 300자까지 등록합니다. GET /api/v1/admin/songs/{id}로 조회하고 POST·PUT의 aliases로 전체 목록을 저장합니다. 삭제는 해당 항목을 빼고 저장하며 빈 배열은 모두 삭제합니다. 표시 제목은 title로 별도 유지됩니다. q 검색은 공백·대소문자를 무시합니다.")
+          @NotNull
+          @Size(max = 50)
+          List<@NotBlank @Size(max = 300) String> aliases,
       @NotNull @Size(max = 100) List<@NotNull UUID> memberIds,
       @NotNull @Size(max = 100) List<@NotNull UUID> externalArtistIds,
       @NotNull Boolean isSpecialEvent,
