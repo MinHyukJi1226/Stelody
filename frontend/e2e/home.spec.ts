@@ -30,6 +30,11 @@ test('홈 데이터와 KST 공개일을 표시하고 최신곡 전체 목록으�
   ).toContainText('준비 중입니다.')
   await page.getByRole('link', { name: '최신곡 전체 보기' }).click()
   await expect(page).toHaveURL('/songs')
+  await expect(page.getByText('공개일 최신순 · 총 2곡')).toBeVisible()
+  await page.reload()
+  await expect(
+    page.getByRole('heading', { name: '전체곡', exact: true }),
+  ).toBeVisible()
 })
 
 test('검색 폼은 한글과 특수문자를 보존해 검색 주소로 이동한다', async ({
@@ -129,6 +134,52 @@ test('처음 불러오는 동안 스켈레톤을 표시하고 빈 결과를 안�
   await expect(latest.getByText('아직 공개된 노래가 없습니다')).toBeVisible()
 })
 
+test('추가 페이지 실패 후 기존 목록을 보존하고 같은 커서로 재시도한다', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Reflect.deleteProperty(window, 'IntersectionObserver')
+  })
+  const first = Array.from({ length: 20 }, (_, i) => makeSong(i + 10))
+  let fail = true
+  const cursors: (string | null)[] = []
+  await page.route('**/api/v1/songs?*', (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    cursors.push(cursor)
+    return route.fulfill(
+      cursor
+        ? fail
+          ? { status: 503, json: { code: 'UNAVAILABLE' } }
+          : {
+              json: {
+                ...emptyPage,
+                items: [first[0], makeSong(50)],
+                totalCount: 21,
+              },
+            }
+        : {
+            json: {
+              items: first,
+              nextCursor: 'opaque+/=',
+              hasNext: true,
+              totalCount: 21,
+            },
+          },
+    )
+  })
+  await page.goto('/songs')
+  await expect(page.getByRole('article')).toHaveCount(20)
+  await page.getByRole('button', { name: '노래 더 보기', exact: true }).click()
+  await expect(page.getByText('노래를 더 불러오지 못했습니다')).toBeVisible()
+  await expect(page.getByRole('article')).toHaveCount(20)
+  fail = false
+  await page.getByRole('button', { name: '다시 시도' }).click()
+  await expect(page.getByRole('article')).toHaveCount(21)
+  await expect(page.getByText('모든 노래를 불러왔습니다.')).toBeVisible()
+  expect(cursors[0]).toBe(null)
+  expect(cursors.slice(1).every((cursor) => cursor === 'opaque+/=')).toBe(true)
+})
+
 test('멤버의 졸업 상태와 이미지 누락을 처리하고 화면이 넘치지 않는다', async ({
   page,
 }) => {
@@ -167,6 +218,44 @@ test('멤버의 졸업 상태와 이미지 누락을 처리하고 화면이 넘�
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true)
+})
+
+test('스크롤로 다음 페이지를 불러오고 상세에서 돌아오면 목록과 위치를 유지한다', async ({
+  page,
+}) => {
+  const first = Array.from({ length: 20 }, (_, i) => makeSong(i + 100))
+  await page.route('**/api/v1/songs?*', (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    return route.fulfill({
+      json: cursor
+        ? { ...emptyPage, items: [makeSong(150)], totalCount: 21 }
+        : {
+            items: first,
+            nextCursor: 'automatic',
+            hasNext: true,
+            totalCount: 21,
+          },
+    })
+  })
+  await page.goto('/songs')
+  await expect(page.getByRole('article')).toHaveCount(20)
+  await page
+    .getByRole('button', { name: '노래 더 보기', exact: true })
+    .scrollIntoViewIfNeeded()
+  await expect(page.getByRole('article')).toHaveCount(21)
+  const last = page.getByRole('link', { name: '테스트 노래 150 상세 보기' })
+  await last.scrollIntoViewIfNeeded()
+  const previousY = await page.evaluate(() => scrollY)
+  await last.click()
+  await expect(
+    page.getByRole('heading', { name: '노래 상세', exact: true }),
+  ).toBeVisible()
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
+  await page.goBack()
+  await expect(page.getByRole('article')).toHaveCount(21)
+  await expect
+    .poll(() => page.evaluate((y) => Math.abs(scrollY - y), previousY))
+    .toBeLessThan(5)
 })
 
 test('썸네일 로드가 실패해도 카드 정보와 화면 규격을 유지한다', async ({
