@@ -140,7 +140,7 @@ it.each(['ORIGINAL', 'COVER'] as const)(
 )
 
 it.each(['COVER', 'ORIGINAL'] as const)(
-  '%s도 완성된 복수 유닛만 참여하면 유닛명을 이어 표시한다',
+  '%s의 복수 유닛 참여 표기를 구분한다',
   (type) => {
     const data = {
       ...song(
@@ -149,7 +149,9 @@ it.each(['COVER', 'ORIGINAL'] as const)(
       ),
       type,
     }
-    expect(participantLabel(data, members)).toBe('Mystic · Universe')
+    expect(participantLabel(data, members)).toBe(
+      type === 'ORIGINAL' ? '스텔라이브' : 'Mystic · Universe',
+    )
   },
 )
 
@@ -166,4 +168,22 @@ it('점묘의 노래의 공개일과 참여자는 Mystic으로 표시한다', ()
   expect(
     participantLabel(song([yuni, kanna], '2024-12-01T12:00:00+09:00'), members),
   ).toBe('Mystic')
+})
+
+it.each([
+  ['2024-02-21T12:00:00+09:00', [yuni, kanna, ...second]],
+  ['2024-02-24T12:00:00+09:00', [...second].reverse().concat(kanna, yuni)],
+])('복수 유닛의 오리지널 단체곡은 스텔라이브로 표시한다: %s', (date, names) => {
+  expect(
+    participantLabel({ ...song(names, date), type: 'ORIGINAL' }, members),
+  ).toBe('스텔라이브')
+})
+
+it.each([
+  ['2024-12-01T12:00:00+09:00', [yuni, kanna], 'Mystic'],
+  ['2026-09-20T12:00:00+09:00', [huya, yuni], 'Everys'],
+])('오리지널 2인 유닛곡은 유닛명을 유지한다: %s', (date, names, unit) => {
+  expect(
+    participantLabel({ ...song(names, date), type: 'ORIGINAL' }, members),
+  ).toBe(unit)
 })

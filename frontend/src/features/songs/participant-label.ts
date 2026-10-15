@@ -74,6 +74,8 @@ export function participantLabel(
     )
     const unitMembers = new Set(completeUnits.flatMap(([, roster]) => roster))
     if (unitMembers.size === names.size) {
+      if (completeUnits.length > 1 && song.type === 'ORIGINAL')
+        return '스텔라이브'
       return completeUnits.map(([unit]) => unit).join(' · ')
     }
   }
