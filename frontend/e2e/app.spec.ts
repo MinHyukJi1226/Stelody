@@ -79,6 +79,8 @@ test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않�
       page.getByRole('dialog', { name: '사이트 메뉴' }),
     ).toBeVisible()
     await page.setViewportSize({ width: 1024, height: 768 })
+    // CSS hides the menu before the media-query subscription unmounts it.
+    await expect(menu).not.toBeAttached()
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await page.setViewportSize(originalViewport)
     await expect(menu).toBeEnabled()
