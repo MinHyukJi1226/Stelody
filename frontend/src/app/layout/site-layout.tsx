@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router'
+import { Outlet, ScrollRestoration } from 'react-router'
 import { SiteHeader } from './site-header'
 import { useTheme } from '../use-theme'
 
@@ -16,6 +16,7 @@ export function SiteLayout() {
       <main id="main-content" tabIndex={-1} className="page-content">
         <Outlet />
       </main>
+      <ScrollRestoration />
     </div>
   )
 }

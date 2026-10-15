@@ -1,8 +1,19 @@
+import { SearchHero } from './components/search-hero'
+import { LatestSongs } from './components/latest-songs'
+import { TrendingPanel } from './components/trending-panel'
+import { Recommendations } from './components/recommendations'
+import { HomeMembers } from './components/home-members'
+import { HomeFooter } from './components/home-footer'
+
 export function HomePage() {
   return (
-    <section>
-      <h1 className="text-4xl font-bold">Stelody</h1>
-      <p className="mt-4 text-lg">스텔라이브의 노래를 한곳에서</p>
-    </section>
+    <div className="home-page flex min-w-0 flex-col gap-8">
+      <SearchHero />
+      <LatestSongs />
+      <TrendingPanel />
+      <Recommendations />
+      <HomeMembers />
+      <HomeFooter />
+    </div>
   )
 }
