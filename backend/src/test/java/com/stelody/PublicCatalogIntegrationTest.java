@@ -635,9 +635,7 @@ class PublicCatalogIntegrationTest {
     assertThat(detail.get("song").get("work").get("artists").size()).isEqualTo(1);
     var related = new ArrayList<String>();
     detail.get("relatedSongs").forEach(s -> related.add(s.get("id").asText()));
-    assertThat(related)
-        .contains(S2.toString())
-        .doesNotContain(S1.toString(), id(105).toString(), id(106).toString());
+    assertThat(related).isEmpty();
     assertThat(request("/api/v1/songs/" + S3).get("song").get("work").isNull()).isTrue();
     assertThat(request("/api/v1/songs/" + S3).get("representativeVideo").get("kind").asText())
         .isEqualTo("AUDIO");
@@ -652,6 +650,101 @@ class PublicCatalogIntegrationTest {
     assertThat(
             request("/api/v1/songs/" + S1).get("representativeVideo").get("embeddable").asBoolean())
         .isFalse();
+  }
+
+  @Test
+  void relatedCoversExcludeMemberOnlyMatchesAndOriginalsBeforeLimiting() throws Exception {
+    song(id(201), "Same work cover", "COVER", W1, "2026-01-10T00:00:00Z", M3);
+    song(id(202), "Same work collaboration", "COVER", W1, "2026-01-10T00:00:00Z", M3);
+    writer.update("INSERT INTO app.song_member VALUES (?, ?, 1, true)", id(202), M1);
+    writer.update("INSERT INTO app.song_member VALUES (?, ?, 2, true)", id(202), M2);
+    song(id(203), "Same work original", "ORIGINAL", W1, "2026-01-30T00:00:00Z", M3);
+    var otherWork = id(11);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES (?, 'Other work', 'other work')",
+        otherWork);
+    for (int i = 210; i < 218; i++)
+      song(id(i), "Member only " + i, "COVER", otherWork, "2026-01-31T00:00:00Z", M1);
+
+    var related = request("/api/v1/songs/" + S1).get("relatedSongs");
+    var relatedIds = new ArrayList<String>();
+    related.forEach(
+        card -> {
+          relatedIds.add(card.get("id").asText());
+          assertThat(card.get("type").asText()).isEqualTo("COVER");
+          assertThat(card.get("work").get("id").asText()).isEqualTo(W1.toString());
+        });
+    assertThat(relatedIds).containsExactly(id(202).toString(), id(201).toString());
+  }
+
+  @Test
+  void relatedCoversRequireAtLeastOneDifferentConfirmedMember() throws Exception {
+    // S1 has M1 and M2; S2 has only M2. Subsets of the current lineup are excluded.
+    assertThat(request("/api/v1/songs/" + S1).get("relatedSongs")).isEmpty();
+    // The reverse direction includes S1 because its M1 is absent from S2.
+    assertThat(request("/api/v1/songs/" + S2).get("relatedSongs").get(0).get("id").asText())
+        .isEqualTo(S1.toString());
+    writer.update("INSERT INTO app.song_member VALUES (?, ?, 1, false)", S2, M3);
+    assertThat(request("/api/v1/songs/" + S1).get("relatedSongs")).isEmpty();
+    writer.update("INSERT INTO app.song_member VALUES (?, ?, 2, false)", S1, M3);
+    writer.update(
+        "UPDATE app.song_member SET confirmed=true WHERE song_id=? AND member_id=?", S2, M3);
+    assertThat(request("/api/v1/songs/" + S1).get("relatedSongs").get(0).get("id").asText())
+        .isEqualTo(S2.toString());
+  }
+
+  @Test
+  void relatedCoversAreEmptyWithoutWorkOrEligibleMatches() throws Exception {
+    assertThat(request("/api/v1/songs/" + S3).get("relatedSongs")).isEmpty();
+    assertThat(request("/api/v1/songs/" + S4).get("relatedSongs")).isEmpty();
+    writer.update("UPDATE app.song_entry SET visibility='HIDDEN' WHERE id=?", S1);
+    assertThat(request("/api/v1/songs/" + S2).get("relatedSongs")).isEmpty();
+  }
+
+  @Test
+  void relatedCoversUsePublicEligibilityAndExcludeUnavailableVideos() throws Exception {
+    for (String availability : List.of("PRIVATE", "UNLISTED", "DELETED", "UNAVAILABLE")) {
+      writer.update("UPDATE app.video SET availability=? WHERE song_id=?", availability, S1);
+      assertThat(request("/api/v1/songs/" + S2).get("relatedSongs")).isEmpty();
+    }
+    writer.update("UPDATE app.video SET availability='PUBLIC' WHERE song_id=?", S1);
+    for (String visibility : List.of("DRAFT", "HIDDEN")) {
+      writer.update("UPDATE app.song_entry SET visibility=? WHERE id=?", visibility, S1);
+      assertThat(request("/api/v1/songs/" + S2).get("relatedSongs")).isEmpty();
+    }
+    writer.update("UPDATE app.song_entry SET visibility='PUBLISHED' WHERE id=?", S1);
+    writer.update(
+        "UPDATE app.video SET published_at=null, source_published_at=null WHERE song_id=?", S1);
+    assertThat(request("/api/v1/songs/" + S2).get("relatedSongs")).isEmpty();
+    writer.update(
+        "UPDATE app.video SET source_published_at='2026-01-01T00:00:00Z', embeddable=false WHERE song_id=?",
+        S1);
+    assertThat(request("/api/v1/songs/" + S2).get("relatedSongs").get(0).get("id").asText())
+        .isEqualTo(S1.toString());
+    writer.update("UPDATE app.song_entry SET representative_video_id=null WHERE id=?", S1);
+    assertThat(request("/api/v1/songs/" + S2).get("relatedSongs")).isEmpty();
+  }
+
+  @Test
+  void relatedCoversReturnSixLatestUniqueSongsWithDeterministicDateTies() throws Exception {
+    for (int i = 201; i <= 207; i++) {
+      song(id(i), "Cover " + i, "COVER", W1, "2026-01-10T00:00:00Z", M3);
+      writer.update("INSERT INTO app.song_member VALUES (?, ?, 1, true)", id(i), M1);
+      writer.update("INSERT INTO app.song_member VALUES (?, ?, 2, true)", id(i), M2);
+    }
+    // A newer date takes precedence over a larger song ID.
+    song(id(200), "Newest cover", "COVER", W1, "2026-01-11T00:00:00Z", M3);
+    var related = request("/api/v1/songs/" + S1).get("relatedSongs");
+    var relatedIds = new ArrayList<String>();
+    related.forEach(card -> relatedIds.add(card.get("id").asText()));
+    assertThat(relatedIds)
+        .containsExactly(
+            id(200).toString(),
+            id(207).toString(),
+            id(206).toString(),
+            id(205).toString(),
+            id(204).toString(),
+            id(203).toString());
   }
 
   @Test
