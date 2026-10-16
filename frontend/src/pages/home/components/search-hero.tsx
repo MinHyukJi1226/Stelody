@@ -34,6 +34,7 @@ export function SearchHero() {
           placeholder="곡명, 원곡, 멤버 검색"
           className="min-h-[53px] flex-1 border-0 text-sm leading-[1.5]"
           required
+          pattern={'.*\\S.*'}
         />
         <Button variant="primary" type="submit">
           검색

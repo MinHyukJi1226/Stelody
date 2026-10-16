@@ -7,6 +7,8 @@ type SongQuery = NonNullable<
 
 it('검색 조건 타입은 실제 계약을 보존한다', () => {
   expectTypeOf<SongQuery['q']>().toEqualTypeOf<string | undefined>()
+  expectTypeOf<SongQuery['startDate']>().toEqualTypeOf<string | undefined>()
+  expectTypeOf<SongQuery['endDate']>().toEqualTypeOf<string | undefined>()
   expectTypeOf<SongQuery['cursor']>().toEqualTypeOf<string | undefined>()
   expectTypeOf<SongQuery['type']>().toEqualTypeOf<
     'ALL' | 'COVER' | 'ORIGINAL' | undefined

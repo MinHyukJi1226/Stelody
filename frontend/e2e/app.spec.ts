@@ -64,13 +64,18 @@ test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않�
     const link = navigation.getByRole('link', { name: label, exact: true })
     await link.click()
     await expect(
-      page.getByRole('heading', { name: label, exact: true }),
+      page.getByRole('heading', {
+        name: label === '검색' ? '노래 검색' : label,
+        exact: true,
+      }),
     ).toBeVisible()
     if (mobile) await expect(page.getByRole('dialog')).toHaveCount(0)
     else await expect(link).toHaveAttribute('aria-current', 'page')
-    await expect(
-      page.getByText('준비 중입니다.', { exact: true }),
-    ).toBeVisible()
+    if (label !== '검색') {
+      await expect(
+        page.getByText('준비 중입니다.', { exact: true }),
+      ).toBeVisible()
+    }
   }
   if (mobile) {
     const originalViewport = page.viewportSize()!

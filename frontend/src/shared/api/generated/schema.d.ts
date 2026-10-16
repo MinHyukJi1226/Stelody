@@ -1487,7 +1487,7 @@ export interface components {
     ApiProblem: {
       /** @description 기능별 오류 코드. 각 API의 오류 응답 description·x-error-codes와 HTTP status로 분기합니다. fieldErrors[].code와 내보내기 Job.errorCode는 별도입니다. 새 코드는 추가될 수 있으므로 알 수 없는 코드는 일반 오류로 안내하고 traceId를 보관합니다. */
       code: string
-      /** @description DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다. */
+      /** @description DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 날짜 검색은 INVALID_DATE: 형식·존재 오류, DATE_OUT_OF_RANGE: 연도 범위, INVALID_DATE_RANGE: 시작일·종료일 역전, CONFLICTING_FILTER: year와 날짜 범위 중복입니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다. */
       fieldErrors: {
         /** @enum {string} */
         code:
@@ -1497,6 +1497,10 @@ export interface components {
           | 'OUT_OF_RANGE'
           | 'DUPLICATE'
           | 'INVALID_VALUE'
+          | 'INVALID_DATE'
+          | 'DATE_OUT_OF_RANGE'
+          | 'INVALID_DATE_RANGE'
+          | 'CONFLICTING_FILTER'
         /**
          * @description 요청 필드 또는 파라미터 경로. 점은 객체 속성, [n]은 0부터 시작하는 배열 인덱스입니다.
          * @example links[0].url
@@ -1762,6 +1766,7 @@ export interface components {
       workId: string | null
     }
     'com.stelody.admin.dto.CatalogAdminDtos.SongInput': {
+      /** @description 곡 검색용 별칭. 한국어 번역명·발음·통용명을 최대 50개, 각 300자까지 등록합니다. GET /api/v1/admin/songs/{id}로 조회하고 POST·PUT의 aliases로 전체 목록을 저장합니다. 삭제는 해당 항목을 빼고 저장하며 빈 배열은 모두 삭제합니다. 표시 제목은 title로 별도 유지됩니다. q 검색은 공백·대소문자를 무시합니다. */
       aliases: string[]
       externalArtistIds: string[]
       isSpecialEvent: boolean
@@ -7959,12 +7964,17 @@ export interface operations {
   get_songs: {
     parameters: {
       query?: {
+        /** @description 최대 200자. NFKC 정규화 후 공백·영어 대소문자를 무시하여 곡 제목·곡 별칭·원곡 제목과 별칭·참여 멤버 및 아티스트 이름과 별칭을 검색합니다. 정식 제목은 바뀌지 않으며 같은 곡은 한 번만 반환합니다. totalCount·정렬·커서에 같은 검색 규칙을 적용합니다. 생략은 전체 탐색, 명시한 빈 검색어는 기존 SEARCH 계약에 따라 빈 결과입니다. */
         q?: string
         type?: 'ALL' | 'COVER' | 'ORIGINAL'
         /** @description 참여 멤버 ID. 중복을 제외하고 최대 20개입니다. */
         memberIds?: string[]
         /** @description 대표 영상 공개일의 Asia/Seoul 기준 연도입니다. 전체 연도 선택지는 GET /api/v1/songs/years에서 조회합니다. */
         year?: number
+        /** @description YYYY-MM-DD. 대표 영상 publishedAt의 Asia/Seoul 날짜 기준, 1900-01-01~2100-12-31. 시작일은 한국 시간 00:00 이상, 종료일은 다음날 00:00 미만으로 양 끝 날짜를 포함합니다. 한쪽만 지정할 수 있습니다. 둘 다 생략하면 기간 제한이 없습니다. year와 함께 지정하면 400 INVALID_CATALOG_QUERY입니다. 기간을 변경하면 이전 커서는 사용할 수 없습니다. */
+        startDate?: string
+        /** @description YYYY-MM-DD. 대표 영상 publishedAt의 Asia/Seoul 날짜 기준, 1900-01-01~2100-12-31. 시작일은 한국 시간 00:00 이상, 종료일은 다음날 00:00 미만으로 양 끝 날짜를 포함합니다. 한쪽만 지정할 수 있습니다. 둘 다 생략하면 기간 제한이 없습니다. year와 함께 지정하면 400 INVALID_CATALOG_QUERY입니다. 기간을 변경하면 이전 커서는 사용할 수 없습니다. */
+        endDate?: string
         collaboration?: boolean
         /** @description 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다. */
         sort?: 'LATEST' | 'RELEVANCE' | 'VIEWS'
@@ -7989,7 +7999,10 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Page']
         }
       }
-      /** @description INVALID_CATALOG_QUERY: 검색 조건·커서를 확인합니다. */
+      /**
+       * @description INVALID_CATALOG_QUERY: 검색 조건·커서를 확인합니다.
+       *     INVALID_CATALOG_QUERY: 날짜 범위는 totalCount와 모든 커서 페이지에 동일하게 적용됩니다. 날짜 형식·존재 오류: fieldErrors[].code=INVALID_DATE, 허용 연도 밖: DATE_OUT_OF_RANGE, 시작일>종료일: INVALID_DATE_RANGE(startDate·endDate), year와 범위 동시 사용: CONFLICTING_FILTER(year·지정 날짜 필드). fieldErrors[].field로 입력칸을 식별하며 입력값은 반환하지 않습니다. 기간 변경 후 기존 커서도 INVALID_CATALOG_QUERY입니다.
+       */
       400: {
         headers: {
           [name: string]: unknown
