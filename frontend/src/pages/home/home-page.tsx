@@ -3,7 +3,7 @@ import { LatestSongs } from './components/latest-songs'
 import { TrendingPanel } from './components/trending-panel'
 import { Recommendations } from './components/recommendations'
 import { HomeMembers } from './components/home-members'
-import { HomeFooter } from './components/home-footer'
+import { SiteFooter } from '@/shared/ui/site-footer'
 
 export function HomePage() {
   return (
@@ -13,7 +13,7 @@ export function HomePage() {
       <TrendingPanel />
       <Recommendations />
       <HomeMembers />
-      <HomeFooter />
+      <SiteFooter />
     </div>
   )
 }

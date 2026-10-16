@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 
-export function HomeFooter() {
+export function SiteFooter() {
   return (
     <footer className="-mx-5 -mb-12 bg-surface p-5 text-xs text-muted md:mx-[calc(clamp(24px,8.333333vw,120px)*-1)] md:p-10">
       <p>Stelody · 팬이 만드는 노래 아카이브</p>
