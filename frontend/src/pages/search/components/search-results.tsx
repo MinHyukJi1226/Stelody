@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import type { SearchCriteria } from '@/features/songs/search-params'
 import { songSearchOptions } from '@/features/songs/search-queries'
 import { uniqueSongs } from '@/features/songs/queries'
@@ -29,7 +29,9 @@ export function SearchResults({
   criteria: SearchCriteria
   onSort: (sort: SearchCriteria['sort']) => void
 }) {
-  const query = useInfiniteQuery(songSearchOptions(criteria))
+  const queryClient = useQueryClient()
+  const options = songSearchOptions(criteria)
+  const query = useInfiniteQuery(options)
   const sentinel = useRef<HTMLDivElement>(null)
   const { hasNextPage, isFetching, isError, fetchNextPage } = query
   useEffect(() => {
@@ -52,8 +54,17 @@ export function SearchResults({
     return () => observer.disconnect()
   }, [hasNextPage, isFetching, isError, fetchNextPage])
   const songs = uniqueSongs(query.data?.pages ?? [])
-  const retry = () =>
+  const publicationChanged =
+    query.error instanceof ApiError &&
+    query.error.status === 409 &&
+    query.error.code === 'VIEW_PUBLICATION_CHANGED'
+  const retry = () => {
+    if (publicationChanged) {
+      void queryClient.resetQueries({ queryKey: options.queryKey, exact: true })
+      return
+    }
     void (query.isFetchNextPageError ? query.fetchNextPage() : query.refetch())
+  }
   const fieldErrors =
     query.error instanceof ApiError ? query.error.fieldErrors : []
   return (
@@ -124,7 +135,11 @@ export function SearchResults({
               ? '검색 결과를 더 불러오지 못했습니다'
               : '검색 결과를 갱신하지 못했습니다'
           }
-          description="이전에 불러온 결과를 표시하고 있습니다."
+          description={
+            publicationChanged
+              ? '조회수 집계가 갱신되었습니다. 다시 시도하면 첫 페이지부터 불러옵니다.'
+              : '이전에 불러온 결과를 표시하고 있습니다.'
+          }
           onRetry={retry}
         />
       )}

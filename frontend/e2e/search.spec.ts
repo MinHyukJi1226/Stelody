@@ -490,3 +490,72 @@ test('검색어 없이 멤버만 선택해도 검색하고 초기화하면 다�
   await expect(page).toHaveURL('/search')
   await expect(button).toBeDisabled()
 })
+
+test('조회수 집계 변경 오류는 기존 커서를 버리고 첫 페이지부터 재시작한다', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    delete (window as { IntersectionObserver?: unknown }).IntersectionObserver
+  })
+  const cursors: (string | null)[] = []
+  let publicationChanged = false
+  await page.route('**/api/v1/songs?*', (route) => {
+    const params = new URL(route.request().url()).searchParams
+    const cursor = params.get('cursor')
+    cursors.push(cursor)
+    expect(params.get('sort')).toBe('VIEWS')
+    expect(params.get('q')).toBe('노래')
+    expect(params.get('type')).toBe('COVER')
+    expect(params.get('startDate')).toBe('2025-01-01')
+    if (cursor === 'old-third') {
+      publicationChanged = true
+      return route.fulfill({
+        status: 409,
+        json: { code: 'VIEW_PUBLICATION_CHANGED' },
+      })
+    }
+    if (publicationChanged) {
+      if (cursor && cursor !== 'new-next')
+        return route.fulfill({
+          status: 409,
+          json: { code: 'VIEW_PUBLICATION_CHANGED' },
+        })
+      return route.fulfill({
+        json: cursor
+          ? { ...emptyPage, items: [makeSong(102)], totalCount: 2 }
+          : {
+              items: [makeSong(101)],
+              totalCount: 2,
+              hasNext: true,
+              nextCursor: 'new-next',
+            },
+      })
+    }
+    return route.fulfill({
+      json: {
+        items: [makeSong(cursor ? 2 : 1)],
+        totalCount: 3,
+        hasNext: true,
+        nextCursor: cursor ? 'old-third' : 'old-next',
+      },
+    })
+  })
+  await page.goto('/search?q=노래&type=COVER&sort=VIEWS&startDate=2025-01-01')
+  await expect(page.getByRole('article')).toHaveCount(1)
+  await page.getByRole('button', { name: '노래 더 보기', exact: true }).click()
+  await expect(page.getByRole('article')).toHaveCount(2)
+  await page.getByRole('button', { name: '노래 더 보기', exact: true }).click()
+  await expect(
+    page.getByText('검색 결과를 더 불러오지 못했습니다', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('article')).toHaveCount(2)
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: '검색 결과 2곡', exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('article')).toHaveCount(1)
+  expect(cursors).toEqual([null, 'old-next', 'old-third', null])
+  await page.getByRole('button', { name: '노래 더 보기', exact: true }).click()
+  await expect(page.getByRole('article')).toHaveCount(2)
+  expect(cursors).toEqual([null, 'old-next', 'old-third', null, 'new-next'])
+})
