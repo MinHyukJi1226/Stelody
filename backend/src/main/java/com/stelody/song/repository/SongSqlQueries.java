@@ -143,10 +143,11 @@ final class SongSqlQueries {
     return new Statement(
         RANKED_SONGS
             + """
-        AND s.id <> :id AND (
-          (s.song_type = 'COVER' AND s.work_id = :work) OR
-          EXISTS (SELECT 1 FROM app.song_member sm JOIN app.song_member own ON own.member_id = sm.member_id
-            WHERE sm.song_id = s.id AND own.song_id = :id AND sm.confirmed AND own.confirmed))
+        AND s.id <> :id AND s.song_type = 'COVER' AND s.work_id = :work
+          AND EXISTS (SELECT 1 FROM app.song_member sm
+            WHERE sm.song_id = s.id AND sm.confirmed
+              AND NOT EXISTS (SELECT 1 FROM app.song_member own
+                WHERE own.song_id = :id AND own.member_id = sm.member_id AND own.confirmed))
         ORDER BY s.published_at DESC, s.id DESC LIMIT 6
         """,
         params);

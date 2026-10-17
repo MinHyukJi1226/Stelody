@@ -97,6 +97,7 @@ public class SongRepository {
   }
 
   public List<Row> related(Row song, UUID publication) {
+    if (song.workId() == null) return List.of();
     var statement = SongSqlQueries.related(song.id(), song.workId(), publication);
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).list();
   }

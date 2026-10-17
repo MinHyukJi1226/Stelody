@@ -80,6 +80,36 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsRelatedSongsAsSameWorkCoversByDifferentMembers() throws Exception {
+    var api = contract();
+    var related =
+        api.path("components")
+            .path("schemas")
+            .path("com.stelody.song.dto.SongDtos.Detail")
+            .path("properties")
+            .path("relatedSongs");
+    assertThat(related.path("type").asText()).isEqualTo("array");
+    assertThat(related.path("maxItems").asInt()).isEqualTo(6);
+    assertThat(related.path("uniqueItems").asBoolean()).isTrue();
+    assertThat(related.path("description").asText())
+        .contains(
+            "work.id",
+            "COVER",
+            "확정 멤버",
+            "제외",
+            "공개",
+            "조건 적용 후",
+            "publishedAt",
+            "곡 ID 내림차순",
+            "6개",
+            "빈 배열",
+            "페이지 조회는 지원하지 않습니다");
+    assertThat(
+            api.path("paths").path("/api/v1/songs/{id}").path("get").path("description").asText())
+        .contains("relatedSongs", "같은 원곡", "다른 멤버");
+  }
+
+  @Test
   void documentsWhitespaceInsensitiveSearchAndExistingSongAliasEditing() throws Exception {
     var api = contract();
     for (var p : api.path("paths").path("/api/v1/songs").path("get").path("parameters"))

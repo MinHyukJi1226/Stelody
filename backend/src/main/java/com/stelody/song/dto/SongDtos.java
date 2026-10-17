@@ -112,7 +112,17 @@ public final class SongDtos {
       Card song,
       Video representativeVideo,
       SearchHelp searchHelp,
-      List<Card> relatedSongs,
+      @ArraySchema(
+              uniqueItems = true,
+              maxItems = 6,
+              arraySchema =
+                  @Schema(
+                      description =
+                          "같은 work.id의 다른 COVER 중 현재 곡에 없는 확정 멤버가 한 명 이상 참여한 곡입니다. "
+                              + "현재 곡과 같은 멤버만 참여한 곡은 제외합니다. 일반 공개 목록과 동일하게 공개 설정·대표 영상의 공개 상태·공개일·확정 멤버 조건을 적용합니다. "
+                              + "곡 ID 중복 없이 조건 적용 후 대표 영상 publishedAt 내림차순, 동률이면 곡 ID 내림차순으로 최대 6개를 반환합니다. "
+                              + "원곡 정보나 일치하는 커버가 없으면 빈 배열이며 페이지 조회는 지원하지 않습니다."))
+          List<Card> relatedSongs,
       List<ExternalLink> links,
       List<Karaoke> karaoke,
       @Schema(nullable = true) WorkResources workResources) {}

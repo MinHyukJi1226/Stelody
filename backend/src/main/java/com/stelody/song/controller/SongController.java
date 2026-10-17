@@ -40,7 +40,10 @@ public class SongController {
   }
 
   @GetMapping("/api/v1/songs/{id}")
-  @Operation(summary = "공개 곡 상세")
+  @Operation(
+      summary = "공개 곡 상세",
+      description =
+          "relatedSongs는 같은 원곡의 다른 멤버 커버만 반환합니다. 조건 적용 후 최신순 최대 6개이며 페이지 조회는 지원하지 않습니다. 원곡 정보나 일치하는 커버가 없으면 빈 배열입니다. 상세 조건은 relatedSongs 명세를 참고합니다.")
   public SongDtos.Detail detail(@PathVariable UUID id) {
     return songs.detail(id);
   }
