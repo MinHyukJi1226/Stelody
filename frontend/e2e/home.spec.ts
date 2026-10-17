@@ -248,7 +248,7 @@ test('스크롤로 다음 페이지를 불러오고 상세에서 돌아오면 �
   const previousY = await page.evaluate(() => scrollY)
   await last.click()
   await expect(
-    page.getByRole('heading', { name: '노래 상세', exact: true }),
+    page.getByRole('heading', { name: '노래를 찾을 수 없습니다', exact: true }),
   ).toBeVisible()
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
   await page.goBack()

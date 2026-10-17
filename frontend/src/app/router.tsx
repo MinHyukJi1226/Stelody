@@ -13,7 +13,14 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <HomePage /> },
       { path: '/songs', element: <SongCatalogPage /> },
-      { path: '/songs/:songId', element: <ComingSoonPage title="노래 상세" /> },
+      {
+        path: '/songs/:songId',
+        lazy: async () => {
+          const { SongDetailPage } =
+            await import('@/pages/song-detail/song-detail-page')
+          return { Component: SongDetailPage }
+        },
+      },
       {
         path: '/members/:memberId',
         element: <ComingSoonPage title="멤버 상세" />,
