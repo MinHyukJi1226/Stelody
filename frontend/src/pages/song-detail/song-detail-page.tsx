@@ -15,6 +15,7 @@ import { SongVideo } from './components/song-video'
 import { ExternalLinks } from './components/external-links'
 import { KaraokeNumbers, WorkInformation } from './components/song-resources'
 import { SearchHelp } from './components/search-help'
+import { SongViews } from './components/song-views'
 
 export function SongDetailPage() {
   const { songId = '' } = useParams()
@@ -63,6 +64,7 @@ export function SongDetailPage() {
           <SongContent
             key={`${query.data.song.id}-${query.data.representativeVideo.id}`}
             detail={query.data}
+            reload={() => void query.refetch()}
           />
         </>
       )}
@@ -71,7 +73,13 @@ export function SongDetailPage() {
   )
 }
 
-function SongContent({ detail }: { detail: SongDetail }) {
+function SongContent({
+  detail,
+  reload,
+}: {
+  detail: SongDetail
+  reload: () => void
+}) {
   return (
     <>
       <SongHeading detail={detail} />
@@ -105,6 +113,13 @@ function SongContent({ detail }: { detail: SongDetail }) {
         <SearchHelp detail={detail} />
       )}
       <WorkInformation detail={detail} />
+      <SongViews
+        songId={detail.song.id}
+        videoId={detail.representativeVideo.id}
+        viewCount={detail.song.viewCount}
+        observedAt={detail.song.viewsObservedAt}
+        onVideoChanged={reload}
+      />
       {detail.relatedSongs.length > 0 && (
         <section
           aria-labelledby="related-title"

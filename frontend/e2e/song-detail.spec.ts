@@ -55,6 +55,57 @@ test('목록에서 상세로 이동하고 곡·원곡 리소스를 구분하며 
   ).toBeVisible()
 })
 
+test('조회수 기간 변경·결측·0회·독립 오류와 재시도를 처리한다', async ({
+  page,
+}) => {
+  const periods: number[] = []
+  let fail = true
+  await page.route(`**/api/v1/songs/${song.id}/views?*`, (route) => {
+    const days = Number(new URL(route.request().url()).searchParams.get('days'))
+    periods.push(days)
+    return days === 30 && fail
+      ? route.fulfill({
+          status: 400,
+          json: { code: 'INVALID_STATISTICS_QUERY' },
+        })
+      : route.fulfill({ json: makeViews(days) })
+  })
+  await page.goto(`/songs/${song.id}`)
+  const table = page.getByRole('table', { name: '날짜별 데이터' })
+  await expect(table.getByRole('row')).toHaveCount(8)
+  await expect(
+    table.getByRole('row').filter({
+      has: page.getByRole('button', {
+        name: '2026-10-01 데이터 보기',
+        exact: true,
+      }),
+    }),
+  ).toContainText('0회')
+  await expect(
+    table.getByRole('row').filter({
+      has: page.getByRole('button', {
+        name: '2026-10-02 데이터 보기',
+        exact: true,
+      }),
+    }),
+  ).toContainText('미수집')
+  const path = page.locator('.recharts-line-curve')
+  await expect(path).toHaveCount(1)
+  expect((await path.getAttribute('d'))?.match(/M/g)?.length).toBe(2)
+  await page.getByRole('radio', { name: '최근 30일' }).click()
+  await expect(
+    page.getByText('조회수 추이를 불러오지 못했어요', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: song.title, exact: true }),
+  ).toBeVisible()
+  await expect(table.getByRole('button')).toHaveCount(0)
+  fail = false
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(table.getByRole('row')).toHaveCount(31)
+  expect(periods).toEqual([7, 30, 30])
+})
+
 test('사용자가 재생할 때만 YouTube 임베드를 로드한다', async ({ page }) => {
   await page.route('https://www.youtube-nocookie.com/**', (route) =>
     route.fulfill({ body: '<html></html>', contentType: 'text/html' }),
@@ -211,6 +262,59 @@ test('유효하지 않은 주소·비공개 곡·요청 실패와 재시도를 �
   ).toBeVisible()
 })
 
+test('미수집·대표 영상 변경 시 잘못된 조회수를 표시하지 않는다', async ({
+  page,
+}) => {
+  let changed = false
+  await page.route(`**/api/v1/songs/${song.id}`, (route) =>
+    route.fulfill({
+      json: {
+        ...detail,
+        representativeVideo: {
+          ...detail.representativeVideo,
+          id: changed ? 'new-video' : detail.representativeVideo.id,
+        },
+      },
+    }),
+  )
+  await page.route(`**/api/v1/songs/${song.id}/views?*`, (route) =>
+    route.fulfill({
+      json: {
+        ...makeViews(),
+        videoId: 'new-video',
+        latestViewCount: null,
+        latestObservedAt: null,
+        collectionStartedAt: null,
+        points: makeViews().points.map((p) => ({
+          ...p,
+          viewCount: null,
+          observedAt: null,
+        })),
+      },
+    }),
+  )
+  await page.goto(`/songs/${song.id}`)
+  await expect(
+    page.getByText('대표 영상이 변경되었습니다', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('table', { name: '날짜별 데이터' }).getByRole('button'),
+  ).toHaveCount(0)
+  changed = true
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(
+    page.getByText('총 조회수 미수집', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('기간 내 수집된 데이터가 없습니다', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page
+      .getByRole('table', { name: '날짜별 데이터' })
+      .getByRole('columnheader'),
+  ).toHaveCount(3)
+})
+
 test('긴 제목·다수 참여자·라이트/다크에서 모바일 가로 넘침이 없다', async ({
   page,
 }) => {
@@ -241,6 +345,45 @@ test('긴 제목·다수 참여자·라이트/다크에서 모바일 가로 넘�
       ),
     ).toBe(true)
     await page.getByRole('button', { name: /모드로 변경$/ }).click()
+  }
+})
+
+test('상세와 조회수 로딩 상태를 각각 표시한다', async ({ page }) => {
+  let releaseDetail!: () => void
+  let releaseViews!: () => void
+  const detailGate = new Promise<void>((resolve) => {
+    releaseDetail = resolve
+  })
+  const viewsGate = new Promise<void>((resolve) => {
+    releaseViews = resolve
+  })
+  await page.route(`**/api/v1/songs/${song.id}`, async (route) => {
+    await detailGate
+    await route.fulfill({ json: detail })
+  })
+  await page.route(`**/api/v1/songs/${song.id}/views?*`, async (route) => {
+    await viewsGate
+    await route.fulfill({ json: makeViews() })
+  })
+  try {
+    await page.goto(`/songs/${song.id}`)
+    await expect(
+      page.getByRole('status', { name: '노래 상세 불러오는 중' }),
+    ).toBeVisible()
+    releaseDetail()
+    await expect(
+      page.getByRole('heading', { name: song.title, exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('status', { name: '조회수 불러오는 중' }),
+    ).toBeVisible()
+    releaseViews()
+    await expect(
+      page.getByRole('table', { name: '날짜별 데이터' }),
+    ).toBeVisible()
+  } finally {
+    releaseDetail()
+    releaseViews()
   }
 })
 
