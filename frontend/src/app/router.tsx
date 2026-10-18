@@ -23,7 +23,11 @@ export const router = createBrowserRouter([
       },
       {
         path: '/members/:memberId',
-        element: <ComingSoonPage title="멤버 상세" />,
+        lazy: async () => {
+          const { MemberDetailPage } =
+            await import('@/pages/member-detail/member-detail-page')
+          return { Component: MemberDetailPage }
+        },
       },
       {
         path: '/search',
