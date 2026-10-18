@@ -23,7 +23,11 @@ export const router = createBrowserRouter([
       },
       {
         path: '/members/:memberId',
-        element: <ComingSoonPage title="멤버 상세" />,
+        lazy: async () => {
+          const { MemberDetailPage } =
+            await import('@/pages/member-detail/member-detail-page')
+          return { Component: MemberDetailPage }
+        },
       },
       {
         path: '/search',
@@ -32,7 +36,14 @@ export const router = createBrowserRouter([
           return { Component: SearchPage }
         },
       },
-      { path: '/members', element: <ComingSoonPage title="멤버" /> },
+      {
+        path: '/members',
+        lazy: async () => {
+          const { MemberListPage } =
+            await import('@/pages/members/member-list-page')
+          return { Component: MemberListPage }
+        },
+      },
       { path: '/library', element: <ComingSoonPage title="내 보관함" /> },
       { path: '/login', element: <ComingSoonPage title="로그인" /> },
       { path: '*', element: <NotFoundPage /> },
