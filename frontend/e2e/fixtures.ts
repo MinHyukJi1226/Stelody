@@ -24,7 +24,7 @@ export function makeSong(index: number, overrides: Partial<Song> = {}): Song {
       },
     ],
     work: null,
-    collaboration: false,
+    multipleParticipants: (overrides.participants?.length ?? 1) >= 2,
     isSpecialEvent: false,
     specialEventLabel: null,
     viewCount: null,

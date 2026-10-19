@@ -110,12 +110,12 @@ export function MemberSongs({
             <MemberState
               kind="empty"
               title={
-                filters.type === 'ALL' && !filters.collaboration
+                filters.type === 'ALL' && !filters.multipleParticipants
                   ? '등록된 공개 곡이 없습니다'
                   : '조건에 맞는 공개 곡이 없습니다'
               }
               description={
-                filters.type === 'ALL' && !filters.collaboration
+                filters.type === 'ALL' && !filters.multipleParticipants
                   ? '새 노래가 등록되면 이곳에서 만나보세요.'
                   : '곡 유형이나 공동 참여 필터를 바꿔보세요.'
               }

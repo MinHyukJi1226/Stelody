@@ -21,7 +21,8 @@ describe('공개 곡 조회', () => {
         expect(q.get('q')).toBe('노래 & cover?')
         expect(q.get('cursor')).toBe('opaque+/=&cursor')
         expect(q.getAll('memberIds')).toEqual(['member-a', 'member-b'])
-        expect(q.get('collaboration')).toBe('false')
+        expect(q.get('multipleParticipants')).toBe('false')
+        expect(q.has('collaboration')).toBe(false)
         expect(q.has('year')).toBe(false)
         return HttpResponse.json(emptyPage)
       }),
@@ -31,7 +32,7 @@ describe('공개 곡 조회', () => {
         q: '노래 & cover?',
         cursor: 'opaque+/=&cursor',
         memberIds: ['member-a', 'member-b'],
-        collaboration: false,
+        multipleParticipants: false,
       }),
     ).resolves.toEqual(emptyPage)
   })

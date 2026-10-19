@@ -75,9 +75,16 @@ Tailwind Vite 플러그인과 shadcn/ui의 `components.json`·경로 별칭을 �
 - 멤버 상세와 곡 목록의 로딩·오류를 독립적으로 처리합니다. 공개 곡이 없어도 프로필은 유지하며, 잘못된 UUID는 요청하지 않습니다. 없는 멤버·공개 불가 응답은 기존 상세 대신 접근 불가 안내를 제공합니다.
 - 디자인 기준: [PC 멤버 목록](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-267), [PC 멤버 상세](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-7065), [모바일 멤버 상세](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-10387).
 
+## 다인 참여와 특별 목적 표시
+
+- 참여 인원 제한은 `multipleParticipants`를 사용합니다. `true`이면 확정 참여자 2명 이상이며, `false` 또는 생략하면 인원 제한이 없습니다. 곡 목록과 멤버별 곡 목록은 신규 파라미터만 전송합니다.
+- 멤버의 공동 참여곡 수는 `songCounts.multipleParticipants`를 사용합니다. deprecated 호환 집계는 표시 기준으로 사용하지 않습니다.
+- 곡 카드·상세는 참여 인원으로 콜라보 배지를 만들지 않습니다. 특별 목적 배지는 `isSpecialEvent`가 참일 때 `specialEventLabel` 문구를 표시하며, 문구가 없으면 기존 대체 문구인 “특별한 날”을 사용합니다.
+- 기존 멤버 주소의 `collaboration` 조건은 새 필터로 읽고 다음 UI 변경부터 새 이름으로 URL을 작성합니다. 신·구 조건이 충돌하면 곡 요청을 막고 필터 초기화를 안내합니다.
+
 ## API 계약
 
-`openapi/stelody.json`은 같은 원곡의 다른 커버 보완 기준 커밋 `d494df67c1fbf03f2a426cafad8930fc6b457d65`의 전달된 검증 명세를 반영한 스냅샷입니다. [기준 CI 실행](https://github.com/MinHyukJi1226/Stelody/actions/runs/38911979438)이 제공되었으며, 2026-10-16 운영 명세와 JSON 내용의 일치를 확인했습니다. 저장 시 프로젝트 JSON 포맷을 적용하므로 파일 바이트 일치를 의미하지 않습니다.
+`openapi/stelody.json`은 다인 참여·콜라보 표시 계약 분리 기준 커밋 `d68f7b02cf854581fd1b0da92a24020ce8aeba9e`([PR #59](https://github.com/MinHyukJi1226/Stelody/pull/59)) 이후의 운영 OpenAPI 스냅샷입니다. 2026-10-19 운영 반영을 확인하고 교체했습니다. 저장 시 프로젝트 JSON 포맷과 기존 키 순서를 적용하므로 파일 바이트 일치를 의미하지 않습니다.
 
 명세는 수동으로 편집하지 않습니다. 백엔드 변경 시 해당 커밋의 검증된 CI 아티팩트에서 교체하고 아래 명령으로 타입을 생성합니다.
 

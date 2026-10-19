@@ -18,7 +18,7 @@ const song: Song = {
   thumbnailUrl: null,
   participants: [],
   work: null,
-  collaboration: false,
+  multipleParticipants: false,
   isSpecialEvent: false,
   specialEventLabel: null,
   viewCount: null,

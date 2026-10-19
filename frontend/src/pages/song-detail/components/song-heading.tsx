@@ -11,9 +11,6 @@ export function SongHeading({ detail }: { detail: SongDetail }) {
         <span className="rounded-lg bg-tint p-2 text-brand">
           {song.type === 'COVER' ? '커버' : '오리지널'}
         </span>
-        {song.collaboration && (
-          <span className="rounded-lg bg-tint p-2 text-brand">콜라보</span>
-        )}
         {song.isSpecialEvent && (
           <span className="rounded-lg bg-mint p-2 text-green">
             {song.specialEventLabel || '특별한 날'}

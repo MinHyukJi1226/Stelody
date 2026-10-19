@@ -25,7 +25,7 @@ export function MemberCounts({ counts }: { counts: MemberCard['songCounts'] }) {
         ))}
       </dl>
       <p className="text-sm leading-[1.5] text-muted">
-        공동 참여 {counts.collaborations.toLocaleString('ko-KR')}곡 · 전체{' '}
+        공동 참여 {counts.multipleParticipants.toLocaleString('ko-KR')}곡 · 전체{' '}
         {counts.total.toLocaleString('ko-KR')}곡에 포함됩니다.
       </p>
     </>

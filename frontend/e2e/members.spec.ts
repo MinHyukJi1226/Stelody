@@ -113,7 +113,7 @@ test('필터·정렬을 URL과 API에 적용하고 새로고침·뒤로 가기�
     return route.fulfill({ json: memberSongs })
   })
   await page.goto(
-    `/members/${member.id}?type=COVER&collaboration=true&sort=VIEWS`,
+    `/members/${member.id}?type=COVER&multipleParticipants=true&sort=VIEWS`,
   )
   await expect(page.getByRole('article')).toHaveCount(2)
   await expect(
@@ -125,7 +125,7 @@ test('필터·정렬을 URL과 API에 적용하고 새로고침·뒤로 가기�
   await expect(page.getByLabel('참여곡 정렬')).toHaveValue('VIEWS')
   expect(Object.fromEntries(requests[0]!)).toEqual({
     type: 'COVER',
-    collaboration: 'true',
+    multipleParticipants: 'true',
     sort: 'VIEWS',
     size: '20',
   })
@@ -135,7 +135,9 @@ test('필터·정렬을 URL과 API에 적용하고 새로고침·뒤로 가기�
   await page.getByLabel('참여곡 정렬').selectOption('LATEST')
   await expect.poll(() => requests.at(-1)?.get('sort')).toBe('LATEST')
   await page.getByRole('button', { name: '공동 참여곡만', exact: true }).click()
-  await expect.poll(() => requests.at(-1)?.get('collaboration')).toBe('false')
+  await expect
+    .poll(() => requests.at(-1)?.get('multipleParticipants'))
+    .toBe('false')
   expect(detailCalls).toBe(1)
   await page.goBack()
   await expect(
@@ -204,7 +206,7 @@ test('조회수 집계가 바뀌면 같은 필터의 첫 페이지부터 다시 
     const p = new URL(route.request().url()).searchParams
     expect(p.get('sort')).toBe('VIEWS')
     expect(p.get('type')).toBe('COVER')
-    expect(p.get('collaboration')).toBe('true')
+    expect(p.get('multipleParticipants')).toBe('true')
     cursors.push(p.get('cursor'))
     if (p.has('cursor')) {
       changed = true
@@ -220,7 +222,7 @@ test('조회수 집계가 바뀌면 같은 필터의 첫 페이지부터 다시 
     })
   })
   await page.goto(
-    `/members/${member.id}?type=COVER&collaboration=true&sort=VIEWS`,
+    `/members/${member.id}?type=COVER&multipleParticipants=true&sort=VIEWS`,
   )
   await expect(page.getByRole('article')).toHaveCount(2)
   await page.getByRole('button', { name: '노래 더 보기', exact: true }).click()
@@ -298,7 +300,13 @@ test('공개 곡이 없어도 프로필·0곡 집계를 유지하고 미등록 �
           generation: null,
           chzzkUrl: null,
           xUrl: null,
-          songCounts: { total: 0, originals: 0, covers: 0, collaborations: 0 },
+          songCounts: {
+            total: 0,
+            originals: 0,
+            covers: 0,
+            collaborations: 0,
+            multipleParticipants: 0,
+          },
         },
         channels: [],
       },
@@ -455,7 +463,7 @@ test('잘못된 URL 필터는 곡 요청을 막고 초기화 후 기본 목록�
     calls++
     return route.fulfill({ json: memberSongs })
   })
-  await page.goto(`/members/${member.id}?collaboration=invalid`)
+  await page.goto(`/members/${member.id}?multipleParticipants=invalid`)
   await expect(
     page.getByText('곡 조회 조건이 올바르지 않습니다', { exact: true }),
   ).toBeVisible()

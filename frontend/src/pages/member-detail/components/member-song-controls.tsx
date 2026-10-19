@@ -26,10 +26,12 @@ export function MemberSongControls({
       </TabsList>
       <div className="flex flex-wrap gap-2">
         <Button
-          aria-pressed={filters.collaboration}
-          onClick={() => onChange({ collaboration: !filters.collaboration })}
+          aria-pressed={filters.multipleParticipants}
+          onClick={() =>
+            onChange({ multipleParticipants: !filters.multipleParticipants })
+          }
           className={
-            filters.collaboration ? 'bg-brand-fill text-on-accent' : ''
+            filters.multipleParticipants ? 'bg-brand-fill text-on-accent' : ''
           }
         >
           공동 참여곡만

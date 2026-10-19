@@ -25,7 +25,13 @@ const members: MemberCard[] = [
   profileImageUrl: null,
   chzzkUrl: null,
   xUrl: null,
-  songCounts: { total: 0, covers: 0, originals: 0, collaborations: 0 },
+  songCounts: {
+    total: 0,
+    covers: 0,
+    originals: 0,
+    collaborations: 0,
+    multipleParticipants: 0,
+  },
 }))
 function song(
   names: readonly string[],

@@ -2,8 +2,9 @@ import { apiClient } from '@/shared/api/client'
 import type { ApiPaths, ApiSchemas, SongPage } from '@/shared/api/types'
 
 export type Song = ApiSchemas['com.stelody.song.dto.SongDtos.Card']
-export type SongListQuery = NonNullable<
-  ApiPaths['/api/v1/songs']['get']['parameters']['query']
+export type SongListQuery = Omit<
+  NonNullable<ApiPaths['/api/v1/songs']['get']['parameters']['query']>,
+  'collaboration'
 >
 type Recommendations =
   ApiSchemas['com.stelody.song.dto.SongDtos.Recommendations']
