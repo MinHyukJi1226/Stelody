@@ -3,6 +3,7 @@ package com.stelody.auth;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.stelody.auth.domain.LocalLogin;
 import com.stelody.auth.domain.LoginReturn;
 import com.stelody.auth.service.ReauthenticationService;
 import com.stelody.auth.web.ReauthenticationRequests;
@@ -79,6 +80,35 @@ class LoginReturnRepositoryTest {
     assertThat(callback.getAttribute(LoginReturn.ATTRIBUTE)).isNull();
     assertThat(repository.removeAuthorizationRequest(callback(start, "expected"), response))
         .isNull();
+  }
+
+  @Test
+  void localClientIsBoundToStateAndExpiryIncludingRequestsWithoutReturnPath() {
+    for (boolean expired : new boolean[] {false, true}) {
+      var start = new MockHttpServletRequest();
+      var local =
+          new LocalLogin(
+              "http://localhost:5173/api/v1/auth/callback/google",
+              Instant.now().plusSeconds(expired ? -1 : 300));
+      start.setAttribute(LocalLogin.ATTRIBUTE, local);
+      repository.saveAuthorizationRequest(authorization("local"), start, response);
+      var wrong = callback(start, "wrong");
+      assertThat(repository.loadAuthorizationRequest(wrong)).isNull();
+      assertThat(repository.removeAuthorizationRequest(wrong, response)).isNull();
+      assertThat(wrong.getAttribute(LocalLogin.ATTRIBUTE)).isNull();
+      var matched = callback(start, "local");
+      matched.addParameter("loginClient", "https://evil.example");
+      if (expired) {
+        assertThatThrownBy(() -> repository.removeAuthorizationRequest(matched, response))
+            .isInstanceOf(OAuth2AuthenticationException.class);
+        assertThat(matched.getAttribute(LocalLogin.ATTRIBUTE)).isNull();
+      } else {
+        assertThat(repository.removeAuthorizationRequest(matched, response)).isNotNull();
+        assertThat(matched.getAttribute(LocalLogin.ATTRIBUTE)).isEqualTo(local);
+      }
+      assertThat(repository.removeAuthorizationRequest(callback(start, "local"), response))
+          .isNull();
+    }
   }
 
   @Test

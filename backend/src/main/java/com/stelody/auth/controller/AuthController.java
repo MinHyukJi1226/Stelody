@@ -1,5 +1,6 @@
 package com.stelody.auth.controller;
 
+import com.stelody.auth.domain.LocalLogin;
 import com.stelody.auth.domain.LoginReturn;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.auth.web.ApiProblems;
@@ -47,11 +48,14 @@ public class AuthController {
       problems.write(request, response, 503, "GOOGLE_LOGIN_UNAVAILABLE", "Google 로그인 설정이 필요합니다");
     } else {
       var target = (LoginReturn) request.getAttribute(LoginReturn.ATTRIBUTE);
-      response.sendRedirect(
+      String path =
           "/api/v1/auth/authorize/google"
               + (target == null
                   ? ""
-                  : "?returnTo=" + URLEncoder.encode(target.path(), StandardCharsets.UTF_8)));
+                  : "?returnTo=" + URLEncoder.encode(target.path(), StandardCharsets.UTF_8));
+      if (request.getAttribute(LocalLogin.ATTRIBUTE) != null)
+        path += (target == null ? "?" : "&") + "loginClient=local";
+      response.sendRedirect(LocalLogin.location(request, path));
     }
   }
 

@@ -57,6 +57,11 @@ cd backend
 - 즐겨찾기는 최근 저장순(`savedAt` 내림차순, 동률이면 `songId` 내림차순)만 지원합니다. 중복 저장은 순서를 유지하고 해제 후 재저장은 맨 앞으로 이동합니다. 이용 불가 항목도 순서를 유지하며 다음 페이지에 기존 `nextCursor`를 그대로 전달합니다. 페이지 크기는 변경할 수 있고, 조회 중 새 저장 항목은 첫 페이지를 새로 조회합니다.
 - GET `/api/v1/me/playlists?songId=<UUID>`는 각 목록의 `containsSong`으로 곡 저장 여부를 반환합니다. 이용 불가 곡도 이미 저장되어 있으면 `true`, 미저장·존재하지 않는 UUID는 `false`입니다. `songId` 생략 및 생성·상세·변경 응답은 `null`입니다. 목록 정렬·커서·개수는 그대로이며, 추가 요청의 `version`·중복 검증은 계속 사용합니다.
 - 전체 순서 편집은 GET `/api/v1/me/playlists/{id}/items`의 모든 페이지를 같은 `version`으로 모은 뒤 PUT `/api/v1/me/playlists/{id}/order`에 그 버전과 원하는 순서의 전체 `itemIds`를 전달합니다. `songId`가 아닌 항목 `id`이며 이용 불가 항목도 포함합니다. 누락·중복은 400, 조회·저장 중 `409 PLAYLIST_CHANGED`이면 첫 페이지부터 다시 읽고 편집 내용을 확인합니다. 성공 시 새 버전을 사용합니다.
+- 로컬 프론트 → 운영 API 연결은 `GOOGLE_LOCAL_REDIRECT_URI=http://localhost:5173/api/v1/auth/callback/google`로 활성화합니다. Google Web 클라이언트에도 같은 승인된 리디렉션 URI를 등록합니다. 미설정 시 비활성이고 서버는 localhost·127.0.0.1 콜백만 허용합니다.
+  - 로그인 시작: `/api/v1/auth/google?loginClient=local&returnTo=%2Flogin`. `loginClient` 생략 시 기존 운영 로그인입니다. 임의 값·중복·비활성 연결은 400 `INVALID_LOGIN_CLIENT`입니다. `returnTo`의 내부 경로 제한은 유지합니다.
+  - 프론트: API 기본 주소 `/api/v1`, 개발 프록시 대상 `https://stelody-backend.onrender.com`. `/api` 전체(시작·authorize·callback·세션·CSRF·로그아웃)를 같은 프록시로 전달합니다. HTTP localhost의 `Set-Cookie`에서 `Secure` 제거는 **개발 프록시에서만** 처리하고 HttpOnly·SameSite·Path는 유지합니다. 로그아웃 쿠키에도 동일하게 적용합니다. 운영 서버의 Secure 쿠키와 CORS 설정은 변경하지 않습니다.
+  - 복귀: 성공·실패·취소 후 선택된 로컬 origin의 `returnTo`로 이동합니다. 생략 시 성공은 로컬 `/api/v1/me`, 실패는 기존 401 JSON입니다. 선택은 OAuth state와 함께 5분간 저장하며 Host/Forwarded 헤더·콜백 쿼리로 변경할 수 없습니다. 실제 로그인은 `/me`로 확인합니다.
+  - 지원 범위: 일반 Google 로그인만 해당합니다. YouTube 연결과 탈퇴 재인증은 기존 운영 콜백을 사용합니다. Google 콘솔 등록·운영 환경변수·프론트 프록시 설정 후 실제 계정으로 검증합니다.
 - 로그인 `returnTo`는 `/`로 시작하는 내부 UI 경로만 허용합니다. 최대 2,048자이며 외부 주소·경로 우회·`/api`·`/actuator`는 거절합니다. 같은 브라우저에서 5분 안에 완료해야 합니다. 생략하면 `/api/v1/me`로 이동합니다. `loginResult`는 안내용이며 실제 로그인은 `/api/v1/me`로 확인합니다.
 - 세션은 idle 30분·로그인 후 최대 12시간입니다. 탈퇴는 POST `/api/v1/me/reauthentications`로 같은 계정을 재인증한 뒤 새 CSRF로 5분 내 DELETE `/api/v1/me`를 호출합니다. 철회·탈퇴 기록 저장 실패 시 계정은 유지됩니다.
 - 조회수는 대표 영상 하나의 실제 관측값이며 미관측 날짜는 null입니다. 커버는 공식 커버 영상, 오리지널은 공식 MV 또는 MV가 없을 때 공식 음원을 대표로 사용합니다. 영상 간 조회수를 합산하지 않습니다.

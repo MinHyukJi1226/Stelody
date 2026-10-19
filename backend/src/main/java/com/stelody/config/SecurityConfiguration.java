@@ -3,6 +3,8 @@ package com.stelody.config;
 import com.stelody.auth.service.GoogleOidcUserService;
 import com.stelody.auth.web.AccountSessionFilter;
 import com.stelody.auth.web.ApiProblems;
+import com.stelody.auth.web.GoogleLoginClients;
+import com.stelody.auth.web.LocalLoginCallbackFilter;
 import com.stelody.auth.web.LoginHandlers;
 import com.stelody.auth.web.LoginReturnFilter;
 import com.stelody.auth.web.ReauthenticationRequests;
@@ -20,10 +22,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
-import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.web.OAuth2LoginAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.savedrequest.NullRequestCache;
@@ -44,6 +45,7 @@ public class SecurityConfiguration {
       ApiProblems problems,
       AccountService accounts,
       LoginHandlers handlers,
+      GoogleLoginClients loginClients,
       GoogleOidcUserService googleUsers,
       ReauthenticationRequests reauthenticationRequests,
       ObjectProvider<ClientRegistrationRepository> clients,
@@ -207,7 +209,11 @@ public class SecurityConfiguration {
         .httpBasic(AbstractHttpConfigurer::disable)
         .requestCache(cache -> cache.requestCache(new NullRequestCache()))
         .addFilterBefore(
-            new LoginReturnFilter(problems), OAuth2AuthorizationRequestRedirectFilter.class)
+            new LoginReturnFilter(problems, loginClients),
+            OAuth2AuthorizationRequestRedirectFilter.class)
+        .addFilterBefore(
+            new LocalLoginCallbackFilter(reauthenticationRequests),
+            OAuth2LoginAuthenticationFilter.class)
         .addFilterAfter(
             new AccountSessionFilter(accounts, problems, sessions),
             SecurityContextHolderFilter.class)
@@ -231,10 +237,7 @@ public class SecurityConfiguration {
                             problems.write(
                                 request, response, 403, "ACCESS_DENIED", "요청을 허용할 수 없습니다")));
     if (clients.getIfAvailable() != null) {
-      var resolver =
-          new DefaultOAuth2AuthorizationRequestResolver(
-              clients.getObject(), "/api/v1/auth/authorize");
-      resolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
+      var resolver = loginClients.resolver(clients.getObject());
       http.oauth2Login(
           oauth ->
               oauth
