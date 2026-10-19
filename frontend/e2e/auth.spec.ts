@@ -342,4 +342,78 @@ test('CSRF 조회 실패는 로그아웃을 전송하지 않으며 응답 유실
     page.getByRole('link', { name: 'Google로 로그인' }),
   ).toBeVisible()
   expect(logoutCalls).toBe(1)
+  await expect(
+    page.getByText('로그아웃 결과를 확인하지 못했습니다. 다시 시도해 주세요.', {
+      exact: true,
+    }),
+  ).toHaveCount(0)
+})
+
+for (const path of ['/search', '/library']) {
+  test(`응답 유실 뒤 비로그인이 확인되면 로그아웃 오류를 남기지 않는다: ${path}`, async ({
+    page,
+  }) => {
+    let loggedIn = true
+    let logoutCalls = 0
+    await page.route('**/api/v1/me', (route) =>
+      route.fulfill(
+        loggedIn
+          ? { json: user }
+          : { status: 401, json: { code: 'AUTHENTICATION_REQUIRED' } },
+      ),
+    )
+    await page.route('**/api/v1/auth/csrf', (route) =>
+      route.fulfill({ json: { headerName: 'X-CSRF-TOKEN', token: 'fixture' } }),
+    )
+    await page.route('**/api/v1/auth/logout', async (route) => {
+      logoutCalls++
+      loggedIn = false
+      await route.abort('failed')
+    })
+    await page.goto(path)
+    await accountMenu(page)
+    await page.getByRole('button', { name: '로그아웃', exact: true }).click()
+    await expect(page).toHaveURL(
+      path === '/library' ? '/login?returnTo=%2Flibrary' : path,
+    )
+    await expect(
+      page.getByRole('link', { name: '로그인', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        '로그아웃 결과를 확인하지 못했습니다. 다시 시도해 주세요.',
+        { exact: true },
+      ),
+    ).toHaveCount(0)
+    expect(logoutCalls).toBe(1)
+  })
+}
+
+test('응답 유실 후 세션 조회도 실패하면 오류와 재시도 동작을 유지한다', async ({
+  page,
+}) => {
+  let checkingFails = false
+  await page.route('**/api/v1/me', (route) =>
+    route.fulfill(
+      checkingFails
+        ? { status: 503, json: { code: 'UNAVAILABLE' } }
+        : { json: user },
+    ),
+  )
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    route.fulfill({ json: { headerName: 'X-CSRF-TOKEN', token: 'fixture' } }),
+  )
+  await page.route('**/api/v1/auth/logout', async (route) => {
+    checkingFails = true
+    await route.abort('failed')
+  })
+  await page.goto('/search')
+  await accountMenu(page)
+  await page.getByRole('button', { name: '로그아웃', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText(
+    '로그아웃 결과를 확인하지 못했습니다. 다시 시도해 주세요.',
+  )
+  await expect(
+    page.getByRole('button', { name: '로그아웃', exact: true }),
+  ).toBeEnabled()
 })

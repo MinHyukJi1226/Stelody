@@ -51,7 +51,7 @@ export function AccountControl({ onNavigate }: { onNavigate?: () => void }) {
           </Link>
         </Button>
       )}
-      {mutation.isError && (
+      {mutation.isError && session.data !== null && (
         <p role="alert" className="max-w-48 text-xs text-error">
           로그아웃 결과를 확인하지 못했습니다. 다시 시도해 주세요.
         </p>
