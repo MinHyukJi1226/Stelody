@@ -4059,6 +4059,13 @@
             "name": "returnTo",
             "required": false,
             "schema": { "type": "string", "maxLength": 2048 }
+          },
+          {
+            "description": "생략하면 기존 운영 콜백을 사용합니다. local은 GOOGLE_LOCAL_REDIRECT_URI로 서버에 등록된 localhost/127.0.0.1 개발 프록시 콜백만 선택합니다. 임의 URL·중복 값·미설정 상태는 400 INVALID_LOGIN_CLIENT입니다. 로그인 시작과 콜백 모두 같은 로컬 /api 프록시를 사용해야 합니다. returnTo는 계속 내부 경로만 허용하며 로그인 복귀도 선택된 로컬 origin을 사용합니다. YouTube 연결·탈퇴 재인증에는 적용되지 않습니다.",
+            "in": "query",
+            "name": "loginClient",
+            "required": false,
+            "schema": { "type": "string", "enum": ["local"] }
           }
         ],
         "responses": {
@@ -4086,6 +4093,14 @@
               }
             },
             "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+              }
+            },
+            "description": "INVALID_LOGIN_CLIENT: 알 수 없거나 비활성인 loginClient 또는 중복 값입니다. INVALID_LOGIN_RETURN: 허용하지 않는 내부 복귀 경로입니다."
           }
         },
         "security": [],

@@ -7,12 +7,12 @@ import type { Theme } from '@/shared/lib/theme'
 import { useMediaQuery } from '@/shared/lib/use-media-query'
 import { Button } from '@/shared/ui/button'
 import { MenuIcon } from './menu-icon'
+import { AccountControl } from '@/features/auth/account-control'
 
 const navigation = [
   { to: '/search', label: '검색' },
   { to: '/members', label: '멤버' },
   { to: '/library', label: '내 보관함' },
-  { to: '/login', label: '로그인' },
 ]
 const MobileMenu = lazy(() => import('./mobile-menu'))
 
@@ -42,6 +42,7 @@ export function SiteHeader({
             <NavLink to={to}>{label}</NavLink>
           </Button>
         ))}
+        <AccountControl />
       </nav>
       <Button
         size="icon"

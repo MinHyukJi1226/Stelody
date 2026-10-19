@@ -38,7 +38,12 @@ export const test = base.extend<{ catalogMocks: void }>({
     async ({ page }, use) => {
       await page.route('**/api/v1/**', async (route) => {
         const pathname = new URL(route.request().url()).pathname
-        if (pathname === '/api/v1/songs/recommendations') {
+        if (pathname === '/api/v1/me') {
+          await route.fulfill({
+            status: 401,
+            json: { code: 'AUTHENTICATION_REQUIRED' },
+          })
+        } else if (pathname === '/api/v1/songs/recommendations') {
           await route.fulfill({ json: { items: [] } })
         } else if (
           pathname === '/api/v1/songs' ||

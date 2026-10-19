@@ -5,6 +5,7 @@ import { ComingSoonPage } from '@/pages/coming-soon/coming-soon-page'
 import { SongCatalogPage } from '@/pages/song-catalog/song-catalog-page'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { SiteLayout } from './layout/site-layout'
+import { AuthGate } from '@/features/auth/auth-gate'
 
 export const router = createBrowserRouter([
   {
@@ -44,8 +45,19 @@ export const router = createBrowserRouter([
           return { Component: MemberListPage }
         },
       },
-      { path: '/library', element: <ComingSoonPage title="내 보관함" /> },
-      { path: '/login', element: <ComingSoonPage title="로그인" /> },
+      {
+        element: <AuthGate />,
+        children: [
+          { path: '/library', element: <ComingSoonPage title="내 보관함" /> },
+        ],
+      },
+      {
+        path: '/login',
+        lazy: async () => {
+          const { LoginPage } = await import('@/pages/login/login-page')
+          return { Component: LoginPage }
+        },
+      },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
