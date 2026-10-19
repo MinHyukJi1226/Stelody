@@ -6128,6 +6128,8 @@ export interface operations {
       query?: {
         /** @description 사이트 내부 UI 절대 경로. 외부 주소·API·actuator 경로는 허용하지 않습니다. 생략하면 /api/v1/me로 이동합니다. */
         returnTo?: string
+        /** @description 생략하면 기존 운영 콜백을 사용합니다. local은 GOOGLE_LOCAL_REDIRECT_URI로 서버에 등록된 localhost/127.0.0.1 개발 프록시 콜백만 선택합니다. 임의 URL·중복 값·미설정 상태는 400 INVALID_LOGIN_CLIENT입니다. 로그인 시작과 콜백 모두 같은 로컬 /api 프록시를 사용해야 합니다. returnTo는 계속 내부 경로만 허용하며 로그인 복귀도 선택된 로컬 origin을 사용합니다. YouTube 연결·탈퇴 재인증에는 적용되지 않습니다. */
+        loginClient?: 'local'
       }
       header?: never
       path?: never
@@ -6143,6 +6145,15 @@ export interface operations {
           [name: string]: unknown
         }
         content?: never
+      }
+      /** @description INVALID_LOGIN_CLIENT: 알 수 없거나 비활성인 loginClient 또는 중복 값입니다. INVALID_LOGIN_RETURN: 허용하지 않는 내부 복귀 경로입니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
       }
       /** @description Google 로그인 설정이 없습니다. */
       503: {

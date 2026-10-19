@@ -27,11 +27,7 @@ export function createApiClient(baseUrl: string) {
     csrf = undefined
   }
 
-  async function send(
-    path: string,
-    options: RequestOptions,
-    token?: CsrfToken,
-  ) {
+  function url(path: string) {
     if (
       !/^\/(?!\/)/.test(path) ||
       /[\\#]/.test(path) ||
@@ -42,11 +38,20 @@ export function createApiClient(baseUrl: string) {
     ) {
       throw new Error('API 요청 경로가 올바르지 않습니다.')
     }
+    return `${base}${path}`
+  }
+
+  async function send(
+    path: string,
+    options: RequestOptions,
+    token?: CsrfToken,
+  ) {
+    const destination = url(path)
     const headers = new Headers({ Accept: 'application/json' })
     if (options.body !== undefined)
       headers.set('Content-Type', 'application/json')
     if (token) headers.set(token.headerName, token.token)
-    const response = await fetch(`${base}${path}`, {
+    const response = await fetch(destination, {
       method: options.method ?? 'GET',
       credentials: 'include',
       redirect: 'error',
@@ -109,7 +114,7 @@ export function createApiClient(baseUrl: string) {
     }
   }
 
-  return { request, invalidateCsrf }
+  return { request, invalidateCsrf, url }
 }
 
 export const apiClient = createApiClient(

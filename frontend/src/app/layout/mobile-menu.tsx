@@ -3,6 +3,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { NavLink } from 'react-router'
 import { Button } from '@/shared/ui/button'
 import { MenuIcon } from './menu-icon'
+import { AccountControl } from '@/features/auth/account-control'
 
 export default function MobileMenu({
   navigation,
@@ -36,6 +37,7 @@ export default function MobileMenu({
                 </NavLink>
               </Button>
             ))}
+            <AccountControl onNavigate={() => setOpen(false)} />
           </nav>
         </Popover.Content>
       </Popover.Portal>
