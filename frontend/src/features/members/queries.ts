@@ -23,7 +23,7 @@ export const memberSongsOptions = (id: string, filters: MemberSongFilters) =>
     queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams({
         type: filters.type,
-        collaboration: String(filters.collaboration),
+        multipleParticipants: String(filters.multipleParticipants),
         sort: filters.sort,
         size: '20',
       })

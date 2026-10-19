@@ -6,7 +6,21 @@ test('홈 데이터와 KST 공개일을 표시하고 최신곡 전체 목록으�
   const songs = [
     makeSong(1, {
       title: '자정 이후 공개곡',
-      collaboration: true,
+      multipleParticipants: true,
+      participants: [
+        {
+          id: 'first',
+          name: '첫 멤버',
+          kind: 'MEMBER',
+          activityStatus: 'ACTIVE',
+        },
+        {
+          id: 'second',
+          name: '둘째 멤버',
+          kind: 'MEMBER',
+          activityStatus: 'ACTIVE',
+        },
+      ],
       isSpecialEvent: true,
       specialEventLabel: '생일',
     }),
@@ -22,7 +36,7 @@ test('홈 데이터와 KST 공개일을 표시하고 최신곡 전체 목록으�
   })
   await expect(latest.getByRole('article')).toHaveCount(2)
   await expect(latest.getByText('2026.10.15')).toHaveCount(2)
-  await expect(latest.getByText('콜라보', { exact: true })).toBeVisible()
+  await expect(latest.getByText('콜라보', { exact: true })).toHaveCount(0)
   await expect(latest.getByText('생일', { exact: true })).toBeVisible()
   await expect(latest.getByText('원곡 · 정보 준비 중')).toHaveCount(2)
   await expect(
@@ -201,6 +215,7 @@ test('멤버의 졸업 상태와 이미지 누락을 처리하고 화면이 넘�
               originals: 0,
               covers: 0,
               collaborations: 0,
+              multipleParticipants: 0,
             },
           },
         ],
@@ -375,7 +390,13 @@ test('멤버 명단 전체 페이지로 유닛 전원을 판정하고 혼합곡�
       chzzkUrl: null,
       xUrl: null,
       profileImageUrl: null,
-      songCounts: { total: 0, covers: 0, originals: 0, collaborations: 0 },
+      songCounts: {
+        total: 0,
+        covers: 0,
+        originals: 0,
+        collaborations: 0,
+        multipleParticipants: 0,
+      },
     }))
     return route.fulfill({
       json: cursor

@@ -11,7 +11,13 @@ export const member: MemberCard = {
   profileImageUrl: null,
   chzzkUrl: 'https://chzzk.naver.com/test',
   xUrl: 'https://x.com/test',
-  songCounts: { total: 12, originals: 3, covers: 9, collaborations: 4 },
+  songCounts: {
+    total: 12,
+    originals: 3,
+    covers: 9,
+    collaborations: 4,
+    multipleParticipants: 4,
+  },
 }
 export const graduate: MemberCard = {
   ...member,

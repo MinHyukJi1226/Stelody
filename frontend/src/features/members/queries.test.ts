@@ -52,6 +52,7 @@ it('멤버·필터별 캐시를 분리하고 추가 페이지에도 같은 조�
     ),
     http.get('*/api/v1/members/:id/songs', ({ request }) => {
       const url = new URL(request.url)
+      expect(url.searchParams.has('collaboration')).toBe(false)
       requests.push(url)
       return HttpResponse.json(
         url.searchParams.has('cursor')
@@ -67,7 +68,7 @@ it('멤버·필터별 캐시를 분리하고 추가 페이지에도 같은 조�
     )
     const filters = {
       type: 'COVER',
-      collaboration: true,
+      multipleParticipants: true,
       sort: 'VIEWS',
     } as const
     await client.fetchInfiniteQuery({
@@ -76,10 +77,15 @@ it('멤버·필터별 캐시를 분리하고 추가 페이지에도 같은 조�
     })
     expect(requests.map((url) => Object.fromEntries(url.searchParams))).toEqual(
       [
-        { type: 'COVER', collaboration: 'true', sort: 'VIEWS', size: '20' },
         {
           type: 'COVER',
-          collaboration: 'true',
+          multipleParticipants: 'true',
+          sort: 'VIEWS',
+          size: '20',
+        },
+        {
+          type: 'COVER',
+          multipleParticipants: 'true',
           sort: 'VIEWS',
           size: '20',
           cursor: 'song+/=&cursor',
@@ -93,7 +99,9 @@ it('멤버·필터별 캐시를 분리하고 추가 페이지에도 같은 조�
       memberSongsOptions(id.replace(/101$/, '102'), filters),
     )
     expect(requests.at(-2)?.searchParams.get('cursor')).toBeNull()
-    expect(requests.at(-2)?.searchParams.get('collaboration')).toBe('false')
+    expect(requests.at(-2)?.searchParams.get('multipleParticipants')).toBe(
+      'false',
+    )
     expect(requests.at(-1)?.pathname).toBe(
       `/api/v1/members/${id.replace(/101$/, '102')}/songs`,
     )

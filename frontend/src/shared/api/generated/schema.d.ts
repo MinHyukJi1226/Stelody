@@ -1489,7 +1489,7 @@ export interface components {
     ApiProblem: {
       /** @description 기능별 오류 코드. 각 API의 오류 응답 description·x-error-codes와 HTTP status로 분기합니다. fieldErrors[].code와 내보내기 Job.errorCode는 별도입니다. 새 코드는 추가될 수 있으므로 알 수 없는 코드는 일반 오류로 안내하고 traceId를 보관합니다. */
       code: string
-      /** @description DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 날짜 검색은 INVALID_DATE: 형식·존재 오류, DATE_OUT_OF_RANGE: 연도 범위, INVALID_DATE_RANGE: 시작일·종료일 역전, CONFLICTING_FILTER: year와 날짜 범위 중복입니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다. */
+      /** @description DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 날짜 검색은 INVALID_DATE: 형식·존재 오류, DATE_OUT_OF_RANGE: 연도 범위, INVALID_DATE_RANGE: 시작일·종료일 역전, CONFLICTING_FILTER: year와 날짜 범위 중복입니다. 다인 참여의 새 필터 multipleParticipants와 이전 호환 파라미터 collaboration이 충돌해도 CONFLICTING_FILTER를 양쪽 필드에 반환합니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다. */
       fieldErrors: {
         /** @enum {string} */
         code:
@@ -1771,6 +1771,7 @@ export interface components {
       /** @description 곡 검색용 별칭. 한국어 번역명·발음·통용명을 최대 50개, 각 300자까지 등록합니다. GET /api/v1/admin/songs/{id}로 조회하고 POST·PUT의 aliases로 전체 목록을 저장합니다. 삭제는 해당 항목을 빼고 저장하며 빈 배열은 모두 삭제합니다. 표시 제목은 title로 별도 유지됩니다. q 검색은 공백·대소문자를 무시합니다. */
       aliases: string[]
       externalArtistIds: string[]
+      /** @description 생일·데뷔·주년·신의상·게임 협업 등을 포함하는 기념·특별 목적 곡 여부입니다. true만으로 게임 콜라보를 의미하지 않습니다. */
       isSpecialEvent: boolean
       karaoke: components['schemas']['com.stelody.admin.dto.CatalogAdminDtos.Karaoke'][]
       links: components['schemas']['com.stelody.admin.dto.CatalogAdminDtos.Link'][]
@@ -1784,10 +1785,11 @@ export interface components {
        * @enum {string}
        */
       searchVisibility: 'UNCHECKED' | 'NORMAL' | 'DIFFICULT'
-      specialEventLabel?: string
+      /** @description 관리자가 확인 후 정하는 자유 입력 문구입니다. 예: 생일 기념, 게임 콜라보 기념. isSpecialEvent=true이면 빈 문구를 허용하지 않고 입력은 최대 60자이며 앞뒤 공백을 제거해 저장합니다. false이면 null로 정규화합니다. 고정 유형 enum을 두지 않습니다. */
+      specialEventLabel?: string | null
       title: string
       /**
-       * @description ORIGINAL: 오리지널곡, COVER: 커버곡. 콜라보는 참여자 구성으로 별도 판단합니다.
+       * @description ORIGINAL: 오리지널곡, COVER: 커버곡. 여러 명의 참여 여부와 기념·협업 등의 특별 목적은 별도 속성입니다.
        * @enum {string}
        */
       type: 'ORIGINAL' | 'COVER'
@@ -2336,7 +2338,11 @@ export interface components {
       youtubeId: string
     }
     'com.stelody.member.dto.MemberDtos.Counts': {
-      /** Format: int64 */
+      /**
+       * Format: int64
+       * @deprecated
+       * @description 기존 클라이언트를 위한 다인 참여 곡 수의 호환 필드입니다. multipleParticipants와 항상 같은 값이며 게임·IP 협업곡 수가 아닙니다. 신규 연동은 multipleParticipants를 사용합니다.
+       */
       collaborations: number
       /** Format: int64 */
       covers: number
@@ -2344,6 +2350,11 @@ export interface components {
       originals: number
       /** Format: int64 */
       total: number
+      /**
+       * Format: int64
+       * @description 이 멤버가 참여한 공개 곡 중 확정 참여자(멤버·외부 아티스트)가 2명 이상인 곡 수입니다. originals·covers와 중복될 수 있으며 게임·IP 협업곡 집계가 아닙니다.
+       */
+      multipleParticipants: number
     }
     'com.stelody.member.dto.MemberDtos.Detail': {
       /** @description YouTube 채널 목록. 등록된 채널이 없으면 빈 배열이며 null은 반환하지 않습니다. */
@@ -2491,18 +2502,19 @@ export interface components {
       name: string
     }
     'com.stelody.song.dto.SongDtos.Card': {
-      collaboration: boolean
       /** Format: uuid */
       id: string
+      /** @description 관리자가 확정한 기념·특별 목적 곡 여부입니다. 생일·데뷔·주년·신의상·게임 협업 등을 모두 포함하므로 true만으로 게임 콜라보를 의미하지 않습니다. 곡별 표시 문구는 specialEventLabel입니다. */
       isSpecialEvent: boolean
       participants: components['schemas']['com.stelody.song.dto.SongDtos.Participant'][]
       /** Format: date-time */
       publishedAt: string
+      /** @description 관리자가 정한 자유 입력 문구입니다. 예: 생일 기념, 데뷔 기념, 게임 콜라보 기념. 고정 유형 enum이나 문구 파싱으로 협업 여부를 자동 판정하지 않습니다. isSpecialEvent=false이면 null입니다. */
       specialEventLabel: string | null
       thumbnailUrl: string | null
       title: string
       /**
-       * @description ORIGINAL: 오리지널곡, COVER: 커버곡. 콜라보 여부는 collaboration으로 별도 표시합니다.
+       * @description ORIGINAL: 오리지널곡, COVER: 커버곡. 여러 명의 참여 여부와 기념·협업 등의 특별 목적은 별도로 제공합니다.
        * @enum {string}
        */
       type: 'ORIGINAL' | 'COVER'
@@ -2511,6 +2523,8 @@ export interface components {
       /** Format: date-time */
       viewsObservedAt: string | null
       work: components['schemas']['com.stelody.song.dto.SongDtos.Work'] | null
+      /** @description 확정된 스텔라이브 멤버와 외부 참여자의 합계가 2명 이상이면 true입니다. 게임·IP·브랜드 협업 여부를 뜻하지 않으며 콜라보 배지의 기준으로 사용하지 않습니다. */
+      multipleParticipants: boolean
     }
     'com.stelody.song.dto.SongDtos.Detail': {
       karaoke: components['schemas']['com.stelody.song.dto.SongDtos.Karaoke'][]
@@ -7911,6 +7925,12 @@ export interface operations {
     parameters: {
       query?: {
         type?: 'ALL' | 'COVER' | 'ORIGINAL'
+        /** @description 기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다. 이전 collaboration과 함께 보내면 값이 같아야 합니다. */
+        multipleParticipants?: boolean
+        /**
+         * @deprecated
+         * @description 이전 클라이언트의 다인 참여 필터를 위한 호환 파라미터입니다. 게임·IP 협업 여부를 뜻하지 않습니다. 신규 연동은 multipleParticipants를 사용합니다. 새 파라미터 미지정 시 이 값을 사용하며, 둘 다 지정한 값이 다르면 400 INVALID_CATALOG_QUERY와 CONFLICTING_FILTER입니다.
+         */
         collaboration?: boolean
         /** @description 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다. */
         sort?: 'LATEST' | 'RELEVANCE' | 'VIEWS'
@@ -7935,7 +7955,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Page']
         }
       }
-      /** @description INVALID_CATALOG_QUERY: 검색 조건·커서를 확인합니다. */
+      /** @description INVALID_CATALOG_QUERY: 검색 조건·커서를 확인합니다. 여러 명 참여 필터는 multipleParticipants입니다. 이전 collaboration도 호환용으로 같은 조건으로 해석하며 두 값이 다르면 400 INVALID_CATALOG_QUERY 및 양쪽 fieldErrors[].code=CONFLICTING_FILTER입니다. */
       400: {
         headers: {
           [name: string]: unknown
@@ -7978,6 +7998,12 @@ export interface operations {
         startDate?: string
         /** @description YYYY-MM-DD. 대표 영상 publishedAt의 Asia/Seoul 날짜 기준, 1900-01-01~2100-12-31. 시작일은 한국 시간 00:00 이상, 종료일은 다음날 00:00 미만으로 양 끝 날짜를 포함합니다. 한쪽만 지정할 수 있습니다. 둘 다 생략하면 기간 제한이 없습니다. year와 함께 지정하면 400 INVALID_CATALOG_QUERY입니다. 기간을 변경하면 이전 커서는 사용할 수 없습니다. */
         endDate?: string
+        /** @description 기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다. 이전 collaboration과 함께 보내면 값이 같아야 합니다. */
+        multipleParticipants?: boolean
+        /**
+         * @deprecated
+         * @description 이전 클라이언트의 다인 참여 필터를 위한 호환 파라미터입니다. 게임·IP 협업 여부를 뜻하지 않습니다. 신규 연동은 multipleParticipants를 사용합니다. 새 파라미터 미지정 시 이 값을 사용하며, 둘 다 지정한 값이 다르면 400 INVALID_CATALOG_QUERY와 CONFLICTING_FILTER입니다.
+         */
         collaboration?: boolean
         /** @description 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다. */
         sort?: 'LATEST' | 'RELEVANCE' | 'VIEWS'
@@ -8003,7 +8029,7 @@ export interface operations {
         }
       }
       /**
-       * @description INVALID_CATALOG_QUERY: 검색 조건·커서를 확인합니다.
+       * @description INVALID_CATALOG_QUERY: 검색 조건·커서를 확인합니다. 여러 명 참여 필터는 multipleParticipants입니다. 이전 collaboration도 호환용으로 같은 조건으로 해석하며 두 값이 다르면 400 INVALID_CATALOG_QUERY 및 양쪽 fieldErrors[].code=CONFLICTING_FILTER입니다.
        *     INVALID_CATALOG_QUERY: 날짜 범위는 totalCount와 모든 커서 페이지에 동일하게 적용됩니다. 날짜 형식·존재 오류: fieldErrors[].code=INVALID_DATE, 허용 연도 밖: DATE_OUT_OF_RANGE, 시작일>종료일: INVALID_DATE_RANGE(startDate·endDate), year와 범위 동시 사용: CONFLICTING_FILTER(year·지정 날짜 필드). fieldErrors[].field로 입력칸을 식별하며 입력값은 반환하지 않습니다. 기간 변경 후 기존 커서도 INVALID_CATALOG_QUERY입니다.
        */
       400: {

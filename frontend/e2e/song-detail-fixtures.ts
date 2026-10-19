@@ -50,7 +50,7 @@ export const detail: SongDetail = {
     makeSong(3, {
       title: '협업 커버',
       work: song.work,
-      collaboration: true,
+      multipleParticipants: true,
       participants: [
         ...song.participants,
         {

@@ -47,7 +47,6 @@ export function SongCard({
           <span className="text-brand">
             {song.type === 'COVER' ? '커버' : '오리지널'}
           </span>
-          {song.collaboration && <span className="text-brand">콜라보</span>}
           <time dateTime={song.publishedAt} className="text-muted">
             {date.replace(/\. /g, '.').replace(/\.$/, '')}
           </time>
