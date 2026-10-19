@@ -981,7 +981,7 @@ class CatalogManagementIntegrationTest {
     mvc.perform(json(put(ROOT + "/songs/" + s), b)).andExpect(status().isOk());
     mvc.perform(get("/api/v1/songs/" + s))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.song.collaboration").value(true))
+        .andExpect(jsonPath("$.song.multipleParticipants").value(true))
         .andExpect(jsonPath("$.workResources.karaoke[0].number").value("00123"))
         .andExpect(jsonPath("$.karaoke[0].status").value("UNKNOWN"))
         .andExpect(jsonPath("$.karaoke[1].status").value("NOT_LISTED"))

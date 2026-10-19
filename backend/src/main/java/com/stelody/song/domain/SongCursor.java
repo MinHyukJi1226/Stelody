@@ -72,7 +72,7 @@ public class SongCursor {
                 query.type(),
                 query.memberIds(),
                 query.year(),
-                query.collaboration(),
+                query.multipleParticipants(),
                 query.sort(),
                 query.emptySearch(),
                 query.requiredMember(),
@@ -92,7 +92,8 @@ public class SongCursor {
       String type,
       java.util.List<UUID> members,
       Integer year,
-      boolean collaboration,
+      // Preserve existing cursor identities while correcting the public API name.
+      @com.fasterxml.jackson.annotation.JsonProperty("collaboration") boolean multipleParticipants,
       String sort,
       boolean emptySearch,
       UUID requiredMember,

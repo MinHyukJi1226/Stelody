@@ -45,12 +45,12 @@ public class MemberRepository {
         SELECT sm.member_id, count(*) AS total,
           count(*) FILTER (WHERE s.song_type = 'ORIGINAL') AS originals,
           count(*) FILTER (WHERE s.song_type = 'COVER') AS covers,
-          count(*) FILTER (WHERE s.participant_count > 1) AS collaborations
+          count(*) FILTER (WHERE s.participant_count > 1) AS multiple_participants
         FROM public_songs s JOIN app.song_member sm ON sm.song_id = s.id AND sm.confirmed
         GROUP BY sm.member_id
       ), members AS (
         SELECT m.*, coalesce(c.total, 0) AS total, coalesce(c.originals, 0) AS originals,
-          coalesce(c.covers, 0) AS covers, coalesce(c.collaborations, 0) AS collaborations,
+          coalesce(c.covers, 0) AS covers, coalesce(c.multiple_participants, 0) AS multiple_participants,
           CASE WHEN m.activity_status = 'ACTIVE' THEN 1 ELSE 2 END AS activity_order,
           coalesce(m.generation, 32768) AS generation_order,
           coalesce(m.display_order, 2147483647) AS display_order_key,
@@ -122,7 +122,7 @@ public class MemberRepository {
                 rs.getLong("total"),
                 rs.getLong("originals"),
                 rs.getLong("covers"),
-                rs.getLong("collaborations"))),
+                rs.getLong("multiple_participants"))),
         rs.getString("search_name"),
         rs.getInt("activity_order"),
         rs.getInt("generation_order"),

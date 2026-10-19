@@ -1,9 +1,12 @@
 package com.stelody.song.controller;
 
+import com.stelody.auth.web.ApiFieldError;
+import com.stelody.catalog.web.CatalogException;
 import com.stelody.song.domain.SongQuery;
 import com.stelody.song.dto.SongDtos;
 import com.stelody.song.service.SongService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,14 +31,32 @@ public class SongController {
       @RequestParam(required = false) Integer year,
       @RequestParam(required = false) String startDate,
       @RequestParam(required = false) String endDate,
-      @RequestParam(defaultValue = "false") boolean collaboration,
+      @RequestParam(defaultValue = "false") boolean multipleParticipants,
+      @Parameter(hidden = true) @RequestParam(required = false) String collaboration,
       @RequestParam(required = false) String sort,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String mode,
       @RequestParam(required = false) String cursor) {
+    if (collaboration != null)
+      throw CatalogException.invalid(
+          List.of(
+              new ApiFieldError(
+                  "collaboration",
+                  "UNSUPPORTED_PARAMETER",
+                  "collaboration은 지원하지 않습니다. 여러 명 참여 필터는 multipleParticipants를 사용해 주세요")));
     return songs.list(
         SongQuery.create(
-            q, type, memberIds, year, collaboration, sort, size, mode, null, startDate, endDate),
+            q,
+            type,
+            memberIds,
+            year,
+            multipleParticipants,
+            sort,
+            size,
+            mode,
+            null,
+            startDate,
+            endDate),
         cursor);
   }
 

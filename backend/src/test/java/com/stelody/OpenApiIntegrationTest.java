@@ -80,6 +80,50 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void distinguishesMultipleParticipantsFromAllSpecialPurposesInTheContract() throws Exception {
+    var api = contract();
+    for (String path : new String[] {"/api/v1/songs", "/api/v1/members/{id}/songs"}) {
+      var names = new java.util.ArrayList<String>();
+      for (var parameter : api.path("paths").path(path).path("get").path("parameters")) {
+        String name = parameter.path("name").asText();
+        names.add(name);
+        if (name.equals("multipleParticipants")) {
+          assertThat(parameter.at("/schema/type").asText()).isEqualTo("boolean");
+          assertThat(parameter.path("required").asBoolean()).isFalse();
+          assertThat(parameter.at("/schema/default").asBoolean()).isFalse();
+          assertThat(parameter.path("description").asText())
+              .contains("2명 이상", "게임", "필터가 아닙니다", "totalCount", "커서");
+        }
+      }
+      assertThat(names).contains("multipleParticipants").doesNotContain("collaboration");
+      assertThat(api.path("paths").path(path).path("get").at("/responses/400/description").asText())
+          .contains("UNSUPPORTED_PARAMETER", "collaboration", "multipleParticipants");
+    }
+    var schemas = api.path("components").path("schemas");
+    var card = schemas.path("com.stelody.song.dto.SongDtos.Card");
+    assertThat(card.path("properties").has("collaboration")).isFalse();
+    assertThat(card.path("required").toString())
+        .contains("multipleParticipants")
+        .doesNotContain("collaboration");
+    assertThat(card.at("/properties/multipleParticipants/description").asText())
+        .contains("2명 이상", "콜라보 배지");
+    assertThat(card.at("/properties/isSpecialEvent/description").asText())
+        .contains("생일", "데뷔", "주년", "신의상", "게임 협업", "true만으로");
+    var label = card.at("/properties/specialEventLabel");
+    assertThat(label.has("enum")).isFalse();
+    assertThat(label.path("description").asText()).contains("자유 입력", "자동 판정하지 않습니다");
+    var counts = schemas.path("com.stelody.member.dto.MemberDtos.Counts");
+    assertThat(counts.path("properties").has("collaborations")).isFalse();
+    assertThat(counts.path("properties").has("multipleParticipants")).isTrue();
+    assertThat(counts.at("/properties/multipleParticipants/type").asText()).isEqualTo("integer");
+    assertThat(
+            api.at(
+                    "/components/schemas/ApiProblem/properties/fieldErrors/items/properties/code/enum")
+                .toString())
+        .contains("UNSUPPORTED_PARAMETER");
+  }
+
+  @Test
   void documentsRelatedSongsAsSameWorkCoversByDifferentMembers() throws Exception {
     var api = contract();
     var related =

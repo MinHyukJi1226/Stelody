@@ -542,11 +542,15 @@ class PublicCatalogIntegrationTest {
             Map.entry("?type=COVER", 3L),
             Map.entry("?memberIds=" + M1 + "," + M2, 4L),
             Map.entry(
-                "?q=sky&memberIds=" + M1 + "," + M2 + "&type=COVER&year=2026&collaboration=true",
+                "?q=sky&memberIds="
+                    + M1
+                    + ","
+                    + M2
+                    + "&type=COVER&year=2026&multipleParticipants=true",
                 1L),
-            Map.entry("?memberIds=" + M1 + "&type=ORIGINAL&collaboration=true", 1L),
+            Map.entry("?memberIds=" + M1 + "&type=ORIGINAL&multipleParticipants=true", 1L),
             Map.entry("?memberIds=" + M3, 0L),
-            Map.entry("?collaboration=true", 2L),
+            Map.entry("?multipleParticipants=true", 2L),
             Map.entry("?year=2025", 0L));
     for (var entry : cases.entrySet()) {
       assertThat(request("/api/v1/songs" + entry.getKey()).get("totalCount").asLong())
@@ -556,7 +560,7 @@ class PublicCatalogIntegrationTest {
     assertThat(request("/api/v1/members/" + M1 + "/songs?size=1").get("totalCount").asLong())
         .isEqualTo(2);
     assertThat(
-            request("/api/v1/members/" + M1 + "/songs?type=COVER&collaboration=true")
+            request("/api/v1/members/" + M1 + "/songs?type=COVER&multipleParticipants=true")
                 .get("totalCount")
                 .asLong())
         .isEqualTo(1);
@@ -610,20 +614,93 @@ class PublicCatalogIntegrationTest {
   }
 
   @Test
-  void memberOrFiltersAndExternalCollaborationMatchCounts() throws Exception {
+  void memberOrFiltersAndMultipleParticipantsMatchCounts() throws Exception {
     assertThat(ids(request("/api/v1/songs?memberIds=" + M1 + "," + M2)))
         .hasSize(4)
         .doesNotHaveDuplicates();
-    assertThat(ids(request("/api/v1/songs?memberIds=" + M1 + "&type=ORIGINAL&collaboration=true")))
+    assertThat(
+            ids(
+                request(
+                    "/api/v1/songs?memberIds=" + M1 + "&type=ORIGINAL&multipleParticipants=true")))
         .containsExactly(S3.toString());
     var member = request("/api/v1/members/" + M1).get("member");
     assertThat(member.get("songCounts").get("total").asLong()).isEqualTo(2);
     assertThat(member.get("songCounts").get("originals").asLong()).isEqualTo(1);
     assertThat(member.get("songCounts").get("covers").asLong()).isEqualTo(1);
-    assertThat(member.get("songCounts").get("collaborations").asLong()).isEqualTo(2);
+    assertThat(member.get("songCounts").get("multipleParticipants").asLong()).isEqualTo(2);
     assertThat(ids(request("/api/v1/members/" + M1 + "/songs"))).hasSize(2);
-    assertThat(ids(request("/api/v1/members/" + M1 + "/songs?type=COVER&collaboration=true")))
+    assertThat(
+            ids(request("/api/v1/members/" + M1 + "/songs?type=COVER&multipleParticipants=true")))
         .containsExactly(S1.toString());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"생일 기념", "데뷔 기념", "게임 콜라보 기념"})
+  void specialPurposeLabelsAreIndependentOfParticipantCountAndSharedWork(String label)
+      throws Exception {
+    // S1 and S2 share a work. S1 has multiple participants; S2 has one member.
+    writer.update(
+        "UPDATE app.song_entry SET is_special_event=true,special_event_label=? WHERE id=?",
+        label,
+        S2);
+    var solo = request("/api/v1/songs/" + S2).get("song");
+    assertThat(solo.get("multipleParticipants").asBoolean()).isFalse();
+    assertThat(solo.get("isSpecialEvent").asBoolean()).isTrue();
+    assertThat(solo.get("specialEventLabel").asText()).isEqualTo(label);
+    assertThat(solo.has("collaboration")).isFalse();
+    var group = request("/api/v1/songs/" + S1).get("song");
+    assertThat(group.get("multipleParticipants").asBoolean()).isTrue();
+    assertThat(group.get("isSpecialEvent").asBoolean()).isFalse();
+    assertThat(group.get("specialEventLabel").isNull()).isTrue();
+    assertThat(group.has("collaboration")).isFalse();
+    var filtered = request("/api/v1/songs?multipleParticipants=true");
+    assertThat(ids(filtered)).containsExactly(S3.toString(), S1.toString());
+    assertThat(filtered.get("totalCount").asLong()).isEqualTo(2);
+    var counts = request("/api/v1/members/" + M2).get("member").get("songCounts");
+    assertThat(counts.get("multipleParticipants").asLong()).isEqualTo(1);
+    assertThat(counts.has("collaborations")).isFalse();
+  }
+
+  @Test
+  void onlyConfirmedParticipantsCountAndFilteringKeepsCursorAndTotalsConsistent() throws Exception {
+    writer.update("INSERT INTO app.song_member VALUES (?, ?, 1, false)", S2, M3);
+    writer.update("INSERT INTO app.song_external_artist VALUES (?, ?, 0, false)", S2, A1);
+    assertThat(request("/api/v1/songs/" + S2).get("song").get("multipleParticipants").asBoolean())
+        .isFalse();
+    var first = request("/api/v1/songs?multipleParticipants=true&size=1");
+    assertThat(ids(first)).containsExactly(S3.toString());
+    assertThat(first.get("totalCount").asLong()).isEqualTo(2);
+    String cursor = first.get("nextCursor").asText();
+    var second =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs")
+                        .param("multipleParticipants", "true")
+                        .param("size", "1")
+                        .param("cursor", cursor))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(ids(second)).containsExactly(S1.toString());
+    assertThat(second.get("totalCount").asLong()).isEqualTo(2);
+    assertThat(second.get("hasNext").asBoolean()).isFalse();
+    mvc.perform(get("/api/v1/songs").param("multipleParticipants", "false").param("cursor", cursor))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"true", "false", "invalid"})
+  void retiredCollaborationParameterIsRejectedInsteadOfReturningUnfilteredSongs(String value)
+      throws Exception {
+    for (String path : List.of("/api/v1/songs", "/api/v1/members/" + M1 + "/songs")) {
+      mvc.perform(get(path).param("collaboration", value).param("multipleParticipants", "true"))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"))
+          .andExpect(jsonPath("$.fieldErrors[0].field").value("collaboration"))
+          .andExpect(jsonPath("$.fieldErrors[0].code").value("UNSUPPORTED_PARAMETER"));
+    }
   }
 
   @Test
@@ -655,7 +732,7 @@ class PublicCatalogIntegrationTest {
   @Test
   void relatedCoversExcludeMemberOnlyMatchesAndOriginalsBeforeLimiting() throws Exception {
     song(id(201), "Same work cover", "COVER", W1, "2026-01-10T00:00:00Z", M3);
-    song(id(202), "Same work collaboration", "COVER", W1, "2026-01-10T00:00:00Z", M3);
+    song(id(202), "Same work multiple participants", "COVER", W1, "2026-01-10T00:00:00Z", M3);
     writer.update("INSERT INTO app.song_member VALUES (?, ?, 1, true)", id(202), M1);
     writer.update("INSERT INTO app.song_member VALUES (?, ?, 2, true)", id(202), M2);
     song(id(203), "Same work original", "ORIGINAL", W1, "2026-01-30T00:00:00Z", M3);

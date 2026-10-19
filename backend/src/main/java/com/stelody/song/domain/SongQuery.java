@@ -16,7 +16,7 @@ public record SongQuery(
     String type,
     List<UUID> memberIds,
     Integer year,
-    boolean collaboration,
+    boolean multipleParticipants,
     String sort,
     int size,
     boolean emptySearch,
@@ -28,13 +28,13 @@ public record SongQuery(
       String type,
       List<UUID> members,
       Integer year,
-      boolean collaboration,
+      boolean multipleParticipants,
       String sort,
       int size,
       String mode,
       UUID requiredMember) {
     return create(
-        q, type, members, year, collaboration, sort, size, mode, requiredMember, null, null);
+        q, type, members, year, multipleParticipants, sort, size, mode, requiredMember, null, null);
   }
 
   public static SongQuery create(
@@ -42,7 +42,7 @@ public record SongQuery(
       String type,
       List<UUID> members,
       Integer year,
-      boolean collaboration,
+      boolean multipleParticipants,
       String sort,
       int size,
       String mode,
@@ -85,7 +85,7 @@ public record SongQuery(
         actualType,
         ids,
         year,
-        collaboration,
+        multipleParticipants,
         actualSort,
         size,
         actualMode.equals("SEARCH") && normalized.isEmpty(),

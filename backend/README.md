@@ -102,7 +102,14 @@ OpenAPI 파일은 Docker 실행 상태에서 `backend/`의 아래 명령으로 �
 곡 검색 `GET /api/v1/songs`는 선택 날짜 `startDate`·`endDate`(`YYYY-MM-DD`, 1900~2100)를 지원합니다. 대표 영상 공개일의 한국 날짜 기준으로 양 끝을 포함하며 한쪽만 지정할 수 있습니다. `year`와 함께 지정할 수 없습니다. 기간은 `totalCount`·커서에도 적용하며 기간을 바꾸면 커서를 버립니다. 잘못된 날짜는 400 `INVALID_CATALOG_QUERY`와 `fieldErrors`로 반환합니다(`INVALID_DATE`·`DATE_OUT_OF_RANGE`·`INVALID_DATE_RANGE`·`CONFLICTING_FILTER`).
 
 
-응답 필드의 가능한 값과 의미는 OpenAPI enum·description에 명시합니다. 콜라보는 곡 유형과 별도이며 검색 확인 상태와 사이트 공개 상태도 별도입니다.
+응답 필드의 가능한 값과 의미는 OpenAPI enum·description에 명시합니다. 여러 명의 참여 여부는 `multipleParticipants`이며 콜라보 표시와 구분합니다. 검색 확인 상태와 사이트 공개 상태도 별도입니다.
+
+### 참여 인원과 기념·협업 표시
+
+- 곡 카드의 `multipleParticipants`는 확정된 멤버·외부 참여자가 2명 이상인지 나타냅니다. 멤버 집계의 `songCounts.multipleParticipants`도 같은 공개 조건으로 계산합니다.
+- 곡 검색과 멤버별 곡 목록의 `multipleParticipants=true`는 여러 명이 참여한 곡만 조회합니다. 기본 false는 인원 제한 없음입니다. 기존 `collaboration` 필드·집계는 제거했으며, 해당 검색 파라미터를 보내면 400 `INVALID_CATALOG_QUERY`와 `fieldErrors`의 `UNSUPPORTED_PARAMETER`를 반환합니다. 프론트는 명세·타입을 갱신하고 이전 이름을 교체해야 합니다.
+- `multipleParticipants`로 ‘콜라보’ 배지를 만들지 않습니다. 게임·IP·브랜드 협업의 표시는 관리자가 확인한 `isSpecialEvent`·`specialEventLabel`을 사용합니다. 생일·데뷔·주년·신의상 등도 같은 특별 목적 필드에 포함되므로 `isSpecialEvent=true`만으로 게임 콜라보를 판정하지 않습니다. 자유 입력 문구를 그대로 표시하며 고정 분류나 문구 기반 자동 추론을 추가하지 않습니다.
+- 특별 목적 문구는 해당 스텔라이브 곡에만 귀속됩니다. 같은 원곡을 공유하는 다른 커버로 전파하지 않습니다. 기존 커서의 참여 인원 조건은 유지되며 필터를 변경하면 커서를 버리고 첫 페이지부터 조회합니다.
 
 | 필드 | 값·의미 |
 | --- | --- |

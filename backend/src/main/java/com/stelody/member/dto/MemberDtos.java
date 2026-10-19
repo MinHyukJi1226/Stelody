@@ -7,8 +7,15 @@ import java.util.UUID;
 public final class MemberDtos {
   private MemberDtos() {}
 
-  @Schema(requiredProperties = {"total", "originals", "covers", "collaborations"})
-  public record Counts(long total, long originals, long covers, long collaborations) {}
+  @Schema(requiredProperties = {"total", "originals", "covers", "multipleParticipants"})
+  public record Counts(
+      long total,
+      long originals,
+      long covers,
+      @Schema(
+              description =
+                  "이 멤버가 참여한 공개 곡 중 확정 참여자(멤버·외부 아티스트)가 2명 이상인 곡 수입니다. originals·covers와 중복될 수 있으며 게임·IP 협업곡 집계가 아닙니다.")
+          long multipleParticipants) {}
 
   @Schema(
       requiredProperties = {

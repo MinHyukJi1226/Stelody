@@ -199,7 +199,7 @@ final class SongSqlQueries {
       sql.append(" AND s.published_at < :rangeEnd");
       params.put("rangeEnd", Timestamp.from(query.rangeEndExclusive()));
     }
-    if (query.collaboration()) sql.append(" AND s.participant_count > 1");
+    if (query.multipleParticipants()) sql.append(" AND s.participant_count > 1");
   }
 
   private static void appendCursor(
