@@ -1,9 +1,11 @@
 package com.stelody.song.controller;
 
+import com.stelody.catalog.web.ParticipantFilters;
 import com.stelody.song.domain.SongQuery;
 import com.stelody.song.dto.SongDtos;
 import com.stelody.song.service.SongService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,14 +30,16 @@ public class SongController {
       @RequestParam(required = false) Integer year,
       @RequestParam(required = false) String startDate,
       @RequestParam(required = false) String endDate,
-      @RequestParam(defaultValue = "false") boolean collaboration,
+      @RequestParam(required = false) Boolean multipleParticipants,
+      @Parameter(deprecated = true) @RequestParam(required = false) Boolean collaboration,
       @RequestParam(required = false) String sort,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String mode,
       @RequestParam(required = false) String cursor) {
+    boolean participants = ParticipantFilters.resolve(multipleParticipants, collaboration);
     return songs.list(
         SongQuery.create(
-            q, type, memberIds, year, collaboration, sort, size, mode, null, startDate, endDate),
+            q, type, memberIds, year, participants, sort, size, mode, null, startDate, endDate),
         cursor);
   }
 

@@ -1,9 +1,11 @@
 package com.stelody.member.controller;
 
+import com.stelody.catalog.web.ParticipantFilters;
 import com.stelody.member.dto.MemberDtos;
 import com.stelody.member.service.MemberService;
 import com.stelody.song.dto.SongDtos;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,10 +43,12 @@ public class MemberController {
   public SongDtos.Page songs(
       @PathVariable UUID id,
       @RequestParam(required = false) String type,
-      @RequestParam(defaultValue = "false") boolean collaboration,
+      @RequestParam(required = false) Boolean multipleParticipants,
+      @Parameter(deprecated = true) @RequestParam(required = false) Boolean collaboration,
       @RequestParam(required = false) String sort,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    return members.songs(id, type, collaboration, sort, size, cursor);
+    boolean participants = ParticipantFilters.resolve(multipleParticipants, collaboration);
+    return members.songs(id, type, participants, sort, size, cursor);
   }
 }

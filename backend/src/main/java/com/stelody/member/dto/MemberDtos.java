@@ -1,5 +1,6 @@
 package com.stelody.member.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
@@ -7,8 +8,32 @@ import java.util.UUID;
 public final class MemberDtos {
   private MemberDtos() {}
 
-  @Schema(requiredProperties = {"total", "originals", "covers", "collaborations"})
-  public record Counts(long total, long originals, long covers, long collaborations) {}
+  @Schema(
+      requiredProperties = {
+        "total",
+        "originals",
+        "covers",
+        "multipleParticipants",
+        "collaborations"
+      })
+  public record Counts(
+      long total,
+      long originals,
+      long covers,
+      @Schema(
+              description =
+                  "이 멤버가 참여한 공개 곡 중 확정 참여자(멤버·외부 아티스트)가 2명 이상인 곡 수입니다. originals·covers와 중복될 수 있으며 게임·IP 협업곡 집계가 아닙니다.")
+          long multipleParticipants) {
+    @Deprecated
+    @JsonProperty("collaborations")
+    @Schema(
+        deprecated = true,
+        description =
+            "기존 클라이언트를 위한 다인 참여 곡 수의 호환 필드입니다. multipleParticipants와 항상 같은 값이며 게임·IP 협업곡 수가 아닙니다. 신규 연동은 multipleParticipants를 사용합니다.")
+    public long getCollaborations() {
+      return multipleParticipants;
+    }
+  }
 
   @Schema(
       requiredProperties = {

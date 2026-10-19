@@ -23,7 +23,7 @@ public final class CatalogAdminDtos {
     EXTERNAL
   }
 
-  @Schema(description = "ORIGINAL: 오리지널곡, COVER: 커버곡. 콜라보는 참여자 구성으로 별도 판단합니다.")
+  @Schema(description = "ORIGINAL: 오리지널곡, COVER: 커버곡. 여러 명의 참여 여부와 기념·협업 등의 특별 목적은 별도 속성입니다.")
   public enum SongType {
     ORIGINAL,
     COVER
@@ -137,8 +137,17 @@ public final class CatalogAdminDtos {
           List<@NotBlank @Size(max = 300) String> aliases,
       @NotNull @Size(max = 100) List<@NotNull UUID> memberIds,
       @NotNull @Size(max = 100) List<@NotNull UUID> externalArtistIds,
-      @NotNull Boolean isSpecialEvent,
-      @Size(max = 60) String specialEventLabel,
+      @Schema(
+              description =
+                  "생일·데뷔·주년·신의상·게임 협업 등을 포함하는 기념·특별 목적 곡 여부입니다. true만으로 게임 콜라보를 의미하지 않습니다.")
+          @NotNull
+          Boolean isSpecialEvent,
+      @Schema(
+              nullable = true,
+              description =
+                  "관리자가 확인 후 정하는 자유 입력 문구입니다. 예: 생일 기념, 게임 콜라보 기념. isSpecialEvent=true이면 빈 문구를 허용하지 않고 입력은 최대 60자이며 앞뒤 공백을 제거해 저장합니다. false이면 null로 정규화합니다. 고정 유형 enum을 두지 않습니다.")
+          @Size(max = 60)
+          String specialEventLabel,
       @NotNull SearchVisibility searchVisibility,
       @Size(max = 300) String recommendedSearchQuery,
       @NotNull @Size(max = 20) List<@NotNull @Valid Link> links,

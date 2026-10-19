@@ -38,7 +38,7 @@ public final class SongDtos {
         "thumbnailUrl",
         "participants",
         "work",
-        "collaboration",
+        "multipleParticipants",
         "isSpecialEvent",
         "specialEventLabel",
         "viewCount",
@@ -49,15 +49,25 @@ public final class SongDtos {
       String title,
       @Schema(
               allowableValues = {"ORIGINAL", "COVER"},
-              description = "ORIGINAL: 오리지널곡, COVER: 커버곡. 콜라보 여부는 collaboration으로 별도 표시합니다.")
+              description = "ORIGINAL: 오리지널곡, COVER: 커버곡. 여러 명의 참여 여부와 기념·협업 등의 특별 목적은 별도로 제공합니다.")
           String type,
       Instant publishedAt,
       @Schema(nullable = true) String thumbnailUrl,
       List<Participant> participants,
       @Schema(nullable = true) Work work,
-      boolean collaboration,
-      boolean isSpecialEvent,
-      @Schema(nullable = true) String specialEventLabel,
+      @Schema(
+              description =
+                  "확정된 스텔라이브 멤버와 외부 참여자의 합계가 2명 이상이면 true입니다. 게임·IP·브랜드 협업 여부를 뜻하지 않으며 콜라보 배지의 기준으로 사용하지 않습니다.")
+          boolean multipleParticipants,
+      @Schema(
+              description =
+                  "관리자가 확정한 기념·특별 목적 곡 여부입니다. 생일·데뷔·주년·신의상·게임 협업 등을 모두 포함하므로 true만으로 게임 콜라보를 의미하지 않습니다. 곡별 표시 문구는 specialEventLabel입니다.")
+          boolean isSpecialEvent,
+      @Schema(
+              nullable = true,
+              description =
+                  "관리자가 정한 자유 입력 문구입니다. 예: 생일 기념, 데뷔 기념, 게임 콜라보 기념. 고정 유형 enum이나 문구 파싱으로 협업 여부를 자동 판정하지 않습니다. isSpecialEvent=false이면 null입니다.")
+          String specialEventLabel,
       @Schema(nullable = true) Long viewCount,
       @Schema(nullable = true) Instant viewsObservedAt) {}
 
