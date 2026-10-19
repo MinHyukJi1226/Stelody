@@ -658,7 +658,8 @@ class PublicCatalogIntegrationTest {
     assertThat(filtered.get("totalCount").asLong()).isEqualTo(2);
     var counts = request("/api/v1/members/" + M2).get("member").get("songCounts");
     assertThat(counts.get("multipleParticipants").asLong()).isEqualTo(1);
-    assertThat(counts.has("collaborations")).isFalse();
+    assertThat(counts.get("collaborations").asLong())
+        .isEqualTo(counts.get("multipleParticipants").asLong());
   }
 
   @Test
@@ -690,16 +691,72 @@ class PublicCatalogIntegrationTest {
         .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"));
   }
 
+  @Test
+  void legacyMemberClientCanLoadDefaultSongsAndReadNumericCounts() throws Exception {
+    var page =
+        request(
+            "/api/v1/members/" + M1 + "/songs?type=ALL&collaboration=false&sort=LATEST&size=20");
+    assertThat(ids(page)).containsExactly(S3.toString(), S1.toString());
+    assertThat(page.get("totalCount").asLong()).isEqualTo(2);
+    for (var card : page.get("items")) assertThat(card.has("collaboration")).isFalse();
+    var detail = request("/api/v1/members/" + M1).get("member").get("songCounts");
+    assertThat(detail.get("collaborations").isNumber()).isTrue();
+    assertThat(detail.get("collaborations").asLong()).isEqualTo(2);
+    assertThat(detail.get("collaborations")).isEqualTo(detail.get("multipleParticipants"));
+    for (var member : request("/api/v1/members").get("items")) {
+      var counts = member.get("songCounts");
+      assertThat(counts.get("collaborations").isNumber()).isTrue();
+      assertThat(counts.get("collaborations")).isEqualTo(counts.get("multipleParticipants"));
+    }
+    var empty = request("/api/v1/members/" + M3).get("member").get("songCounts");
+    assertThat(empty.get("collaborations").asLong()).isZero();
+    assertThat(empty.get("multipleParticipants").asLong()).isZero();
+  }
+
+  @Test
+  void legacyAndCurrentParticipantNamesShareResultsAndCursorIdentity() throws Exception {
+    for (String path : List.of("/api/v1/songs", "/api/v1/members/" + M1 + "/songs")) {
+      assertThat(request(path + "?collaboration=false")).isEqualTo(request(path));
+      assertThat(request(path + "?collaboration=true"))
+          .isEqualTo(request(path + "?multipleParticipants=true"));
+      assertThat(request(path + "?collaboration=true&multipleParticipants=true"))
+          .isEqualTo(request(path + "?multipleParticipants=true"));
+      assertThat(request(path + "?collaboration=false&multipleParticipants=false"))
+          .isEqualTo(request(path));
+      var first = request(path + "?collaboration=true&size=1");
+      var second =
+          mapper.readTree(
+              mvc.perform(
+                      get(path)
+                          .param("multipleParticipants", "true")
+                          .param("size", "1")
+                          .param("cursor", first.get("nextCursor").asText()))
+                  .andExpect(status().isOk())
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString());
+      assertThat(ids(first)).containsExactly(S3.toString());
+      assertThat(ids(second)).containsExactly(S1.toString());
+      assertThat(second.get("totalCount").asLong()).isEqualTo(2);
+      assertThat(second.get("hasNext").asBoolean()).isFalse();
+    }
+  }
+
   @ParameterizedTest
-  @ValueSource(strings = {"true", "false", "invalid"})
-  void retiredCollaborationParameterIsRejectedInsteadOfReturningUnfilteredSongs(String value)
+  @ValueSource(booleans = {true, false})
+  void conflictingLegacyAndCurrentParticipantFiltersIdentifyBothFields(boolean current)
       throws Exception {
     for (String path : List.of("/api/v1/songs", "/api/v1/members/" + M1 + "/songs")) {
-      mvc.perform(get(path).param("collaboration", value).param("multipleParticipants", "true"))
+      mvc.perform(
+              get(path)
+                  .param("collaboration", String.valueOf(!current))
+                  .param("multipleParticipants", String.valueOf(current)))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"))
           .andExpect(jsonPath("$.fieldErrors[0].field").value("collaboration"))
-          .andExpect(jsonPath("$.fieldErrors[0].code").value("UNSUPPORTED_PARAMETER"));
+          .andExpect(jsonPath("$.fieldErrors[0].code").value("CONFLICTING_FILTER"))
+          .andExpect(jsonPath("$.fieldErrors[1].field").value("multipleParticipants"))
+          .andExpect(jsonPath("$.fieldErrors[1].code").value("CONFLICTING_FILTER"));
     }
   }
 

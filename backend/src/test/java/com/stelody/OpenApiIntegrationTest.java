@@ -95,9 +95,17 @@ class OpenApiIntegrationTest {
               .contains("2명 이상", "게임", "필터가 아닙니다", "totalCount", "커서");
         }
       }
-      assertThat(names).contains("multipleParticipants").doesNotContain("collaboration");
+      assertThat(names).contains("multipleParticipants", "collaboration");
+      for (var parameter : api.path("paths").path(path).path("get").path("parameters")) {
+        if (parameter.path("name").asText().equals("collaboration")) {
+          assertThat(parameter.path("deprecated").asBoolean()).isTrue();
+          assertThat(parameter.at("/schema/type").asText()).isEqualTo("boolean");
+          assertThat(parameter.path("description").asText())
+              .contains("호환", "multipleParticipants", "다르면");
+        }
+      }
       assertThat(api.path("paths").path(path).path("get").at("/responses/400/description").asText())
-          .contains("UNSUPPORTED_PARAMETER", "collaboration", "multipleParticipants");
+          .contains("CONFLICTING_FILTER", "collaboration", "multipleParticipants");
     }
     var schemas = api.path("components").path("schemas");
     var card = schemas.path("com.stelody.song.dto.SongDtos.Card");
@@ -113,14 +121,19 @@ class OpenApiIntegrationTest {
     assertThat(label.has("enum")).isFalse();
     assertThat(label.path("description").asText()).contains("자유 입력", "자동 판정하지 않습니다");
     var counts = schemas.path("com.stelody.member.dto.MemberDtos.Counts");
-    assertThat(counts.path("properties").has("collaborations")).isFalse();
+    assertThat(counts.path("properties").has("collaborations")).isTrue();
+    assertThat(counts.at("/properties/collaborations/deprecated").asBoolean()).isTrue();
+    assertThat(counts.at("/properties/collaborations/type").asText()).isEqualTo("integer");
+    assertThat(counts.path("required").toString()).contains("collaborations");
+    assertThat(counts.at("/properties/collaborations/description").asText())
+        .contains("호환", "multipleParticipants", "게임");
     assertThat(counts.path("properties").has("multipleParticipants")).isTrue();
     assertThat(counts.at("/properties/multipleParticipants/type").asText()).isEqualTo("integer");
     assertThat(
             api.at(
                     "/components/schemas/ApiProblem/properties/fieldErrors/items/properties/code/enum")
                 .toString())
-        .contains("UNSUPPORTED_PARAMETER");
+        .contains("CONFLICTING_FILTER");
   }
 
   @Test

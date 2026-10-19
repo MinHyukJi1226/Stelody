@@ -1,13 +1,11 @@
 package com.stelody.member.controller;
 
-import com.stelody.auth.web.ApiFieldError;
-import com.stelody.catalog.web.CatalogException;
+import com.stelody.catalog.web.ParticipantFilters;
 import com.stelody.member.dto.MemberDtos;
 import com.stelody.member.service.MemberService;
 import com.stelody.song.dto.SongDtos;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,18 +43,12 @@ public class MemberController {
   public SongDtos.Page songs(
       @PathVariable UUID id,
       @RequestParam(required = false) String type,
-      @RequestParam(defaultValue = "false") boolean multipleParticipants,
-      @Parameter(hidden = true) @RequestParam(required = false) String collaboration,
+      @RequestParam(required = false) Boolean multipleParticipants,
+      @Parameter(deprecated = true) @RequestParam(required = false) Boolean collaboration,
       @RequestParam(required = false) String sort,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    if (collaboration != null)
-      throw CatalogException.invalid(
-          List.of(
-              new ApiFieldError(
-                  "collaboration",
-                  "UNSUPPORTED_PARAMETER",
-                  "collaboration은 지원하지 않습니다. 여러 명 참여 필터는 multipleParticipants를 사용해 주세요")));
-    return members.songs(id, type, multipleParticipants, sort, size, cursor);
+    boolean participants = ParticipantFilters.resolve(multipleParticipants, collaboration);
+    return members.songs(id, type, participants, sort, size, cursor);
   }
 }

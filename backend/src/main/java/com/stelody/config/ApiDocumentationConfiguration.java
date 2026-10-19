@@ -263,13 +263,12 @@ public class ApiDocumentationConfiguration {
                                         "INVALID_DATE",
                                         "DATE_OUT_OF_RANGE",
                                         "INVALID_DATE_RANGE",
-                                        "CONFLICTING_FILTER",
-                                        "UNSUPPORTED_PARAMETER")))
+                                        "CONFLICTING_FILTER")))
                         .addProperty(
                             "message", new StringSchema().description("입력값을 포함하지 않는 고정 안내 문구"))
                         .required(List.of("field", "code", "message")))
                 .description(
-                    "DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 날짜 검색은 INVALID_DATE: 형식·존재 오류, DATE_OUT_OF_RANGE: 연도 범위, INVALID_DATE_RANGE: 시작일·종료일 역전, CONFLICTING_FILTER: year와 날짜 범위 중복입니다. UNSUPPORTED_PARAMETER: 폐기된 검색 파라미터입니다. collaboration 대신 multipleParticipants를 사용합니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다."))
+                    "DTO·타입 검증과 관리자 폼의 추가 검증 오류를 field/code/message로 반환합니다. REQUIRED: 필수, INVALID_FORMAT: 형식, INVALID_SIZE: 길이·개수, OUT_OF_RANGE: 범위, DUPLICATE: 중복, INVALID_VALUE: 기타 값 오류. links[0].url, aliases[1], configuration.cover[0].text 형식이며 field·code 순서로 정렬합니다. 날짜 검색은 INVALID_DATE: 형식·존재 오류, DATE_OUT_OF_RANGE: 연도 범위, INVALID_DATE_RANGE: 시작일·종료일 역전, CONFLICTING_FILTER: year와 날짜 범위 중복입니다. 다인 참여의 새 필터 multipleParticipants와 이전 호환 파라미터 collaboration이 충돌해도 CONFLICTING_FILTER를 양쪽 필드에 반환합니다. 파싱이 불가능한 JSON이나 특정 입력칸에 연결할 수 없는 업무·인증 오류는 빈 배열입니다. 입력값·비밀번호·토큰·내부 예외 메시지는 포함하지 않습니다."))
         .addProperty("traceId", new StringSchema().format("uuid"))
         .required(List.of("type", "title", "status", "instance", "code", "fieldErrors", "traceId"));
   }
@@ -352,7 +351,7 @@ public class ApiDocumentationConfiguration {
       errorCodes(
           operation,
           "400",
-          "검색 조건·커서를 확인합니다. 폐기된 collaboration 파라미터는 400 INVALID_CATALOG_QUERY 및 fieldErrors[].field=collaboration, code=UNSUPPORTED_PARAMETER입니다. 여러 명 참여 필터는 multipleParticipants로 지정합니다.",
+          "검색 조건·커서를 확인합니다. 여러 명 참여 필터는 multipleParticipants입니다. 이전 collaboration도 호환용으로 같은 조건으로 해석하며 두 값이 다르면 400 INVALID_CATALOG_QUERY 및 양쪽 fieldErrors[].code=CONFLICTING_FILTER입니다.",
           "INVALID_CATALOG_QUERY");
       if (path.equals("/api/v1/songs"))
         errorCodes(
@@ -503,9 +502,14 @@ public class ApiDocumentationConfiguration {
               "직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정·목록·version에 묶이며 size는 변경할 수 있습니다. 목록 변경 시 409 PLAYLIST_CHANGED이므로 첫 페이지부터 다시 조회합니다.");
         else parameter.setDescription("직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.");
       }
-      case "multipleParticipants" ->
+      case "multipleParticipants" -> {
+        schema.setDefault(false);
+        parameter.setDescription(
+            "기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다. 이전 collaboration과 함께 보내면 값이 같아야 합니다.");
+      }
+      case "collaboration" ->
           parameter.setDescription(
-              "기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다.");
+              "이전 클라이언트의 다인 참여 필터를 위한 호환 파라미터입니다. 게임·IP 협업 여부를 뜻하지 않습니다. 신규 연동은 multipleParticipants를 사용합니다. 새 파라미터 미지정 시 이 값을 사용하며, 둘 다 지정한 값이 다르면 400 INVALID_CATALOG_QUERY와 CONFLICTING_FILTER입니다.");
       case "days" -> schema.setEnum(List.of(7, 30));
       case "year" -> {
         schema.setMinimum(BigDecimal.valueOf(1900));
