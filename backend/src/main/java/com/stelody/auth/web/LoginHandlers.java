@@ -1,5 +1,6 @@
 package com.stelody.auth.web;
 
+import com.stelody.auth.domain.LocalLogin;
 import com.stelody.auth.domain.LoginReturn;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.auth.service.GoogleOidcUserService.LocalOidcUser;
@@ -64,7 +65,8 @@ public class LoginHandlers {
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("Referrer-Policy", "no-referrer");
     var target = (LoginReturn) request.getAttribute(LoginReturn.ATTRIBUTE);
-    response.sendRedirect(target == null ? "/api/v1/me" : target.location("success"));
+    response.sendRedirect(
+        LocalLogin.location(request, target == null ? "/api/v1/me" : target.location("success")));
   }
 
   public void failure(
@@ -82,7 +84,7 @@ public class LoginHandlers {
               ? "cancelled"
               : "failed";
       response.setHeader("Cache-Control", "no-store");
-      response.sendRedirect(target.location(result));
+      response.sendRedirect(LocalLogin.location(request, target.location(result)));
       return;
     }
     problems.write(request, response, 401, "GOOGLE_LOGIN_FAILED", "Google 로그인을 완료하지 못했습니다");

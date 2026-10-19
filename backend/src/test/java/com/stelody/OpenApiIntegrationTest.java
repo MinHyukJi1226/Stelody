@@ -80,6 +80,21 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsOptInLocalLoginWithoutAcceptingExternalReturnUrls() throws Exception {
+    var operation = contract().at("/paths/~1api~1v1~1auth~1google/get");
+    var params = new java.util.HashMap<String, JsonNode>();
+    operation.path("parameters").forEach(p -> params.put(p.path("name").asText(), p));
+    assertThat(params.keySet()).containsExactlyInAnyOrder("returnTo", "loginClient");
+    assertThat(params.get("loginClient").at("/schema/enum").toString()).isEqualTo("[\"local\"]");
+    assertThat(params.get("loginClient").path("description").asText())
+        .contains("GOOGLE_LOCAL_REDIRECT_URI", "프록시", "YouTube", "재인증");
+    assertThat(params.get("returnTo").at("/schema/enum").isMissingNode()).isTrue();
+    assertThat(params.get("returnTo").at("/schema/maxLength").asInt()).isEqualTo(2048);
+    assertThat(operation.at("/responses/400/description").asText())
+        .contains("INVALID_LOGIN_CLIENT", "INVALID_LOGIN_RETURN");
+  }
+
+  @Test
   void distinguishesMultipleParticipantsFromAllSpecialPurposesInTheContract() throws Exception {
     var api = contract();
     for (String path : new String[] {"/api/v1/songs", "/api/v1/members/{id}/songs"}) {

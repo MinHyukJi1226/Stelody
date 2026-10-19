@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest
 @Import({
   SecurityConfiguration.class,
+  com.stelody.auth.web.GoogleLoginClients.class,
   com.stelody.auth.web.ApiProblems.class,
   com.stelody.auth.web.LoginHandlers.class,
   com.stelody.auth.service.GoogleOidcUserService.class
@@ -86,6 +87,18 @@ class SecurityConfigurationTest {
         .andExpect(status().isServiceUnavailable())
         .andExpect(jsonPath("$.code").value("GOOGLE_LOGIN_UNAVAILABLE"))
         .andExpect(jsonPath("$.traceId").isNotEmpty());
+  }
+
+  @Test
+  void localLoginIsRejectedWhenNotConfigured() throws Exception {
+    for (String path : java.util.List.of("/api/v1/auth/google", "/api/v1/auth/authorize/google")) {
+      var response =
+          mvc.perform(get(path).servletPath(path).param("loginClient", "local"))
+              .andExpect(status().isBadRequest())
+              .andExpect(jsonPath("$.code").value("INVALID_LOGIN_CLIENT"))
+              .andReturn();
+      org.assertj.core.api.Assertions.assertThat(response.getRequest().getSession(false)).isNull();
+    }
   }
 
   @Test

@@ -88,6 +88,7 @@ stelody:
   auth:
     google:
       redirect-uri: ${GOOGLE_REDIRECT_URI:}
+      local-redirect-uri: ${GOOGLE_LOCAL_REDIRECT_URI:}
 springdoc:
   api-docs:
     enabled: false

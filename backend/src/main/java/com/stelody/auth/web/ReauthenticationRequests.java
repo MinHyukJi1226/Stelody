@@ -40,6 +40,14 @@ public class ReauthenticationRequests
           OAuth2AuthorizationRequest.from(authorization)
               .attributes(a -> a.put(LoginReturn.ATTRIBUTE, target))
               .build();
+    var local = (LocalLogin) request.getAttribute(LocalLogin.ATTRIBUTE);
+    if (authorization != null
+        && local != null
+        && authorization.getAttribute(ReauthenticationContext.ATTRIBUTE) == null)
+      authorization =
+          OAuth2AuthorizationRequest.from(authorization)
+              .attributes(a -> a.put(LocalLogin.ATTRIBUTE, local))
+              .build();
     delegate.saveAuthorizationRequest(authorization, request, response);
   }
 
@@ -62,12 +70,16 @@ public class ReauthenticationRequests
       reauthentication.consume(context, authorization.getState());
       request.setAttribute(ReauthenticationContext.ATTRIBUTE, context);
     } else {
+      LocalLogin local = authorization.getAttribute(LocalLogin.ATTRIBUTE);
+      if (local != null && !Instant.now().isBefore(local.expiresAt()))
+        throw new OAuth2AuthenticationException("login_client_expired");
       LoginReturn target = authorization.getAttribute(LoginReturn.ATTRIBUTE);
       if (target != null) {
         if (!Instant.now().isBefore(target.expiresAt()))
           throw new OAuth2AuthenticationException("login_return_expired");
         request.setAttribute(LoginReturn.ATTRIBUTE, target);
       }
+      if (local != null) request.setAttribute(LocalLogin.ATTRIBUTE, local);
     }
     return authorization;
   }

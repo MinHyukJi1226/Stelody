@@ -93,6 +93,9 @@ class GoogleLoginIntegrationTest {
     registry.add("spring.flyway.user", () -> "stelody_migrator");
     registry.add("spring.flyway.password", () -> "test-migrator");
     registry.add("server.servlet.session.cookie.secure", () -> false);
+    registry.add(
+        "stelody.auth.google.local-redirect-uri",
+        () -> "http://localhost:5173/api/v1/auth/callback/google");
   }
 
   @TestConfiguration
@@ -521,6 +524,149 @@ class GoogleLoginIntegrationTest {
 
   String returnQuery(String path) {
     return "?returnTo=" + java.net.URLEncoder.encode(path, StandardCharsets.UTF_8);
+  }
+
+  @Test
+  void localProxyFlowUsesConfiguredOriginForStartTokenExchangeAndSuccess() throws Exception {
+    var browser = new Browser();
+    browser.csrf();
+    String oldCookie = browser.cookie();
+    String target = "/login?returnTo=%2Flibrary";
+    var start = browser.get("/api/v1/auth/google" + returnQuery(target) + "&loginClient=local");
+    assertThat(start.statusCode()).isEqualTo(302);
+    URI next = URI.create(start.headers().firstValue("Location").orElseThrow());
+    assertThat(next.toString()).startsWith("http://localhost:5173/api/v1/auth/authorize/google?");
+    assertThat(next.getRawQuery()).contains("loginClient=local");
+    // The local proxy forwards this URL to the backend while changing its Host.
+    var auth = authorize(browser, next.getRawPath() + "?" + next.getRawQuery());
+    tokens(auth, UUID.randomUUID().toString(), "local-login@example.invalid", "none");
+    var result =
+        browser.get(
+            "/api/v1/auth/callback/google?code=test-code&state="
+                + auth.state()
+                + "&loginClient=https://evil.example&returnTo=https://evil.example");
+    assertThat(result.statusCode()).isEqualTo(302);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue("http://localhost:5173/login?returnTo=%2Flibrary&loginResult=success");
+    google.verify(
+        postRequestedFor(urlEqualTo("/token"))
+            .withFormParam(
+                "redirect_uri", equalTo("http://localhost:5173/api/v1/auth/callback/google"))
+            .withFormParam("code_verifier", matching(".+")));
+    assertThat(browser.cookie()).isNotEqualTo(oldCookie);
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(401);
+    // Selection is per OAuth request, not per session: a later standard login stays standard.
+    var standard = authorize(browser);
+    tokens(standard, UUID.randomUUID().toString(), "standard-after-local@example.invalid", "none");
+    assertThat(callback(browser, standard).headers().firstValue("Location"))
+        .hasValue("http://localhost:" + port + "/api/v1/me");
+  }
+
+  @Test
+  void localAuthorizationHasConfiguredCallbackAndPkceWithoutLeakingSelectorToProvider()
+      throws Exception {
+    var result = new Browser().get("/api/v1/auth/authorize/google?loginClient=local");
+    var query =
+        org.springframework.web.util.UriComponentsBuilder.fromUriString(
+                result.headers().firstValue("Location").orElseThrow())
+            .build()
+            .getQueryParams();
+    assertThat(URLDecoder.decode(query.getFirst("redirect_uri"), StandardCharsets.UTF_8))
+        .isEqualTo("http://localhost:5173/api/v1/auth/callback/google");
+    assertThat(query).doesNotContainKeys("loginClient", "returnTo");
+    assertThat(query.getFirst("code_challenge_method")).isEqualTo("S256");
+  }
+
+  @Test
+  void forwardedHostHeadersCannotSelectTheCallbackOrStartDestination() throws Exception {
+    var browser = new Browser();
+    for (boolean local : new boolean[] {true, false}) {
+      String path =
+          local
+              ? "/api/v1/auth/google?loginClient=local&returnTo=%2Flogin"
+              : "/api/v1/auth/authorize/google";
+      var result =
+          browser.client.send(
+              HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                  .header("Forwarded", "host=evil.example;proto=https")
+                  .header("X-Forwarded-Host", "evil.example")
+                  .header("X-Forwarded-Proto", "https")
+                  .GET()
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
+      String location = result.headers().firstValue("Location").orElseThrow();
+      assertThat(location).doesNotContain("evil.example");
+      if (local)
+        assertThat(location).startsWith("http://localhost:5173/api/v1/auth/authorize/google?");
+      else {
+        var params =
+            org.springframework.web.util.UriComponentsBuilder.fromUriString(location)
+                .build()
+                .getQueryParams();
+        assertThat(URLDecoder.decode(params.getFirst("redirect_uri"), StandardCharsets.UTF_8))
+            .isEqualTo("http://localhost:" + port + "/api/v1/auth/callback/google");
+      }
+    }
+  }
+
+  @Test
+  void localCancellationFailureAndDefaultSuccessUseOnlyStoredClient() throws Exception {
+    for (String outcome : java.util.List.of("cancelled", "failed", "success")) {
+      var browser = new Browser();
+      var auth =
+          authorize(
+              browser,
+              "/api/v1/auth/authorize/google?loginClient=local"
+                  + (outcome.equals("success") ? "" : "&returnTo=%2Flogin"));
+      HttpResponse<String> result;
+      if (outcome.equals("cancelled")) {
+        result =
+            browser.get("/api/v1/auth/callback/google?error=access_denied&state=" + auth.state());
+      } else {
+        tokens(
+            auth,
+            UUID.randomUUID().toString(),
+            "local-outcome@example.invalid",
+            outcome.equals("failed") ? "nonce" : "none");
+        result = callback(browser, auth);
+      }
+      assertThat(result.statusCode()).isEqualTo(302);
+      assertThat(result.headers().firstValue("Location"))
+          .hasValue(
+              "http://localhost:5173"
+                  + (outcome.equals("success") ? "/api/v1/me" : "/login?loginResult=" + outcome));
+      assertThat(browser.get("/api/v1/me").statusCode())
+          .isEqualTo(outcome.equals("success") ? 200 : 401);
+    }
+  }
+
+  @Test
+  void invalidClientAndWrongStateCannotChooseALocalRedirect() throws Exception {
+    for (String path : java.util.List.of("/api/v1/auth/google", "/api/v1/auth/authorize/google")) {
+      for (String query :
+          java.util.List.of(
+              "loginClient=",
+              "loginClient=other",
+              "loginClient=https://evil.example",
+              "loginClient=local&loginClient=local",
+              "loginClient=local&returnTo=https://evil.example")) {
+        var browser = new Browser();
+        var result = browser.get(path + "?" + query);
+        assertThat(result.statusCode()).isEqualTo(400);
+        assertThat(result.headers().firstValue("Location")).isEmpty();
+        assertThat(browser.cookies.getCookieStore().getCookies()).isEmpty();
+      }
+    }
+    var browser = new Browser();
+    var auth =
+        authorize(browser, "/api/v1/auth/authorize/google?loginClient=local&returnTo=%2Flogin");
+    var wrong =
+        browser.get("/api/v1/auth/callback/google?code=test-code&state=wrong&loginClient=local");
+    assertThat(wrong.statusCode()).isEqualTo(401);
+    assertThat(wrong.headers().firstValue("Location")).isEmpty();
+    tokens(auth, UUID.randomUUID().toString(), "after-wrong-state@example.invalid", "none");
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(302);
   }
 
   @Test
