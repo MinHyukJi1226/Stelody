@@ -482,15 +482,16 @@ test('변경 중 세션이 만료되면 로그인으로 이동하고 개인 목�
   ).toBeVisible()
 })
 
-test('보관함의 플레이리스트 탭은 준비 중 화면으로 연결한다', async ({
-  page,
-}) => {
+test('보관함의 플레이리스트 탭은 목록 화면으로 연결한다', async ({ page }) => {
   await mockFavorites(page, [item()])
   await page.goto('/library')
   await page.getByRole('link', { name: '플레이리스트', exact: true }).click()
   await expect(page).toHaveURL('/library/playlists')
   await expect(
-    page.getByText('플레이리스트 기능은 준비 중입니다.', { exact: true }),
+    page.getByRole('heading', {
+      name: '아직 만든 플레이리스트가 없습니다',
+      exact: true,
+    }),
   ).toBeVisible()
   await accountMenu(page)
   await expect(
