@@ -21,6 +21,7 @@ export function FavoriteResume() {
     session.isError ||
     session.isFetching ||
     !pending ||
+    pending.kind !== 'favorite' ||
     pending.readyUserId !== session.data.id ||
     pending.returnTo !== returnTo ||
     location.pathname.startsWith('/login')
@@ -40,7 +41,7 @@ function ResumeFavorite({
   useEffect(() => {
     if (pending) return
     const action = consumePendingAction(userId, returnTo)
-    if (action) change(action.favorited)
+    if (action?.kind === 'favorite') change(action.favorited)
   }, [userId, returnTo, change, pending])
   return null
 }

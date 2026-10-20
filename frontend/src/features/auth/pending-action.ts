@@ -3,15 +3,17 @@ import { safeReturnPath } from './return-path'
 
 const key = 'stelody-login-action'
 const lifetime = 5 * 60_000
-const actionSchema = z.object({
-  kind: z.literal('favorite'),
+const actionBase = z.object({
   songId: z.uuid(),
-  favorited: z.boolean(),
   returnTo: z.string(),
   createdAt: z.number(),
   expectedUserId: z.uuid().optional(),
   readyUserId: z.uuid().optional(),
 })
+const actionSchema = z.discriminatedUnion('kind', [
+  actionBase.extend({ kind: z.literal('favorite'), favorited: z.boolean() }),
+  actionBase.extend({ kind: z.literal('playlist') }),
+])
 export type PendingAction = z.infer<typeof actionSchema>
 
 export function readPendingAction(): PendingAction | null {
@@ -40,12 +42,32 @@ export function readPendingAction(): PendingAction | null {
 }
 
 export function storePendingAction(
-  action: Omit<PendingAction, 'createdAt' | 'readyUserId' | 'kind'>,
+  action: Omit<
+    Extract<PendingAction, { kind: 'favorite' }>,
+    'createdAt' | 'readyUserId' | 'kind'
+  >,
 ) {
   try {
     sessionStorage.setItem(
       key,
       JSON.stringify({ ...action, kind: 'favorite', createdAt: Date.now() }),
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function storePlaylistAction(
+  action: Omit<
+    Extract<PendingAction, { kind: 'playlist' }>,
+    'createdAt' | 'readyUserId' | 'kind'
+  >,
+) {
+  try {
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({ ...action, kind: 'playlist', createdAt: Date.now() }),
     )
     return true
   } catch {

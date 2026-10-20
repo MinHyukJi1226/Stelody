@@ -4,6 +4,7 @@ import {
   preparePendingAction,
   readPendingAction,
   storePendingAction,
+  storePlaylistAction,
 } from './pending-action'
 
 const user = '00000000-0000-4000-8000-000000000001'
@@ -75,4 +76,15 @@ it('소비 전에 저장소 삭제가 실패하면 요청을 시작할 작업을
     throw new DOMException('blocked', 'SecurityError')
   })
   expect(consumePendingAction(user, action.returnTo)).toBeNull()
+})
+
+it('플레이리스트 로그인 복귀 의도는 즐겨찾기 변경과 구분하고 한 번만 소비한다', () => {
+  storePlaylistAction({ songId: action.songId, returnTo: action.returnTo })
+  expect(consumePendingAction(user, action.returnTo)).toBeNull()
+  preparePendingAction(user, action.returnTo)
+  expect(consumePendingAction(user, action.returnTo)).toMatchObject({
+    kind: 'playlist',
+    songId: action.songId,
+  })
+  expect(readPendingAction()).toBeNull()
 })

@@ -58,9 +58,25 @@ export const router = createBrowserRouter([
           {
             path: '/library/playlists',
             lazy: async () => {
-              const { PlaylistsPlaceholder } =
-                await import('@/pages/favorites/playlists-placeholder')
-              return { Component: PlaylistsPlaceholder }
+              const { PlaylistsPage } =
+                await import('@/pages/playlists/playlists-page')
+              return { Component: PlaylistsPage }
+            },
+          },
+          {
+            path: '/library/playlists/new',
+            lazy: async () => {
+              const { PlaylistCreatePage } =
+                await import('@/pages/playlists/playlist-create-page')
+              return { Component: PlaylistCreatePage }
+            },
+          },
+          {
+            path: '/library/playlists/:playlistId',
+            lazy: async () => {
+              const { PlaylistDetailPage } =
+                await import('@/pages/playlists/playlist-detail-page')
+              return { Component: PlaylistDetailPage }
             },
           },
         ],

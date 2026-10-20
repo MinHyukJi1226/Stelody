@@ -92,6 +92,7 @@ export function FavoritesPage() {
 
   return (
     <div className="favorites-page flex min-w-0 flex-col gap-12">
+      {(query.isPending || state) && <LibraryTabs />}
       <section
         className={`flex min-w-0 flex-1 flex-col gap-8 ${state ? 'justify-center' : ''}`}
       >
