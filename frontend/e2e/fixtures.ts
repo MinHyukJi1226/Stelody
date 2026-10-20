@@ -43,6 +43,12 @@ export const test = base.extend<{ catalogMocks: void }>({
             status: 401,
             json: { code: 'AUTHENTICATION_REQUIRED' },
           })
+        } else if (pathname === '/api/v1/me/favorites') {
+          await route.fulfill({ json: { ...emptyPage, availableCount: 0 } })
+        } else if (pathname.startsWith('/api/v1/me/favorites/')) {
+          await route.fulfill({
+            json: { songId: pathname.split('/').at(-1), favorited: false },
+          })
         } else if (pathname === '/api/v1/songs/recommendations') {
           await route.fulfill({ json: { items: [] } })
         } else if (

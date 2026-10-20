@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Navigate, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { apiClient } from '@/shared/api/client'
 import { sessionOptions } from '@/features/auth/session'
 import { safeReturnPath } from '@/features/auth/return-path'
 import { SiteFooter } from '@/shared/ui/site-footer'
 import { LoginCard, LoginSkeleton } from './components/login-card'
+import { LoginReturn } from './components/login-return'
+import { preparePendingAction } from '@/features/auth/pending-action'
 
 export function LoginPage() {
   const [params, setParams] = useSearchParams()
@@ -33,7 +35,7 @@ export function LoginPage() {
     !failed &&
     result !== 'cancelled'
   ) {
-    return <Navigate to={returnTo} replace />
+    return <LoginReturn userId={session.data.id} returnTo={returnTo} />
   }
   const notice = session.isError
     ? '로그인 상태를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.'
@@ -83,6 +85,10 @@ export function LoginPage() {
               notice={notice}
               cancelled={result === 'cancelled' && !session.isError}
               canContinue={!!session.data && !session.isError}
+              onContinue={() => {
+                if (session.data)
+                  preparePendingAction(session.data.id, returnTo)
+              }}
               retry={session.isError ? () => void session.refetch() : undefined}
             />
           )}

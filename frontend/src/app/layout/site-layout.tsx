@@ -1,6 +1,7 @@
 import { Outlet, ScrollRestoration } from 'react-router'
 import { SiteHeader } from './site-header'
 import { useTheme } from '../use-theme'
+import { FavoriteResume } from '@/features/favorites/favorite-resume'
 
 export function SiteLayout() {
   const { theme, toggleTheme } = useTheme()
@@ -17,6 +18,7 @@ export function SiteLayout() {
         <Outlet />
       </main>
       <ScrollRestoration />
+      <FavoriteResume />
     </div>
   )
 }

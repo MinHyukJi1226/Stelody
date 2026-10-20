@@ -1,4 +1,6 @@
 import { Link } from 'react-router'
+import type { ReactNode } from 'react'
+import { cn } from '@/shared/lib/utils'
 import { Artwork } from '@/shared/ui/artwork'
 import type { Song } from './api'
 import type { MemberCard } from '@/shared/api/types'
@@ -15,14 +17,24 @@ const publishedDate = new Intl.DateTimeFormat('ko-KR', {
 export function SongCard({
   song,
   members,
+  variant = 'public',
+  actions,
 }: {
   song: Song
   members?: readonly MemberCard[] | undefined
+  variant?: 'public' | 'library'
+  actions?: ReactNode
 }) {
   const date = publishedDate.format(new Date(song.publishedAt))
   const origin = song.work?.artists.map(({ name }) => name).join(' · ')
   return (
-    <article className="min-w-0">
+    <article
+      className={cn(
+        'min-w-0',
+        variant === 'library' &&
+          'flex flex-col gap-3 rounded-2xl bg-surface p-4',
+      )}
+    >
       <Link
         to={`/songs/${song.id}`}
         className="flex min-w-0 flex-col gap-3 rounded-2xl"
@@ -30,9 +42,19 @@ export function SongCard({
       >
         <Artwork
           src={song.thumbnailUrl}
-          className="h-[180px] w-full rounded-2xl md:h-40"
+          className={cn(
+            'h-[180px] w-full rounded-2xl',
+            variant === 'public' && 'md:h-40',
+          )}
         />
-        <h3 className="break-words text-base font-bold leading-6">
+        <h3
+          className={cn(
+            'break-words font-bold',
+            variant === 'library'
+              ? 'text-lg leading-[1.5]'
+              : 'text-base leading-6',
+          )}
+        >
           {song.title}
         </h3>
         <p className="break-words text-sm leading-[1.5] text-muted">
@@ -57,6 +79,7 @@ export function SongCard({
           )}
         </div>
       </Link>
+      {actions}
     </article>
   )
 }

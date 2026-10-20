@@ -179,8 +179,11 @@ test('임베드 불가·오리지널·외부 참여자·안전한 링크를 처�
     'TJ · 미확인',
   )
   await expect(
-    page.getByRole('button', { name: '♡ 즐겨찾기', exact: true }),
-  ).toBeDisabled()
+    page.getByRole('button', {
+      name: `${song.title} 즐겨찾기 저장`,
+      exact: true,
+    }),
+  ).toBeEnabled()
 })
 
 test('권장 검색어 복사 성공과 실패를 안내한다', async ({ page }) => {
