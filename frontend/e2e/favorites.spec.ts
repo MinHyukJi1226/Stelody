@@ -482,16 +482,55 @@ test('변경 중 세션이 만료되면 로그인으로 이동하고 개인 목�
   ).toBeVisible()
 })
 
-test('보관함의 플레이리스트 탭은 목록 화면으로 연결한다', async ({ page }) => {
-  await mockFavorites(page, [item()])
+test('즐겨찾기가 비어 있어도 기존 플레이리스트로 이동하고 다시 돌아올 수 있다', async ({
+  page,
+}) => {
+  await mockFavorites(page)
+  await page.route('**/api/v1/me/playlists?*', (route) =>
+    route.fulfill({
+      json: {
+        ...emptyPage,
+        totalCount: 1,
+        items: [
+          {
+            id: makeSong(900).id,
+            name: '기존 플레이리스트',
+            totalCount: 1,
+            availableCount: 1,
+            version: 0,
+            containsSong: null,
+            createdAt: '2026-10-20T01:00:00Z',
+            updatedAt: '2026-10-20T01:00:00Z',
+          },
+        ],
+      },
+    }),
+  )
   await page.goto('/library')
+  await expect(
+    page.getByRole('heading', { name: '아직 저장한 노래가 없습니다' }),
+  ).toBeVisible()
   await page.getByRole('link', { name: '플레이리스트', exact: true }).click()
   await expect(page).toHaveURL('/library/playlists')
   await expect(
     page.getByRole('heading', {
-      name: '아직 만든 플레이리스트가 없습니다',
+      name: '기존 플레이리스트',
       exact: true,
     }),
+  ).toBeVisible()
+  await page.reload()
+  await expect(
+    page.getByRole('heading', { name: '기존 플레이리스트', exact: true }),
+  ).toBeVisible()
+  await page
+    .getByRole('navigation', { name: '보관함 종류' })
+    .getByRole('link', { name: '즐겨찾기', exact: true })
+    .click()
+  await expect(
+    page.getByRole('heading', { name: '아직 저장한 노래가 없습니다' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: '플레이리스트', exact: true }),
   ).toBeVisible()
   await accountMenu(page)
   await expect(

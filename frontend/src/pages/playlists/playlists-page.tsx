@@ -56,6 +56,7 @@ export function PlaylistsPage() {
         : null
   return (
     <div className="favorites-page flex min-w-0 flex-col gap-12">
+      {(query.isPending || state) && <LibraryTabs playlists />}
       <section
         className={`flex min-w-0 flex-1 flex-col gap-8 ${state ? 'justify-center' : ''}`}
       >

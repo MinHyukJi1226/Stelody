@@ -158,6 +158,11 @@ test('빈 목록에서 이름을 검증하고 생성 후 빈 상세로 이동하
   await expect(
     page.getByRole('heading', { name: '아직 만든 플레이리스트가 없습니다' }),
   ).toBeVisible()
+  await expect(
+    page
+      .getByRole('navigation', { name: '보관함 종류' })
+      .getByRole('link', { name: '즐겨찾기', exact: true }),
+  ).toBeVisible()
   await page.getByRole('link', { name: '첫 목록 만들기' }).click()
   const input = page.getByRole('textbox', { name: '플레이리스트 이름' })
   await page.getByRole('button', { name: '만들고 곡 담기' }).click()
