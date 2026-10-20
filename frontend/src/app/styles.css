@@ -129,6 +129,9 @@
   .login-page {
     min-height: calc(100dvh - 197px);
   }
+  .favorites-page {
+    min-height: calc(100dvh - 197px);
+  }
   .login-page > section {
     padding-bottom: 48px;
     min-height: 0;
@@ -186,6 +189,9 @@
       padding: 24px 20px 48px;
     }
     .login-page {
+      min-height: calc(100dvh - 165px);
+    }
+    .favorites-page {
       min-height: calc(100dvh - 165px);
     }
     .login-card {

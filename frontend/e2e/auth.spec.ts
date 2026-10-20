@@ -136,7 +136,7 @@ test('취소 시 기존 세션은 유지하고 사용자 선택으로 계속할 
   ).toBeVisible()
   await page.getByRole('link', { name: '현재 계정으로 계속하기' }).click()
   await expect(page).toHaveURL('/library')
-  await expect(page.getByRole('heading', { name: '내 보관함' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '내 즐겨찾기' })).toBeVisible()
 })
 
 test('세션 로딩·장애·재시도를 구분하며 보호 경로는 비로그인 시 로그인으로 연결한다', async ({
@@ -192,7 +192,9 @@ test('외부 복귀·로그인 루프를 막고 인증된 사용자는 안전한
       `/login?returnTo=${encodeURIComponent(value)}&loginResult=success`,
     )
     await expect(page).toHaveURL('/library')
-    await expect(page.getByRole('heading', { name: '내 보관함' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: '내 즐겨찾기' }),
+    ).toBeVisible()
   }
 })
 
@@ -223,7 +225,7 @@ test('로그아웃은 CSRF를 받아 한 번 전송하고 세션 만료 시 보�
     await route.fulfill({ status: 204 })
   })
   await page.goto('/library')
-  await expect(page.getByRole('heading', { name: '내 보관함' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '내 즐겨찾기' })).toBeVisible()
   await accountMenu(page)
   await page.getByRole('button', { name: '로그아웃', exact: true }).click()
   await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
@@ -234,7 +236,7 @@ test('로그아웃은 CSRF를 받아 한 번 전송하고 세션 만료 시 보�
   expect(csrfCalls).toBe(1)
   await page.goBack()
   await expect(
-    page.getByRole('heading', { name: '내 보관함', exact: true }),
+    page.getByRole('heading', { name: '내 즐겨찾기', exact: true }),
   ).toHaveCount(0)
 })
 
@@ -291,7 +293,7 @@ test('다시 활성화한 화면에서 만료된 세션을 확인하면 보호 �
     ),
   )
   await page.goto('/library')
-  await expect(page.getByRole('heading', { name: '내 보관함' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '내 즐겨찾기' })).toBeVisible()
   await page.waitForLoadState('networkidle')
   expired = true
   await page.evaluate(() =>
@@ -299,7 +301,7 @@ test('다시 활성화한 화면에서 만료된 세션을 확인하면 보호 �
   )
   await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
   await expect(
-    page.getByRole('heading', { name: '내 보관함', exact: true }),
+    page.getByRole('heading', { name: '내 즐겨찾기', exact: true }),
   ).toHaveCount(0)
 })
 

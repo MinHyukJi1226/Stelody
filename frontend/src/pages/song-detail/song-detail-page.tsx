@@ -16,6 +16,7 @@ import { ExternalLinks } from './components/external-links'
 import { KaraokeNumbers, WorkInformation } from './components/song-resources'
 import { SearchHelp } from './components/search-help'
 import { SongViews } from './components/song-views'
+import { FavoriteButton } from '@/features/favorites/favorite-button'
 
 export function SongDetailPage() {
   const { songId = '' } = useParams()
@@ -88,24 +89,23 @@ function SongContent({
       {detail.links.length > 0 && <ExternalLinks links={detail.links} />}
       <div className="flex flex-col gap-2">
         <div
-          className="flex flex-wrap gap-2 md:gap-3"
+          className="grid grid-cols-2 items-start gap-2 md:flex md:flex-wrap md:gap-3"
           aria-describedby="saving-status"
         >
+          <FavoriteButton
+            songId={detail.song.id}
+            songTitle={detail.song.title}
+            className="w-full min-w-0 md:w-44 md:flex-none"
+          />
           <Button
             disabled
-            className="min-h-12 min-w-0 flex-1 border border-line md:w-44 md:flex-none"
-          >
-            ♡ 즐겨찾기
-          </Button>
-          <Button
-            disabled
-            className="min-h-12 min-w-0 flex-1 border border-line md:w-44 md:flex-none"
+            className="h-12 min-h-12 w-full min-w-0 border border-line p-3 font-bold leading-5 md:w-44 md:flex-none"
           >
             ＋ 플레이리스트
           </Button>
         </div>
         <p id="saving-status" className="text-xs text-muted">
-          저장 기능은 준비 중입니다.
+          플레이리스트 기능은 준비 중입니다.
         </p>
       </div>
       {(detail.song.type === 'COVER' ||

@@ -9,12 +9,14 @@ export function LoginCard({
   cancelled = false,
   canContinue = false,
   retry,
+  onContinue,
 }: {
   returnTo: string
   notice?: string | undefined
   cancelled?: boolean
   canContinue?: boolean
   retry?: (() => void) | undefined
+  onContinue?: () => void
 }) {
   return (
     <section aria-labelledby="login-card-title" className="login-card">
@@ -39,7 +41,7 @@ export function LoginCard({
       {retry && <Button onClick={retry}>로그인 상태 다시 확인</Button>}
       {canContinue && (
         <Button asChild>
-          <Link to={returnTo} replace>
+          <Link to={returnTo} replace onClick={onContinue}>
             현재 계정으로 계속하기
           </Link>
         </Button>

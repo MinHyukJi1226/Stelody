@@ -1,7 +1,6 @@
 import { createBrowserRouter } from 'react-router'
 import { HomePage } from '@/pages/home/home-page'
 import { NotFoundPage } from '@/pages/not-found/not-found-page'
-import { ComingSoonPage } from '@/pages/coming-soon/coming-soon-page'
 import { SongCatalogPage } from '@/pages/song-catalog/song-catalog-page'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { SiteLayout } from './layout/site-layout'
@@ -48,7 +47,22 @@ export const router = createBrowserRouter([
       {
         element: <AuthGate />,
         children: [
-          { path: '/library', element: <ComingSoonPage title="내 보관함" /> },
+          {
+            path: '/library',
+            lazy: async () => {
+              const { FavoritesPage } =
+                await import('@/pages/favorites/favorites-page')
+              return { Component: FavoritesPage }
+            },
+          },
+          {
+            path: '/library/playlists',
+            lazy: async () => {
+              const { PlaylistsPlaceholder } =
+                await import('@/pages/favorites/playlists-placeholder')
+              return { Component: PlaylistsPlaceholder }
+            },
+          },
         ],
       },
       {
