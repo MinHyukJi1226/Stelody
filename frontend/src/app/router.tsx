@@ -72,6 +72,14 @@ export const router = createBrowserRouter([
             },
           },
           {
+            path: '/library/playlists/:playlistId/edit',
+            lazy: async () => {
+              const { PlaylistRenamePage } =
+                await import('@/pages/playlists/playlist-rename-page')
+              return { Component: PlaylistRenamePage }
+            },
+          },
+          {
             path: '/library/playlists/:playlistId',
             lazy: async () => {
               const { PlaylistDetailPage } =

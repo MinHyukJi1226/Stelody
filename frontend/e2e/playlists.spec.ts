@@ -199,7 +199,13 @@ test('저장·이용 가능 곡 수와 서버 순서를 표시하고 이용 불�
   state.items.set(first, [entry(), entry(1, false)])
   await page.goto('/library/playlists')
   await expect(page.getByText('2곡 · 이용 가능 1곡 · 나만 보기')).toBeVisible()
-  await page.getByRole('link', { name: '목록 열기' }).click()
+  await page
+    .getByRole('article')
+    .filter({
+      has: page.getByRole('heading', { name: '밤에 듣는 목소리', exact: true }),
+    })
+    .getByRole('link', { name: '목록 열기' })
+    .click()
   await expect(
     page.getByRole('heading', { name: '밤에 듣는 목소리', exact: true }),
   ).toBeVisible()
@@ -219,8 +225,11 @@ test('저장·이용 가능 곡 수와 서버 순서를 표시하고 이용 불�
   await expect(unavailable).toBeVisible()
   await expect(unavailable.getByRole('link')).toHaveCount(0)
   await expect(
-    page.getByRole('button', { name: /제거|위로|아래로|이름 수정|목록 삭제/ }),
-  ).toHaveCount(0)
+    page.getByRole('button', { name: '이름 수정', exact: true }),
+  ).toBeEnabled()
+  await expect(
+    page.getByRole('button', { name: '목록 삭제', exact: true }),
+  ).toBeEnabled()
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -460,10 +469,12 @@ test('상세의 잘못된 UUID는 개인 곡 API를 호출하지 않고 접근 �
   expect(reads).toBe(0)
 })
 
-test('추가 페이지 버전 충돌은 이전 곡을 유지하며 첫 페이지부터 다시 조회한다', async ({
+test('전체 페이지 버전 충돌은 편집을 막고 첫 페이지부터 다시 조회한다', async ({
   page,
 }) => {
-  await setup(page, [{ ...list(), totalCount: 2, availableCount: 2 }])
+  const state = await setup(page, [
+    { ...list(), totalCount: 2, availableCount: 2 },
+  ])
   let reset = false
   const cursors: (string | null)[] = []
   await page.route(`**/api/v1/me/playlists/${first}/items?*`, async (r) => {
@@ -475,8 +486,8 @@ test('추가 페이지 버전 충돌은 이전 곡을 유지하며 첫 페이지
       json: {
         ...emptyPage,
         version: reset ? 1 : 0,
-        totalCount: 1,
-        availableCount: 1,
+        totalCount: reset ? 1 : 2,
+        availableCount: reset ? 1 : 2,
         items: [entry()],
         hasNext: !reset,
         nextCursor: reset ? null : 'next',
@@ -485,14 +496,21 @@ test('추가 페이지 버전 충돌은 이전 곡을 유지하며 첫 페이지
   })
   await page.goto(`/library/playlists/${first}`)
   await expect(page.getByText(/^이용 불가 곡 \d+곡$/)).toHaveCount(0)
-  await page.getByRole('button', { name: '곡 더 보기' }).click()
   await expect(
-    page.getByText('처음부터 다시 불러와 최신 목록을 확인해 주세요.'),
+    page.getByText('전체 목록을 다시 불러와 최신 내용을 확인해 주세요.'),
   ).toBeVisible()
-  await expect(page.getByRole('heading', { name: song.title })).toBeVisible()
+  await expect(page.getByRole('heading', { name: song.title })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: '변경 순서 저장' }),
+  ).toHaveCount(0)
   reset = true
+  Object.assign(state.lists[0]!, {
+    totalCount: 1,
+    availableCount: 1,
+    version: 1,
+  })
   await page.getByRole('button', { name: '다시 시도' }).click()
-  await expect(page.getByRole('button', { name: '곡 더 보기' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: song.title })).toBeVisible()
   expect(cursors).toEqual([null, 'next', null])
 })
 

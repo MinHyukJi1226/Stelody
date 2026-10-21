@@ -1,15 +1,18 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { cn } from '@/shared/lib/utils'
 
 export function Dialog({
   labelledBy,
   onDismiss,
   busy = false,
   children,
+  className,
 }: {
   labelledBy: string
   onDismiss: () => void
   busy?: boolean
   children: ReactNode
+  className?: string
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -36,7 +39,10 @@ export function Dialog({
         event.preventDefault()
         if (!busy) onDismiss()
       }}
-      className="m-auto max-h-[calc(100dvh-40px)] w-[calc(100vw-40px)] max-w-[520px] overflow-y-auto rounded-2xl border border-line bg-surface p-6 text-ink backdrop:bg-night/50"
+      className={cn(
+        'm-auto max-h-[calc(100dvh-40px)] w-[calc(100vw-40px)] max-w-[520px] overflow-y-auto rounded-2xl border border-line bg-surface p-6 text-ink backdrop:bg-night/50',
+        className,
+      )}
     >
       {children}
     </dialog>

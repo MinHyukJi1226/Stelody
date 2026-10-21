@@ -69,3 +69,27 @@ export function addPlaylistSong(playlist: Playlist, songId: string) {
     { method: 'POST', body: { songId, version: playlist.version } },
   )
 }
+
+export function renamePlaylist(playlist: Playlist, name: string) {
+  return apiClient.request<Playlist>(
+    `/me/playlists/${encodeURIComponent(playlist.id)}`,
+    {
+      method: 'PATCH',
+      body: { name: playlistNameSchema.parse(name), version: playlist.version },
+    },
+  )
+}
+
+export function deletePlaylist(playlist: Playlist) {
+  return apiClient.request<void>(
+    `/me/playlists/${encodeURIComponent(playlist.id)}?${new URLSearchParams({ version: String(playlist.version) })}`,
+    { method: 'DELETE' },
+  )
+}
+
+export function removePlaylistItem(playlist: Playlist, itemId: string) {
+  return apiClient.request<Playlist>(
+    `/me/playlists/${encodeURIComponent(playlist.id)}/items/${encodeURIComponent(itemId)}?${new URLSearchParams({ version: String(playlist.version) })}`,
+    { method: 'DELETE' },
+  )
+}

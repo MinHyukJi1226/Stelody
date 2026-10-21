@@ -111,16 +111,15 @@ export function PlaylistsPage() {
                       : '아직 담은 곡이 없습니다'}
                   </p>
                 </div>
-                <div className="flex flex-1">
+                <div className="flex flex-1 flex-wrap gap-2">
+                  {playlist.totalCount === 0 && (
+                    <Button asChild>
+                      <Link to="/search">곡 찾기</Link>
+                    </Button>
+                  )}
                   <Button asChild>
-                    <Link
-                      to={
-                        playlist.totalCount
-                          ? `/library/playlists/${playlist.id}`
-                          : '/search'
-                      }
-                    >
-                      {playlist.totalCount ? '목록 열기' : '곡 찾기'}
+                    <Link to={`/library/playlists/${playlist.id}`}>
+                      목록 열기
                     </Link>
                   </Button>
                 </div>
