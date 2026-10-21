@@ -118,6 +118,7 @@ public class ApiDocumentationConfiguration {
                             correctSuccess(path, verb, operation);
                             playlistOrdering(path, verb, operation);
                             frontendErrors(path, verb, operation);
+                            youtubeReturn(path, operation);
                             operation
                                 .getResponses()
                                 .values()
@@ -309,7 +310,8 @@ public class ApiDocumentationConfiguration {
     String status = null;
     if (verb.equals("DELETE") && path.equals("/api/v1/me")) status = "204";
     else if (path.equals("/api/v1/auth/google")) status = "302";
-    else if (path.equals("/api/v1/me/youtube/callback")) status = "303";
+    else if (path.equals("/api/v1/me/youtube/callback")
+        || path.equals("/api/v1/me/youtube/callback/local")) status = "303";
     else if (verb.equals("POST")
         && (path.endsWith("/youtube-exports") || path.endsWith("/retries"))) status = "202";
     else if (verb.equals("POST")
@@ -333,6 +335,24 @@ public class ApiDocumentationConfiguration {
                 "Location",
                 new Header().schema(new StringSchema()).description("이동 대상 또는 생성한 리소스의 상대 URL"));
     }
+  }
+
+  private static void youtubeReturn(String path, Operation operation) {
+    if (!(path.equals("/api/v1/me/youtube/callback")
+        || path.equals("/api/v1/me/youtube/callback/local"))) return;
+    operation.setSecurity(List.of());
+    operation.getResponses().remove("401");
+    operation.setDescription(
+        "Google의 YouTube 추가 동의 콜백입니다. 프론트가 직접 호출하지 않습니다. 모든 인증 결과를 303 Location으로 안내합니다. 유효한 state는 사용자·시작 세션·callbackClient에 묶여 5분 내 한 번만 소비되고, 저장한 returnTo를 사용합니다. 세션 만료/누락·state 오류이면 사용자 지정 경로 대신 /library/youtube로 복귀합니다. local 경로는 서버에 등록한 로컬 origin으로, 일반 경로는 YOUTUBE_FRONTEND_ORIGIN(미설정이면 같은 origin)으로 이동합니다. local 미설정 시 일반 프론트 기본 경로에 INVALID_YOUTUBE_CLIENT를 안내합니다. Host·Forwarded·콜백의 returnTo는 사용하지 않습니다. 복귀 후 GET /api/v1/me/youtube/connection을 다시 조회하며, 401이면 Google 로그인 후 연결을 다시 시작합니다. 코드·토큰·state·내부 오류 원문은 Location에 포함하지 않고 Referrer-Policy: no-referrer와 Cache-Control: no-store를 사용합니다.");
+    var response = operation.getResponses().get("303");
+    response.setDescription(
+        "youtubeResult=success|cancelled|failed. success에는 youtubeError가 없습니다. cancelled에는 YOUTUBE_CONSENT_DENIED. failed의 youtubeError는 SESSION_EXPIRED, INVALID_YOUTUBE_STATE, INVALID_YOUTUBE_CLIENT, YOUTUBE_ACCOUNT_MISMATCH, YOUTUBE_SCOPE_REQUIRED, YOUTUBE_OFFLINE_ACCESS_REQUIRED, INVALID_YOUTUBE_IDENTITY, YOUTUBE_AUTHORIZATION_CHANGED, YOUTUBE_EXPORT_DISABLED, YOUTUBE_OAUTH_UNAVAILABLE, YOUTUBE_AUTHORIZATION_FAILED 중 하나입니다. 알 수 없는 외부 오류는 YOUTUBE_AUTHORIZATION_FAILED로 정규화합니다. 결과는 안내용이며 실제 연결 성공을 보장하는 상태 API를 대신하지 않습니다.");
+    response.addHeaderObject(
+        "Location",
+        new Header()
+            .schema(new StringSchema())
+            .description(
+                "검증된 내부 returnTo에 youtubeResult·youtubeError를 추가한 프론트 URL. 기본 예: /library/youtube?youtubeResult=success. 로컬 예: http://localhost:5173/library/youtube?youtubeResult=cancelled&youtubeError=YOUTUBE_CONSENT_DENIED. 기존 같은 이름의 결과 파라미터·OAuth 민감 파라미터는 제거합니다."));
   }
 
   private static void playlistOrdering(String path, String verb, Operation operation) {
@@ -461,6 +481,13 @@ public class ApiDocumentationConfiguration {
             "YOUTUBE_CONNECTION_REQUIRED");
     }
     if (path.equals("/api/v1/me/youtube/authorizations")) {
+      errorCodes(
+          operation,
+          "400",
+          "선택 JSON 본문은 {returnTo, callbackClient}입니다. 본문/필드 생략 및 null을 허용합니다. returnTo 기본값 /library/youtube, callbackClient 기본값 default. local은 YOUTUBE_LOCAL_REDIRECT_URI 설정 및 Google 콘솔의 해당 승인 URI 등록이 필요합니다. 기존 /api 프록시에서 시작·콜백·연결 상태·CSRF 요청을 같은 세션으로 처리하며 Secure·HttpOnly·SameSite를 유지합니다. 응답 authorizationUrl로 브라우저를 이동시킵니다.",
+          "INVALID_YOUTUBE_RETURN",
+          "INVALID_YOUTUBE_CLIENT",
+          "INVALID_EXPORT_REQUEST");
       errorCodes(operation, "409", "권한 철회 완료 후 추가 동의를 다시 시작합니다.", "YOUTUBE_REVOCATION_PENDING");
       errorCodes(operation, "503", "YouTube OAuth 설정이 없습니다.", "YOUTUBE_OAUTH_UNAVAILABLE");
     }

@@ -16,10 +16,15 @@ import org.springframework.web.bind.annotation.*;
 public class ExportController {
   private final ExportService exports;
   private final YouTubeConnectionService connections;
+  private final com.stelody.export.web.YouTubeOAuthReturn returns;
 
-  public ExportController(ExportService exports, YouTubeConnectionService connections) {
+  public ExportController(
+      ExportService exports,
+      YouTubeConnectionService connections,
+      com.stelody.export.web.YouTubeOAuthReturn returns) {
     this.exports = exports;
     this.connections = connections;
+    this.returns = returns;
   }
 
   @GetMapping("/api/v1/me/youtube/connection")
@@ -29,23 +34,45 @@ public class ExportController {
   }
 
   @PostMapping("/api/v1/me/youtube/authorizations")
-  @Operation(summary = "YouTube 추가 동의 시작")
+  @Operation(
+      summary = "YouTube 추가 동의 시작",
+      description =
+          "선택 JSON 본문 returnTo·callbackClient로 복귀 경로와 콜백을 지정합니다. 생략하면 /library/youtube 및 default를 사용합니다. Google 일반 로그인 선택과 별도이며 반환한 authorizationUrl로 브라우저를 이동합니다.")
   public ExportDtos.Authorization authorize(
-      @AuthenticationPrincipal SessionUser user, HttpServletRequest request) {
-    return connections.authorize(user.id(), request.getSession().getId());
+      @AuthenticationPrincipal SessionUser user,
+      HttpServletRequest request,
+      @RequestBody(required = false) ExportDtos.AuthorizationRequest input) {
+    return connections.authorize(user.id(), request.getSession().getId(), input);
   }
 
-  @GetMapping("/api/v1/me/youtube/callback")
+  @GetMapping({"/api/v1/me/youtube/callback", "/api/v1/me/youtube/callback/local"})
   @Operation(summary = "YouTube 추가 동의 콜백")
   public ResponseEntity<Void> callback(
       @AuthenticationPrincipal SessionUser user,
       HttpServletRequest request,
-      @RequestParam String state,
+      @RequestParam(required = false) String state,
       @RequestParam(required = false) String code,
       @RequestParam(required = false) String error) {
-    connections.callback(user.id(), request.getSession().getId(), state, code, error);
+    String client = request.getRequestURI().endsWith("/local") ? "local" : "default";
+    boolean duplicate =
+        java.util.stream.Stream.of("state", "code", "error")
+            .anyMatch(
+                k ->
+                    request.getParameterValues(k) != null
+                        && request.getParameterValues(k).length != 1);
+    var session = request.getSession(false);
+    var result =
+        connections.callback(
+            user == null ? null : user.id(),
+            session == null ? null : session.getId(),
+            duplicate ? null : state,
+            code,
+            error,
+            client);
     return ResponseEntity.status(303)
-        .location(URI.create("/api/v1/me/youtube/connection"))
+        .location(
+            URI.create(
+                returns.location(client, result.returnTo(), result.result(), result.errorCode())))
         .header("Referrer-Policy", "no-referrer")
         .cacheControl(org.springframework.http.CacheControl.noStore())
         .build();

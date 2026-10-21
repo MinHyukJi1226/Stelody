@@ -59,9 +59,9 @@ cd backend
 - 전체 순서 편집은 GET `/api/v1/me/playlists/{id}/items`의 모든 페이지를 같은 `version`으로 모은 뒤 PUT `/api/v1/me/playlists/{id}/order`에 그 버전과 원하는 순서의 전체 `itemIds`를 전달합니다. `songId`가 아닌 항목 `id`이며 이용 불가 항목도 포함합니다. 누락·중복은 400, 조회·저장 중 `409 PLAYLIST_CHANGED`이면 첫 페이지부터 다시 읽고 편집 내용을 확인합니다. 성공 시 새 버전을 사용합니다.
 - 로컬 프론트 → 운영 API 연결은 `GOOGLE_LOCAL_REDIRECT_URI=http://localhost:5173/api/v1/auth/callback/google`로 활성화합니다. Google Web 클라이언트에도 같은 승인된 리디렉션 URI를 등록합니다. 미설정 시 비활성이고 서버는 localhost·127.0.0.1 콜백만 허용합니다.
   - 로그인 시작: `/api/v1/auth/google?loginClient=local&returnTo=%2Flogin`. `loginClient` 생략 시 기존 운영 로그인입니다. 임의 값·중복·비활성 연결은 400 `INVALID_LOGIN_CLIENT`입니다. `returnTo`의 내부 경로 제한은 유지합니다.
-  - 프론트: API 기본 주소 `/api/v1`, 개발 프록시 대상 `https://stelody-backend.onrender.com`. `/api` 전체(시작·authorize·callback·세션·CSRF·로그아웃)를 같은 프록시로 전달합니다. HTTP localhost의 `Set-Cookie`에서 `Secure` 제거는 **개발 프록시에서만** 처리하고 HttpOnly·SameSite·Path는 유지합니다. 로그아웃 쿠키에도 동일하게 적용합니다. 운영 서버의 Secure 쿠키와 CORS 설정은 변경하지 않습니다.
+  - 프론트: API 기본 주소 `/api/v1`, 개발 프록시 대상 `https://stelody-backend.onrender.com`. `/api` 전체(시작·authorize·callback·세션·CSRF·로그아웃)를 같은 프록시로 전달합니다. 쿠키의 Secure·HttpOnly·SameSite·Path는 개발 프록시에서도 유지합니다. 브라우저의 localhost 지원을 사용하고, 쿠키가 차단되는 환경에서는 로컬 HTTPS를 사용합니다. 운영 서버의 Secure 쿠키와 CORS 설정은 변경하지 않습니다.
   - 복귀: 성공·실패·취소 후 선택된 로컬 origin의 `returnTo`로 이동합니다. 생략 시 성공은 로컬 `/api/v1/me`, 실패는 기존 401 JSON입니다. 선택은 OAuth state와 함께 5분간 저장하며 Host/Forwarded 헤더·콜백 쿼리로 변경할 수 없습니다. 실제 로그인은 `/me`로 확인합니다.
-  - 지원 범위: 일반 Google 로그인만 해당합니다. YouTube 연결과 탈퇴 재인증은 기존 운영 콜백을 사용합니다. Google 콘솔 등록·운영 환경변수·프론트 프록시 설정 후 실제 계정으로 검증합니다.
+  - 지원 범위: `loginClient`는 일반 Google 로그인만 선택합니다. YouTube 연결은 아래 별도 `callbackClient`를 사용하며 탈퇴 재인증은 기존 운영 콜백을 사용합니다. Google 콘솔 등록·운영 환경변수·프론트 프록시 설정 후 실제 계정으로 검증합니다.
 - 로그인 `returnTo`는 `/`로 시작하는 내부 UI 경로만 허용합니다. 최대 2,048자이며 외부 주소·경로 우회·`/api`·`/actuator`는 거절합니다. 같은 브라우저에서 5분 안에 완료해야 합니다. 생략하면 `/api/v1/me`로 이동합니다. `loginResult`는 안내용이며 실제 로그인은 `/api/v1/me`로 확인합니다.
 - 세션은 idle 30분·로그인 후 최대 12시간입니다. 탈퇴는 POST `/api/v1/me/reauthentications`로 같은 계정을 재인증한 뒤 새 CSRF로 5분 내 DELETE `/api/v1/me`를 호출합니다. 철회·탈퇴 기록 저장 실패 시 계정은 유지됩니다.
 - 조회수는 대표 영상 하나의 실제 관측값이며 미관측 날짜는 null입니다. 커버는 공식 커버 영상, 오리지널은 공식 MV 또는 MV가 없을 때 공식 음원을 대표로 사용합니다. 영상 간 조회수를 합산하지 않습니다.
@@ -77,6 +77,11 @@ cd backend
 - GET `/api/v1/admin/songs`는 기존 `id/name/version/status`에 `participants`, `discoveredAt`, `missingFields`, `informationComplete`를 제공합니다. 참여자는 멤버·외부 아티스트 순서이며 미확정 항목도 `confirmed=false`로 표시합니다. 발견일은 연결된 영상 후보의 최초 발견 시각이고 기록이 없으면 `null`입니다. 자동 등록 목록의 누락 코드 6개에 `members/representativeVideo`를 더하며, 선택 별칭(`aliases`)만 없으면 완성입니다. 공개 설정(`status`)과 완성도는 독립적이며 전체 곡에 같은 기준을 적용합니다.
 - GET `/api/v1/admin/inbox`는 신규 검토(`PENDING+REVIEW`), 자동 등록 곡의 정보 보완, 기념일 `PENDING` 후보, 최근 24시간 미해결 수집 실패 작업 수를 반환합니다. 보완 완료·검토 처리·해당 원본 작업 재시도 성공 시 집계에서 제외합니다. 기념일 후보는 만료·비활성 근거도 재검토 대상으로 포함합니다. 실패 목록은 `/api/v1/admin/collection-failures`에 응답의 `failureWindowStart/checkedAt`을 `from/to`로 전달하면 같은 기간으로 조회합니다. 집계 단위·누락 조건은 OpenAPI에 명시하며 기존 설정·수집 현황 API를 함께 사용합니다.
 - 입력 오류는 기존 최상위 `code`와 함께 `fieldErrors: [{field, code, message}]`를 반환합니다. `links[0].url`·`aliases[1]`처럼 객체 속성은 점, 배열 위치는 0부터 시작하는 인덱스로 구분합니다. 오류 코드는 `REQUIRED/INVALID_FORMAT/INVALID_SIZE/OUT_OF_RANGE/DUPLICATE/INVALID_VALUE`이며 메시지는 고정 안내 문구입니다. 잘못된 JSON 구조·인증·필드와 무관한 업무 오류는 빈 배열이고, 입력값·비밀번호·토큰은 반환하지 않습니다.
+- V24는 YouTube OAuth 상태에 복귀 경로·콜백 선택·콜백 URI를 추가합니다. 운영에서 `SPRING_FLYWAY_ENABLED=false`라면 새 버전 배포 전에 전용 마이그레이터로 적용합니다. 기존 동의 요청은 기본 콜백·복귀 경로로 이어갈 수 있습니다.
+- YouTube 계정 연결: CSRF를 포함해 POST `/api/v1/me/youtube/authorizations`에 선택 JSON `{"returnTo":"/library/youtube","callbackClient":"local"}`을 보내고 응답 `authorizationUrl`로 이동합니다. 본문·필드를 생략하면 `/library/youtube`·`default`입니다. 내부 경로만 허용하며 경로·클라이언트는 세션/state에 묶어 5분간 한 번 사용합니다.
+  - 로컬: `YOUTUBE_LOCAL_REDIRECT_URI=http://localhost:5173/api/v1/me/youtube/callback/local`을 서버에 설정하고 Google Web OAuth 클라이언트에도 같은 URI를 추가합니다. `/api` 프록시를 통해 기존 로그인 세션·CSRF를 그대로 사용하며 쿠키 속성은 제거하지 않습니다. Google 로그인용 `GOOGLE_LOCAL_REDIRECT_URI`와 별도 설정입니다.
+  - 운영: 일반 콜백은 기존 `YOUTUBE_EXPORT_REDIRECT_URI`를 유지합니다. 프론트·API가 같은 origin이면 복귀는 상대 경로이고, 별도 origin이면 서버의 `YOUTUBE_FRONTEND_ORIGIN=https://<프론트 도메인>`에 경로 없는 HTTPS origin을 지정합니다. 요청에서 외부 복귀 URL을 받지 않습니다.
+  - 복귀: 303으로 `youtubeResult=success/cancelled/failed`, 취소·실패 때만 `youtubeError`를 전달합니다. 기본 화면은 `/library/youtube`이며 세션 만료·잘못된 state도 각 클라이언트의 기본 화면으로 돌아옵니다. 성공 URL만으로 연결을 확정하지 말고 GET `/api/v1/me/youtube/connection`을 다시 조회합니다. 401이면 로그인 후 다시 연결합니다. 코드·토큰·state·내부 오류는 프론트 URL로 전달하지 않습니다. 오류 코드 전체는 OpenAPI 콜백의 303 응답을 참고합니다.
 - YouTube는 같은 Google 계정의 추가 동의를 받습니다. 내보내기에는 UUID `requestId`와 목록 `version`이 필요하며 요청 당시 이름·순서를 새 비공개 목록으로 복사합니다. 이용 불가 곡은 제외합니다. `UNCERTAIN`은 기존 작업을 확인·재시도하고 새 작업으로 반복하지 않습니다. 취소·연결 해제·탈퇴는 외부 목록을 삭제하지 않습니다.
 
 | 설정 | 기본값·조건 |
@@ -244,7 +249,7 @@ java -jar backend/build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover
 <details>
 <summary>암호화 백업 · 독립 탈퇴 기록 · 복구</summary>
 
-백업·복구는 V19~V23를 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
+백업·복구는 V19~V24를 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
 
 백업은 카탈로그·회원·즐겨찾기·개인 목록을 보존합니다. 세션·재인증·YouTube 토큰/동의/내보내기·조회수 표본·수집 작업은 제외합니다. 최대 유효 기간은 7일이며 원본 자료 기한이 먼저 오면 더 짧아집니다. 복구 키와 별도 탈퇴 기록이 필요합니다.
 

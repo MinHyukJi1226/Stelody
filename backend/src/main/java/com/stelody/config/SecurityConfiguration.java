@@ -61,6 +61,8 @@ public class SecurityConfiguration {
                         "/api/v1/auth/google",
                         "/api/v1/auth/authorize/google",
                         "/api/v1/auth/callback/google",
+                        "/api/v1/me/youtube/callback",
+                        "/api/v1/me/youtube/callback/local",
                         "/api/v1/songs",
                         "/api/v1/songs/trending",
                         "/api/v1/songs/recommendations",
@@ -191,7 +193,6 @@ public class SecurityConfiguration {
                     .requestMatchers(
                         HttpMethod.GET,
                         "/api/v1/me/youtube/connection",
-                        "/api/v1/me/youtube/callback",
                         "/api/v1/me/youtube-exports/{id}")
                     .authenticated()
                     .requestMatchers(

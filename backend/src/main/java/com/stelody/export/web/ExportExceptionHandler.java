@@ -20,7 +20,17 @@ public class ExportExceptionHandler {
   void export(ExportException e, HttpServletRequest request, HttpServletResponse response)
       throws IOException {
     response.setHeader("Referrer-Policy", "no-referrer");
-    problems.write(request, response, e.status(), e.code(), e.getMessage());
+    var fields =
+        switch (e.code()) {
+          case "INVALID_YOUTUBE_RETURN" ->
+              java.util.List.of(
+                  com.stelody.auth.web.InputErrors.field("returnTo", "INVALID_FORMAT"));
+          case "INVALID_YOUTUBE_CLIENT" ->
+              java.util.List.of(
+                  com.stelody.auth.web.InputErrors.field("callbackClient", "INVALID_VALUE"));
+          default -> java.util.List.<com.stelody.auth.web.ApiFieldError>of();
+        };
+    problems.write(request, response, e.status(), e.code(), e.getMessage(), fields);
   }
 
   @ExceptionHandler({

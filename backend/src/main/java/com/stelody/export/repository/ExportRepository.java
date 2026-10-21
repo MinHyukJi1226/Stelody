@@ -24,7 +24,8 @@ public class ExportRepository {
       String refresh,
       Instant expiresAt) {}
 
-  public record Authorization(UUID generation, String verifier, String nonce) {}
+  public record Authorization(
+      UUID generation, String verifier, String nonce, String returnPath, String callbackUri) {}
 
   public record Task(
       UUID id,
@@ -91,7 +92,10 @@ public class ExportRepository {
       String session,
       String verifier,
       String nonce,
-      Instant expiry) {
+      Instant expiry,
+      String returnPath,
+      String callbackClient,
+      String callbackUri) {
     jdbc.sql("DELETE FROM app.youtube_authorization WHERE expires_at<=CURRENT_TIMESTAMP").update();
     jdbc.sql(
             """
@@ -103,10 +107,10 @@ public class ExportRepository {
         .update();
     jdbc.sql(
             """
-        INSERT INTO app.youtube_authorization(user_id,generation,state_hash,session_hash,verifier,nonce,expires_at)
-        VALUES(:user,:gen,:state,:session,:verifier,:nonce,:expiry)
+        INSERT INTO app.youtube_authorization(user_id,generation,state_hash,session_hash,verifier,nonce,expires_at,return_path,callback_client,callback_uri)
+        VALUES(:user,:gen,:state,:session,:verifier,:nonce,:expiry,:returnPath,:callbackClient,:callbackUri)
         ON CONFLICT(user_id) DO UPDATE SET generation=:gen,state_hash=:state,session_hash=:session,
-          verifier=:verifier,nonce=:nonce,expires_at=:expiry
+          verifier=:verifier,nonce=:nonce,expires_at=:expiry,return_path=:returnPath,callback_client=:callbackClient,callback_uri=:callbackUri
         """)
         .param("user", user)
         .param("gen", generation)
@@ -115,21 +119,31 @@ public class ExportRepository {
         .param("verifier", verifier)
         .param("nonce", nonce)
         .param("expiry", Timestamp.from(expiry))
+        .param("returnPath", returnPath)
+        .param("callbackClient", callbackClient)
+        .param("callbackUri", callbackUri)
         .update();
   }
 
-  public Authorization consume(UUID user, String state, String session) {
+  public Authorization consume(UUID user, String state, String session, String callbackClient) {
     return jdbc.sql(
             """
         DELETE FROM app.youtube_authorization WHERE user_id=:user AND state_hash=:state
-          AND session_hash=:session AND expires_at>CURRENT_TIMESTAMP
-        RETURNING generation,verifier,nonce
+          AND session_hash=:session AND callback_client=:callbackClient AND expires_at>CURRENT_TIMESTAMP
+        RETURNING generation,verifier,nonce,return_path,callback_uri
         """)
         .param("user", user)
         .param("state", state)
         .param("session", session)
+        .param("callbackClient", callbackClient)
         .query(
-            (r, n) -> new Authorization(r.getObject(1, UUID.class), r.getString(2), r.getString(3)))
+            (r, n) ->
+                new Authorization(
+                    r.getObject(1, UUID.class),
+                    r.getString(2),
+                    r.getString(3),
+                    r.getString(4),
+                    r.getString(5)))
         .optional()
         .orElseThrow(() -> new ExportException(400, "INVALID_YOUTUBE_STATE"));
   }

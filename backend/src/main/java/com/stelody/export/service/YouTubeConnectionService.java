@@ -4,6 +4,7 @@ import com.stelody.export.config.*;
 import com.stelody.export.dto.ExportDtos;
 import com.stelody.export.repository.ExportRepository;
 import com.stelody.export.web.ExportException;
+import com.stelody.export.web.YouTubeOAuthReturn;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.time.Instant;
@@ -65,13 +66,17 @@ public class YouTubeConnectionService {
   }
 
   private ClientRegistration registration() {
+    return registration(settings.redirectUri());
+  }
+
+  private ClientRegistration registration(String callbackUri) {
     enabled();
     var repository = clients.getIfAvailable();
     var base = repository == null ? null : repository.findByRegistrationId("google");
     if (base == null) throw new ExportException(503, "YOUTUBE_OAUTH_UNAVAILABLE");
     return ClientRegistration.withClientRegistration(base)
         .registrationId("youtube-export")
-        .redirectUri(settings.redirectUri())
+        .redirectUri(callbackUri)
         .scope("openid", "email", ExportSettings.SCOPE)
         .build();
   }
@@ -84,8 +89,12 @@ public class YouTubeConnectionService {
             .orElse(settings.enabled() ? "DISCONNECTED" : "DISABLED"));
   }
 
-  public ExportDtos.Authorization authorize(UUID user, String session) {
-    var registration = registration();
+  public ExportDtos.Authorization authorize(
+      UUID user, String session, ExportDtos.AuthorizationRequest input) {
+    String returnPath = YouTubeOAuthReturn.path(input == null ? null : input.returnTo());
+    String client = settings.callbackClient(input == null ? null : input.callbackClient());
+    String callbackUri = settings.callbackUri(client);
+    var registration = registration(callbackUri);
     String state = nonce(), verifier = nonce(), nonce = nonce();
     Instant expires = Instant.now().plusSeconds(300);
     String subject =
@@ -101,14 +110,17 @@ public class YouTubeConnectionService {
                   hash(session),
                   cipher.encrypt(user, "verifier", verifier),
                   nonce,
-                  expires);
+                  expires,
+                  returnPath,
+                  client,
+                  callbackUri);
               return sub;
             });
     String url =
         UriComponentsBuilder.fromUriString(registration.getProviderDetails().getAuthorizationUri())
             .queryParam("response_type", "code")
             .queryParam("client_id", registration.getClientId())
-            .queryParam("redirect_uri", settings.redirectUri())
+            .queryParam("redirect_uri", callbackUri)
             .queryParam("scope", String.join(" ", registration.getScopes()))
             .queryParam("state", state)
             .queryParam("nonce", nonce)
@@ -124,20 +136,35 @@ public class YouTubeConnectionService {
     return new ExportDtos.Authorization(url, expires);
   }
 
-  public ExportDtos.Connection callback(
-      UUID user, String session, String state, String code, String error) {
-    var registration = registration();
-    if (state == null || state.length() > 128 || code != null && code.length() > 2048)
-      throw ExportException.invalid();
-    var authorization = store.tx(() -> store.consume(user, hash(state), hash(session)));
-    if (error != null) throw new ExportException(400, "YOUTUBE_CONSENT_DENIED");
-    if (code == null || code.isBlank()) throw ExportException.invalid();
+  public record Callback(String returnTo, String result, String errorCode) {}
+
+  public Callback callback(
+      UUID user, String session, String state, String code, String error, String client) {
+    String returnTo = YouTubeOAuthReturn.DEFAULT_PATH;
     try {
+      String selected = settings.callbackClient(client);
+      if (user == null || session == null)
+        return new Callback(returnTo, "failed", "SESSION_EXPIRED");
+      if (state == null || state.isBlank() || state.length() > 128)
+        throw new ExportException(400, "INVALID_YOUTUBE_STATE");
+      var authorization = store.tx(() -> store.consume(user, hash(state), hash(session), selected));
+      returnTo = YouTubeOAuthReturn.path(authorization.returnPath());
+      if (error != null) {
+        if (error.equals("access_denied") && code == null)
+          return new Callback(returnTo, "cancelled", "YOUTUBE_CONSENT_DENIED");
+        throw new ExportException(400, "YOUTUBE_AUTHORIZATION_FAILED");
+      }
+      if (code == null || code.isBlank() || code.length() > 2048) throw ExportException.invalid();
+      String callbackUri =
+          authorization.callbackUri() == null
+              ? settings.callbackUri(selected)
+              : authorization.callbackUri();
+      var registration = registration(callbackUri);
       var request =
           OAuth2AuthorizationRequest.authorizationCode()
               .authorizationUri(registration.getProviderDetails().getAuthorizationUri())
               .clientId(registration.getClientId())
-              .redirectUri(settings.redirectUri())
+              .redirectUri(callbackUri)
               .scopes(registration.getScopes())
               .state(state)
               .attributes(
@@ -147,10 +174,7 @@ public class YouTubeConnectionService {
                           cipher.decrypt(user, "verifier", authorization.verifier())))
               .build();
       var response =
-          OAuth2AuthorizationResponse.success(code)
-              .state(state)
-              .redirectUri(settings.redirectUri())
-              .build();
+          OAuth2AuthorizationResponse.success(code).state(state).redirectUri(callbackUri).build();
       var tokens =
           codes.getTokenResponse(
               new OAuth2AuthorizationCodeGrantRequest(
@@ -178,11 +202,26 @@ public class YouTubeConnectionService {
               throw new ExportException(409, "YOUTUBE_AUTHORIZATION_CHANGED");
             return null;
           });
-      return status(user);
+      return new Callback(returnTo, "success", null);
     } catch (ExportException e) {
-      throw e;
+      String safe =
+          Set.of(
+                      "SESSION_EXPIRED",
+                      "INVALID_YOUTUBE_STATE",
+                      "YOUTUBE_ACCOUNT_MISMATCH",
+                      "YOUTUBE_SCOPE_REQUIRED",
+                      "YOUTUBE_OFFLINE_ACCESS_REQUIRED",
+                      "INVALID_YOUTUBE_IDENTITY",
+                      "YOUTUBE_AUTHORIZATION_CHANGED",
+                      "YOUTUBE_EXPORT_DISABLED",
+                      "YOUTUBE_OAUTH_UNAVAILABLE",
+                      "INVALID_YOUTUBE_CLIENT")
+                  .contains(e.code())
+              ? e.code()
+              : "YOUTUBE_AUTHORIZATION_FAILED";
+      return new Callback(returnTo, "failed", safe);
     } catch (RuntimeException e) {
-      throw new ExportException(502, "YOUTUBE_AUTHORIZATION_FAILED");
+      return new Callback(returnTo, "failed", "YOUTUBE_AUTHORIZATION_FAILED");
     }
   }
 
