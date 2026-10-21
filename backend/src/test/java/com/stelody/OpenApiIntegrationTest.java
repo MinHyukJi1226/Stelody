@@ -808,6 +808,38 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void youtubeAuthorizationDocumentsOptionalInputAndAllFrontendReturnOutcomes() throws Exception {
+    var api = contract();
+    var start = api.path("paths").path("/api/v1/me/youtube/authorizations").path("post");
+    assertThat(start.path("requestBody").path("required").asBoolean()).isFalse();
+    var schema = start.path("requestBody").path("content").path("application/json").path("schema");
+    if (schema.has("$ref")) schema = api.at(schema.path("$ref").asText().substring(1));
+    var properties = schema.path("properties");
+    assertThat(properties.path("returnTo").path("default").asText()).isEqualTo("/library/youtube");
+    assertThat(properties.path("returnTo").path("maxLength").asInt()).isEqualTo(2048);
+    assertThat(properties.path("callbackClient").path("default").asText()).isEqualTo("default");
+    assertThat(properties.path("callbackClient").path("enum").toString())
+        .contains("default", "local");
+    for (var path :
+        new String[] {"/api/v1/me/youtube/callback", "/api/v1/me/youtube/callback/local"}) {
+      var callback = api.path("paths").path(path).path("get");
+      assertThat(callback.path("security").isEmpty()).isTrue();
+      assertThat(callback.path("responses").has("401")).isFalse();
+      var response = callback.path("responses").path("303");
+      assertThat(response.has("content")).isFalse();
+      assertThat(response.path("description").asText())
+          .contains(
+              "youtubeResult=success|cancelled|failed",
+              "SESSION_EXPIRED",
+              "INVALID_YOUTUBE_STATE",
+              "YOUTUBE_CONSENT_DENIED",
+              "YOUTUBE_AUTHORIZATION_FAILED");
+      assertThat(response.path("headers").path("Location").path("description").asText())
+          .contains("/library/youtube", "http://localhost:5173");
+    }
+  }
+
+  @Test
   void servesSwaggerAssetsWithoutOpeningAccountOrAdministration() throws Exception {
     mvc.perform(get("/swagger-ui.html")).andExpect(status().is3xxRedirection());
     mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());

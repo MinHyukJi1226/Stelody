@@ -47,6 +47,10 @@ public class AccountSessionFilter extends OncePerRequestFilter {
         }
         if (request.getSession(false) != null) request.getSession(false).invalidate();
         SecurityContextHolder.clearContext();
+        if (com.stelody.export.web.YouTubeOAuthReturn.isCallback(request)) {
+          chain.doFilter(request, response);
+          return;
+        }
         problems.write(request, response, 401, "SESSION_EXPIRED", "다시 로그인해 주세요");
         return;
       }

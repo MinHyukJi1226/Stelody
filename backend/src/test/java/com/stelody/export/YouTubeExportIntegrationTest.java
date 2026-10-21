@@ -52,10 +52,13 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.*;
 
 @SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "stelody.export.enabled=true",
       "stelody.export.worker-enabled=false",
-      "stelody.export.redirect-uri=http://localhost:8080/api/v1/me/youtube/callback"
+      "stelody.export.redirect-uri=https://api.example.test/api/v1/me/youtube/callback",
+      "stelody.export.local-redirect-uri=http://localhost:5173/api/v1/me/youtube/callback/local",
+      "stelody.export.frontend-origin=https://stelody.example"
     })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -126,6 +129,7 @@ class YouTubeExportIntegrationTest {
   }
 
   @Autowired MockMvc mvc;
+  @Autowired org.springframework.core.env.Environment environment;
   @Autowired ObjectMapper mapper;
   @Autowired JdbcTemplate runtime;
   @Autowired FindByIndexNameSessionRepository<?> sessions;
@@ -225,11 +229,32 @@ class YouTubeExportIntegrationTest {
             .getResponse();
     assertThat(response.getHeader("Cache-Control")).contains("no-store");
     if (status == 303) {
-      assertThat(response.getHeader("Location")).isEqualTo(CONNECTION);
+      assertThat(response.getHeader("Location"))
+          .isEqualTo("https://stelody.example/library/youtube?youtubeResult=success");
       assertThat(response.getHeader("Referrer-Policy")).isEqualTo("no-referrer");
       return json(get(CONNECTION), browser, 200);
     }
     return mapper.readTree(response.getContentAsString());
+  }
+
+  void callbackResult(MockHttpServletRequestBuilder request, Browser browser, String location)
+      throws Exception {
+    if (browser != null) request.cookie(browser.cookie());
+    mvc.perform(request)
+        .andExpect(status().isSeeOther())
+        .andExpect(header().string("Location", location))
+        .andExpect(header().string("Referrer-Policy", "no-referrer"))
+        .andExpect(
+            header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+        .andExpect(content().string(""));
+  }
+
+  void callbackFailure(MockHttpServletRequestBuilder request, Browser browser, String code)
+      throws Exception {
+    callbackResult(
+        request,
+        browser,
+        "https://stelody.example/library/youtube?youtubeResult=failed&youtubeError=" + code);
   }
 
   void connected(UUID user) {
@@ -264,7 +289,13 @@ class YouTubeExportIntegrationTest {
   }
 
   Flow flow(Browser browser) throws Exception {
-    String url = json(post(AUTH), browser, 200).path("authorizationUrl").asText();
+    return flow(browser, null);
+  }
+
+  Flow flow(Browser browser, String body) throws Exception {
+    var start = post(AUTH);
+    if (body != null) start.content(body);
+    String url = json(start, browser, 200).path("authorizationUrl").asText();
     Map<String, String> params = new HashMap<>();
     for (String entry : URI.create(url).getRawQuery().split("&")) {
       String[] pair = entry.split("=", 2);
@@ -341,6 +372,273 @@ class YouTubeExportIntegrationTest {
             .willReturn(okJson(mapper.writeValueAsString(Map.of("items", items)))));
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void frontendReturnSuccessUsesStoredPathClientAndPkce(String client) throws Exception {
+    String callback = client.equals("local") ? CALLBACK + "/local" : CALLBACK;
+    String origin = client.equals("local") ? "http://localhost:5173" : "https://stelody.example";
+    String callbackUri =
+        client.equals("local")
+            ? "http://localhost:5173" + callback
+            : "https://api.example.test" + callback;
+    Flow flow =
+        flow(
+            first,
+            mapper.writeValueAsString(
+                Map.of(
+                    "callbackClient",
+                    client,
+                    "returnTo",
+                    "/library/youtube?tab=connection&youtube%52esult=spoofed&youtubeError=spoofed&code=secret#linked")));
+    assertThat(
+            runtime.queryForObject(
+                "SELECT callback_uri FROM app.youtube_authorization WHERE user_id=?",
+                String.class,
+                U1))
+        .isEqualTo(callbackUri);
+    token(
+        identity(
+            U1.toString(),
+            flow.nonce(),
+            "export-client",
+            "https://accounts.google.com",
+            Instant.now().plusSeconds(600)),
+        "openid email " + ExportSettings.SCOPE);
+    callbackResult(
+        get(callback)
+            .param("state", flow.state())
+            .param("code", "test-code")
+            .param("returnTo", "https://evil.example")
+            .header("Forwarded", "host=evil.example;proto=https"),
+        first,
+        origin + "/library/youtube?tab=connection&youtubeResult=success#linked");
+    provider.verify(
+        1,
+        postRequestedFor(urlEqualTo("/token"))
+            .withFormParam("redirect_uri", equalTo(callbackUri))
+            .withFormParam("code_verifier", matching("[A-Za-z0-9_-]+")));
+    assertThat(json(get(CONNECTION), first, 200).path("status").asText()).isEqualTo("CONNECTED");
+    assertThat(json(get("/api/v1/me"), first, 200).path("id").asText()).isEqualTo(U1.toString());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "default,access_denied,cancelled,YOUTUBE_CONSENT_DENIED",
+    "local,access_denied,cancelled,YOUTUBE_CONSENT_DENIED",
+    "default,server_error,failed,YOUTUBE_AUTHORIZATION_FAILED",
+    "local,server_error,failed,YOUTUBE_AUTHORIZATION_FAILED"
+  })
+  void cancellationAndProviderErrorsReturnWithoutLeakingRawErrors(
+      String client, String error, String result, String code) throws Exception {
+    String callback = CALLBACK + (client.equals("local") ? "/local" : "");
+    String origin = client.equals("local") ? "http://localhost:5173" : "https://stelody.example";
+    Flow flow =
+        flow(
+            first,
+            mapper.writeValueAsString(
+                Map.of("callbackClient", client, "returnTo", "/library/youtube?tab=connection")));
+    callbackResult(
+        get(callback)
+            .param("state", flow.state())
+            .param("error", error)
+            .param("error_description", "sensitive-internal-provider-details")
+            .param("access_token", "secret"),
+        first,
+        origin
+            + "/library/youtube?tab=connection&youtubeResult="
+            + result
+            + "&youtubeError="
+            + code);
+    provider.verify(0, postRequestedFor(urlEqualTo("/token")));
+    assertThat(json(get(CONNECTION), first, 200).path("status").asText()).isEqualTo("DISCONNECTED");
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_authorization", Long.class))
+        .isZero();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"default,idle", "local,idle", "default,absolute", "local,absolute"})
+  void expiredSessionsReturnToDefaultFrontendWithoutConsumingAuthorization(
+      String client, String expiry) throws Exception {
+    Flow flow =
+        flow(
+            first,
+            mapper.writeValueAsString(
+                Map.of("callbackClient", client, "returnTo", "/library/playlists")));
+    if (expiry.equals("idle")) sessions.deleteById(first.sessionId());
+    else expireLogin(sessions, first);
+    String origin = client.equals("local") ? "http://localhost:5173" : "https://stelody.example";
+    callbackResult(
+        get(CALLBACK + (client.equals("local") ? "/local" : ""))
+            .param("state", flow.state())
+            .param("code", "test-code"),
+        first,
+        origin + "/library/youtube?youtubeResult=failed&youtubeError=SESSION_EXPIRED");
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_authorization", Long.class))
+        .isEqualTo(1);
+    provider.verify(0, postRequestedFor(urlEqualTo("/token")));
+    mvc.perform(get(CONNECTION).cookie(first.cookie())).andExpect(status().isUnauthorized());
+  }
+
+  <S extends Session> void expireLogin(
+      FindByIndexNameSessionRepository<S> repository, Browser browser) {
+    S session = repository.findById(browser.sessionId());
+    var context = SecurityContextHolder.createEmptyContext();
+    context.setAuthentication(
+        UsernamePasswordAuthenticationToken.authenticated(
+            new SessionUser(U1, Instant.now().minusSeconds(13 * 3600)),
+            null,
+            List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+    session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+    repository.save(session);
+  }
+
+  @Test
+  void callbackRouteIsBoundToClientAndInvalidCallbacksDoNotStartSessions() throws Exception {
+    Flow flow = flow(first, "{\"callbackClient\":\"local\"}");
+    callbackFailure(
+        get(CALLBACK).param("state", flow.state()).param("code", "test-code"),
+        first,
+        "INVALID_YOUTUBE_STATE");
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_authorization", Long.class))
+        .isEqualTo(1);
+    callbackResult(
+        get(CALLBACK + "/local").param("state", flow.state()).param("error", "access_denied"),
+        first,
+        "http://localhost:5173/library/youtube?youtubeResult=cancelled&youtubeError=YOUTUBE_CONSENT_DENIED");
+    var response =
+        mvc.perform(get(CALLBACK + "/local"))
+            .andExpect(status().isSeeOther())
+            .andExpect(
+                header()
+                    .string(
+                        "Location",
+                        "http://localhost:5173/library/youtube?youtubeResult=failed&youtubeError=SESSION_EXPIRED"))
+            .andReturn()
+            .getResponse();
+    assertThat(response.getHeaders("Set-Cookie")).isEmpty();
+    callbackFailure(
+        get(CALLBACK).param("state", "a", "b").param("code", "test-code"),
+        first,
+        "INVALID_YOUTUBE_STATE");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void tokenEndpointFailureReturnsSafeCodeAndConsumesState(String client) throws Exception {
+    Flow flow = flow(first, mapper.writeValueAsString(Map.of("callbackClient", client)));
+    provider.stubFor(
+        WireMock.post(urlEqualTo("/token"))
+            .willReturn(aResponse().withStatus(500).withBody("internal secret token details")));
+    String origin = client.equals("local") ? "http://localhost:5173" : "https://stelody.example";
+    callbackResult(
+        get(CALLBACK + (client.equals("local") ? "/local" : ""))
+            .param("state", flow.state())
+            .param("code", "test-code"),
+        first,
+        origin + "/library/youtube?youtubeResult=failed&youtubeError=YOUTUBE_AUTHORIZATION_FAILED");
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_authorization", Long.class))
+        .isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "https://evil.example",
+        "//evil.example",
+        "/api/v1/me",
+        "/actuator/health",
+        "/%2f%2fevil.example",
+        "/x/../login",
+        "/\\evil.example",
+        ""
+      })
+  void invalidReturnPathsAreRejectedBeforeCreatingOAuthState(String path) throws Exception {
+    assertThat(
+            json(
+                    post(AUTH).content(mapper.writeValueAsString(Map.of("returnTo", path))),
+                    first,
+                    400)
+                .path("code")
+                .asText())
+        .isEqualTo("INVALID_YOUTUBE_RETURN");
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_authorization", Long.class))
+        .isZero();
+  }
+
+  @Test
+  void authorizationRequiresKnownClientAndCookieSecurityIsPreserved() throws Exception {
+    assertThat(
+            json(post(AUTH).content("{\"callbackClient\":\"https://evil.example\"}"), first, 400)
+                .path("code")
+                .asText())
+        .isEqualTo("INVALID_YOUTUBE_CLIENT");
+    var request =
+        java.net.http.HttpRequest.newBuilder(
+                URI.create(
+                    "http://localhost:"
+                        + environment.getRequiredProperty("local.server.port")
+                        + "/api/v1/auth/csrf"))
+            .GET()
+            .build();
+    var response =
+        java.net.http.HttpClient.newHttpClient()
+            .send(request, java.net.http.HttpResponse.BodyHandlers.discarding());
+    assertThat(response.statusCode()).isEqualTo(200);
+    assertThat(response.headers().allValues("Set-Cookie"))
+        .anySatisfy(cookie -> assertThat(cookie).contains("Secure", "HttpOnly", "SameSite=Lax"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void expiredStateReturnsToDefaultPathOfItsClient(String client) throws Exception {
+    Flow flow =
+        flow(
+            first,
+            mapper.writeValueAsString(
+                Map.of("callbackClient", client, "returnTo", "/library/playlists")));
+    owner.execute("UPDATE app.youtube_authorization SET expires_at=now()-interval '1 second'");
+    callbackResult(
+        get(CALLBACK + (client.equals("local") ? "/local" : ""))
+            .param("state", flow.state())
+            .param("code", "test-code"),
+        first,
+        (client.equals("local") ? "http://localhost:5173" : "https://stelody.example")
+            + "/library/youtube?youtubeResult=failed&youtubeError=INVALID_YOUTUBE_STATE");
+    provider.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
+  @Test
+  void preMigrationAuthorizationStillCompletesWithDefaultCallbackAndReturnPath() throws Exception {
+    Flow flow = flow(first);
+    owner.execute("UPDATE app.youtube_authorization SET return_path=NULL,callback_uri=NULL");
+    token(
+        identity(
+            U1.toString(),
+            flow.nonce(),
+            "export-client",
+            "https://accounts.google.com",
+            Instant.now().plusSeconds(600)),
+        "openid email " + ExportSettings.SCOPE);
+    json(get(CALLBACK).param("state", flow.state()).param("code", "test-code"), first, 303);
+    provider.verify(
+        1,
+        postRequestedFor(urlEqualTo("/token"))
+            .withFormParam("redirect_uri", equalTo("https://api.example.test" + CALLBACK)));
+  }
+
+  @Test
+  void cancellationKeepsExistingConnectionAndLogin() throws Exception {
+    connected(U1);
+    Flow flow = flow(first);
+    callbackResult(
+        get(CALLBACK).param("state", flow.state()).param("error", "access_denied"),
+        first,
+        "https://stelody.example/library/youtube?youtubeResult=cancelled&youtubeError=YOUTUBE_CONSENT_DENIED");
+    assertThat(json(get(CONNECTION), first, 200).path("status").asText()).isEqualTo("CONNECTED");
+    assertThat(json(get("/api/v1/me"), first, 200).path("id").asText()).isEqualTo(U1.toString());
+    provider.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
   @Test
   void consentIsSessionBoundSingleUseAndEncryptedWithoutReplacingLogin() throws Exception {
     Flow flow = flow(first);
@@ -352,18 +650,20 @@ class YouTubeExportIntegrationTest {
             "https://accounts.google.com",
             Instant.now().plusSeconds(600)),
         "openid email " + ExportSettings.SCOPE);
-    assertThat(
-            json(get(CALLBACK).param("state", flow.state()).param("code", "test-code"), second, 400)
-                .path("code")
-                .asText())
-        .isEqualTo("INVALID_YOUTUBE_STATE");
+    callbackFailure(
+        get(CALLBACK).param("state", flow.state()).param("code", "test-code"),
+        second,
+        "INVALID_YOUTUBE_STATE");
     assertThat(
             json(get(CALLBACK).param("state", flow.state()).param("code", "test-code"), first, 303)
                 .path("status")
                 .asText())
         .isEqualTo("CONNECTED");
     assertThat(json(get("/api/v1/me"), first, 200).path("id").asText()).isEqualTo(U1.toString());
-    json(get(CALLBACK).param("state", flow.state()).param("code", "test-code"), first, 400);
+    callbackFailure(
+        get(CALLBACK).param("state", flow.state()).param("code", "test-code"),
+        first,
+        "INVALID_YOUTUBE_STATE");
     String encrypted =
         runtime.queryForObject(
             "SELECT refresh_token FROM app.youtube_connection WHERE user_id=?", String.class, U1);
@@ -430,21 +730,37 @@ class YouTubeExportIntegrationTest {
                 ? Instant.now().minusSeconds(120)
                 : Instant.now().plusSeconds(600)),
         fault.equals("scope") ? "openid email" : "openid email " + ExportSettings.SCOPE);
-    int status = List.of("audience", "issuer", "expired").contains(fault) ? 502 : 400;
-    json(get(CALLBACK).param("state", flow.state()).param("code", "test-code"), first, status);
+    String expected =
+        switch (fault) {
+          case "subject" -> "YOUTUBE_ACCOUNT_MISMATCH";
+          case "nonce" -> "INVALID_YOUTUBE_IDENTITY";
+          case "scope" -> "YOUTUBE_SCOPE_REQUIRED";
+          default -> "YOUTUBE_AUTHORIZATION_FAILED";
+        };
+    callbackFailure(
+        get(CALLBACK).param("state", flow.state()).param("code", "test-code"), first, expected);
     assertThat(connections.status(U1).status()).isEqualTo("DISCONNECTED");
   }
 
   @Test
   void denialExpiryAndDisconnectCannotCompleteStaleAuthorization() throws Exception {
     Flow denied = flow(first);
-    json(get(CALLBACK).param("state", denied.state()).param("error", "access_denied"), first, 400);
+    callbackResult(
+        get(CALLBACK).param("state", denied.state()).param("error", "access_denied"),
+        first,
+        "https://stelody.example/library/youtube?youtubeResult=cancelled&youtubeError=YOUTUBE_CONSENT_DENIED");
     Flow expired = flow(first);
     owner.execute("UPDATE app.youtube_authorization SET expires_at=now()-interval '1 second'");
-    json(get(CALLBACK).param("state", expired.state()).param("code", "test-code"), first, 400);
+    callbackFailure(
+        get(CALLBACK).param("state", expired.state()).param("code", "test-code"),
+        first,
+        "INVALID_YOUTUBE_STATE");
     Flow stale = flow(first);
     json(delete(CONNECTION), first, 200);
-    json(get(CALLBACK).param("state", stale.state()).param("code", "test-code"), first, 400);
+    callbackFailure(
+        get(CALLBACK).param("state", stale.state()).param("code", "test-code"),
+        first,
+        "INVALID_YOUTUBE_STATE");
     provider.verify(0, postRequestedFor(urlEqualTo("/token")));
     assertThat(json(get("/api/v1/me"), first, 200).path("id").asText()).isEqualTo(U1.toString());
   }

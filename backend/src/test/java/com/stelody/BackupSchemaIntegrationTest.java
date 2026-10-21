@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -90,6 +90,9 @@ class BackupSchemaIntegrationTest {
         "INSERT INTO session.spring_session(primary_id,session_id,creation_time,last_access_time,max_inactive_interval,expiry_time,principal_name) VALUES('fixture-primary','fixture-session',1,1,1800,1800001,'keep')");
     owner.execute(
         "INSERT INTO app.youtube_connection(user_id,generation,status,access_token,refresh_token,expires_at) VALUES('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'CONNECTED','test-access','test-refresh',now()+interval '1 hour')");
+    if (version >= 24)
+      owner.execute(
+          "INSERT INTO app.youtube_authorization(user_id,generation,state_hash,session_hash,verifier,nonce,expires_at,return_path,callback_client,callback_uri) VALUES('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'state','session','encrypted-verifier','nonce',now()+interval '5 minutes','/library/youtube','local','http://localhost:5173/api/v1/me/youtube/callback/local')");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
     String directory = "/tmp/backups-v" + version;
@@ -144,6 +147,22 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 24) {
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM information_schema.columns WHERE table_schema='app' AND table_name='youtube_authorization' AND column_name IN ('return_path','callback_client','callback_uri')",
+                  Integer.class))
+          .isEqualTo(3);
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM app.youtube_authorization", Integer.class))
+          .isZero();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege(current_user,'app.youtube_authorization','INSERT,UPDATE,DELETE')",
+                  Boolean.class))
+          .isTrue();
+    }
     if (version >= 23)
       assertThat(
               runtime.queryForObject(

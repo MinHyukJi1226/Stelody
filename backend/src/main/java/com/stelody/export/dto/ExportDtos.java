@@ -8,6 +8,22 @@ import java.util.UUID;
 public final class ExportDtos {
   private ExportDtos() {}
 
+  public record AuthorizationRequest(
+      @Schema(
+              description =
+                  "내부 프론트 복귀 경로. 생략/null이면 /library/youtube. 최대 2048자. 외부 URL·//·역슬래시·제어문자·경로 우회·/api·/actuator는 허용하지 않습니다.",
+              nullable = true,
+              defaultValue = "/library/youtube",
+              maxLength = 2048)
+          String returnTo,
+      @Schema(
+              description =
+                  "default: 운영 콜백, local: 서버에 설정한 localhost 개발 콜백. 생략/null이면 default. local 미설정·그 외 값은 400 INVALID_YOUTUBE_CLIENT.",
+              allowableValues = {"default", "local"},
+              nullable = true,
+              defaultValue = "default")
+          String callbackClient) {}
+
   @Schema(requiredProperties = {"authorizationUrl", "expiresAt"})
   public record Authorization(String authorizationUrl, Instant expiresAt) {}
 

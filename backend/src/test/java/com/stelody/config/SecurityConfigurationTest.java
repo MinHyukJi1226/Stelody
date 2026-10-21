@@ -61,6 +61,9 @@ class SecurityConfigurationTest {
   com.stelody.export.service.YouTubeConnectionService youtubeConnections;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.export.web.YouTubeOAuthReturn youtubeReturns;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.collection.service.CollectionOperations collectionOperations;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean

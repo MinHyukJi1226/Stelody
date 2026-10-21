@@ -77,6 +77,8 @@ stelody:
   export:
     enabled: ${YOUTUBE_EXPORT_ENABLED:false}
     redirect-uri: ${YOUTUBE_EXPORT_REDIRECT_URI:}
+    local-redirect-uri: ${YOUTUBE_LOCAL_REDIRECT_URI:}
+    frontend-origin: ${YOUTUBE_FRONTEND_ORIGIN:}
   statistics:
     trending-enabled: ${TRENDING_ENABLED:false}
     trending-policy-allowed: ${TRENDING_POLICY_ALLOWED:false}
