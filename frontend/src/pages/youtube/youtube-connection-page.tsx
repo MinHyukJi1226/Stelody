@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { sessionOptions } from '@/features/auth/session'
@@ -40,6 +40,14 @@ function ConnectionScreen({ user }: { user: string }) {
   const { refetch } = query
   const action = useYouTubeActions(user)
   const current = query.isError ? undefined : query.data
+  const mounted = useRef(false)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const clean = cleanYouTubeReturn(
@@ -88,11 +96,13 @@ function ConnectionScreen({ user }: { user: string }) {
     setError(undefined)
     try {
       const response = await action.run('authorize')
+      if (!mounted.current) return
       if (response?.kind === 'authorize') {
         setLeaving(true)
         window.location.assign(response.value.authorizationUrl)
       }
     } catch (failure) {
+      if (!mounted.current) return
       setLeaving(false)
       setError(youtubeErrorMessage(failure))
       void query.refetch()

@@ -186,12 +186,87 @@ test('CSRF로 인증을 한 번 시작하고 응답 URL로 브라우저를 이�
   await page.getByRole('button', { name: 'YouTube 연결', exact: true }).click()
   await expect(page.getByText('Google 인증을 여는 중이에요')).toBeVisible()
   await expect(panel(page).getByRole('button')).toBeDisabled()
-  expect(state.posts).toEqual([{ returnTo: path, callbackClient: 'default' }])
+  await expect
+    .poll(() => state.posts)
+    .toEqual([{ returnTo: path, callbackClient: 'default' }])
   release()
   await expect(page.getByRole('heading', { name: '테스트 인증' })).toBeVisible()
   expect(new URL(page.url()).origin).toBe('https://accounts.google.com')
   expect(state.posts).toHaveLength(1)
 })
+
+for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
+  test(`인증 응답 전에 ${destination} 이동한 화면을 뒤늦게 Google로 전환하지 않는다`, async ({
+    page,
+  }) => {
+    const state = await setup(page)
+    let release!: () => void
+    state.writeGate = new Promise<void>((resolve) => (release = resolve))
+    await page.goto('/library/playlists')
+    await page
+      .getByRole('link', { name: 'YouTube 연결 관리', exact: true })
+      .click()
+    await expect(panel(page)).toBeVisible()
+    await page
+      .getByRole('button', { name: 'YouTube 연결', exact: true })
+      .click()
+    await expect(page.getByText('Google 인증을 여는 중이에요')).toBeVisible()
+    if (destination === 'header') {
+      if (test.info().project.name === 'mobile')
+        await page.getByRole('button', { name: '메뉴 열기' }).click()
+      await page
+        .getByRole('navigation', {
+          name:
+            test.info().project.name === 'mobile'
+              ? '모바일 주 메뉴'
+              : '주 메뉴',
+          exact: true,
+        })
+        .getByRole('link', { name: '검색', exact: true })
+        .click()
+    } else if (destination === 'back') await page.goBack()
+    else
+      await page.getByRole('link', { name: '플레이리스트로 돌아가기' }).click()
+    if (destination === 'revisit')
+      await page
+        .getByRole('link', { name: 'YouTube 연결 관리', exact: true })
+        .click()
+    const expected =
+      destination === 'header'
+        ? '/search'
+        : destination === 'revisit'
+          ? path
+          : '/library/playlists'
+    await expect(page).toHaveURL(new RegExp(`${expected}$`))
+    const response = page.waitForResponse(
+      (r) =>
+        r.url().endsWith('/me/youtube/authorizations') &&
+        r.request().method() === 'POST',
+    )
+    release()
+    await (await response).finished()
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    )
+    await expect(page).toHaveURL(new RegExp(`${expected}$`))
+    if (destination === 'revisit') {
+      await expect(
+        page.getByRole('button', { name: 'YouTube 연결', exact: true }),
+      ).toBeEnabled()
+      expect(state.posts).toHaveLength(1)
+      await page
+        .getByRole('button', { name: 'YouTube 연결', exact: true })
+        .click()
+      await expect(
+        page.getByRole('heading', { name: '테스트 인증' }),
+      ).toBeVisible()
+      expect(state.posts).toHaveLength(2)
+    }
+  })
+}
 
 test('성공 안내는 실제 상태를 확인한 뒤 표시하고 복귀 파라미터를 정리한다', async ({
   page,
