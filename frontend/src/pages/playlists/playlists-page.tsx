@@ -82,6 +82,13 @@ export function PlaylistsPage() {
                 ? { onRetry: () => void retry() }
                 : {})}
             />
+            {state.kind === 'empty' && (
+              <div className="self-center">
+                <Button asChild>
+                  <Link to="/library/youtube">YouTube 연결 관리</Link>
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -91,9 +98,12 @@ export function PlaylistsPage() {
             </h1>
             <p className="text-muted">모든 플레이리스트는 나만 볼 수 있어요.</p>
             <LibraryTabs playlists />
-            <div>
+            <div className="flex flex-wrap gap-2">
               <Button asChild variant="primary">
                 <Link to="/library/playlists/new">＋ 새 플레이리스트</Link>
+              </Button>
+              <Button asChild>
+                <Link to="/library/youtube">YouTube 연결 관리</Link>
               </Button>
             </div>
             {items.map((playlist) => (
