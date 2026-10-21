@@ -48,6 +48,14 @@ export const router = createBrowserRouter([
         element: <AuthGate />,
         children: [
           {
+            path: '/library/youtube',
+            lazy: async () => {
+              const { YouTubeConnectionPage } =
+                await import('@/pages/youtube/youtube-connection-page')
+              return { Component: YouTubeConnectionPage }
+            },
+          },
+          {
             path: '/library',
             lazy: async () => {
               const { FavoritesPage } =

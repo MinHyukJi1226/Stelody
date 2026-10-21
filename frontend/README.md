@@ -134,9 +134,19 @@ API_PROXY_TARGET=https://stelody-backend.onrender.com
 - 개인 Query 키는 계정과 목록·곡 ID로 구분합니다. 세션 만료는 개인 캐시를 정리하고 로그인으로 연결하며, 403·404는 기존 개인 목록 대신 접근 불가를 표시합니다. 선택창은 포커스 이동·Escape·원래 버튼으로 포커스 복귀를 지원하며 저장 중에는 닫기·중복 제출을 막습니다.
 - 디자인 기준: [PC 목록](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-989), [모바일 목록](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-11119), [곡 추가 선택창](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=70-10241), [새 목록 생성](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-1133), [상세·편집](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-7433), [모바일 이름 수정](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-2036), [모바일 삭제 확인](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=226-26502).
 
+## YouTube 연결 관리
+
+- `/library/youtube`: 로그인한 사용자의 연결 상태 조회·연결·재연결·해제를 제공합니다. 플레이리스트 목록의 정상·빈 화면에서 진입합니다. 연결 관리 화면은 플레이리스트 내보내기를 실행하지 않습니다.
+- 인증 시작은 CSRF를 포함한 `POST /me/youtube/authorizations` 응답의 Google URL로 브라우저를 이동합니다. `returnTo`는 `/library/youtube`이고 `callbackClient`는 Vite 개발 실행에서 `local`, 프로덕션 빌드에서 `default`입니다. 로컬 인증은 `http://localhost:5173`에서 진행하며 기존 `/api` 프록시와 쿠키 속성을 유지합니다.
+- 복귀 시 `youtubeResult`·`youtubeError`와 OAuth 관련 파라미터를 주소에서 제거하고 `GET /me/youtube/connection`으로 실제 상태를 확인합니다. 성공 파라미터만으로 연결을 확정하지 않으며 실패·취소가 기존 연결 상태를 덮어쓰지 않습니다. 세션 만료 후에는 로그인 화면으로 이동하며, 로그인만으로 추가 동의를 자동 시작하지 않습니다.
+- 해제는 삭제 범위를 확인한 뒤 CSRF를 포함한 DELETE로 요청합니다. 처리 중에는 확인창 닫기·중복 요청을 막고, `REVOKING` 상태에서는 5초 간격으로 조회만 수행합니다. 네트워크·서버 오류로 해제 결과가 불확실하면 수동 재시도에서 상태를 먼저 확인하며, 이미 해제됐으면 DELETE를 다시 보내지 않습니다.
+- 조회 오류는 미연결과 구분해 재시도를 제공합니다. 개인 캐시와 변경 요청은 계정별로 구분하며, 로그아웃 뒤 도착한 인증 URL은 사용하지 않습니다.
+- 디자인 기준: [PC 연결 화면](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=235-28232), [모바일 연결 화면](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=235-30056), [해제 확인창](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=235-29603). PC·모바일 / 라이트·다크와 상태·결과 안내·해제 확인창을 반영합니다.
+- API·브라우저 자동 검증에는 고정 응답을 사용합니다. 실제 계정의 신규 연결·로컬 복귀·새로고침 후 연결 유지·해제 후 재연결은 사용자가 로컬 개발 주소에서 확인했습니다. 최초 재연결 실패는 재시도에서 성공했으며 당시 원인 코드는 확보하지 못했습니다. 개발 실행에서는 허용된 콜백 실패 코드만 Console에 표시하며 인증 URL이나 토큰은 기록하지 않습니다.
+
 ## API 계약
 
-`openapi/stelody.json`은 로컬 Google 로그인 콜백 지원 기준 커밋 `41309f9`([PR #61](https://github.com/MinHyukJi1226/Stelody/pull/61)) 이후의 운영 OpenAPI 스냅샷입니다. 운영 명세에서 `loginClient=local` 반영을 확인하고 교체했습니다. 저장 시 프로젝트 JSON 포맷과 기존 키 순서를 적용하므로 파일 바이트 일치를 의미하지 않습니다.
+`openapi/stelody.json`은 YouTube 연결 OAuth 복귀 지원 기준 커밋 `904fd25`([PR #66](https://github.com/MinHyukJi1226/Stelody/pull/66)) 이후의 운영 OpenAPI 스냅샷입니다. 저장 시 프로젝트 JSON 포맷과 기존 키 순서를 적용하므로 파일 바이트 일치를 의미하지 않습니다.
 
 명세는 수동으로 편집하지 않습니다. 백엔드 변경 시 해당 커밋의 검증된 CI 아티팩트에서 교체하고 아래 명령으로 타입을 생성합니다.
 
