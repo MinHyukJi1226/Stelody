@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query'
 import { sessionOptions, endLocalSession } from '@/features/auth/session'
 import { ApiError } from '@/shared/api/errors'
+import { getPlaylistSnapshot } from './editor-snapshot'
 import {
   getPlaylist,
   getPlaylistItems,
@@ -24,6 +25,8 @@ export const playlistKeys = {
     [...playlistKeys.all(user), 'detail', id] as const,
   items: (user: string, id: string) =>
     [...playlistKeys.all(user), 'items', id] as const,
+  editor: (user: string, id: string) =>
+    [...playlistKeys.all(user), 'editor', id] as const,
   write: (user: string) => [...playlistKeys.all(user), 'write'] as const,
 }
 export const isPlaylistAccount = (client: QueryClient, user: string) =>
@@ -68,6 +71,12 @@ export const playlistDetailOptions = (user: string, id: string) =>
     queryFn: ({ signal, client }) =>
       read(client, user, () => getPlaylist(id, signal)),
   })
+export const playlistEditorOptions = (user: string, id: string) =>
+  queryOptions({
+    queryKey: playlistKeys.editor(user, id),
+    queryFn: ({ signal, client }) =>
+      read(client, user, () => getPlaylistSnapshot(id, signal)),
+  })
 export const playlistItemsOptions = (user: string, id: string) =>
   infiniteQueryOptions({
     queryKey: playlistKeys.items(user, id),
@@ -89,6 +98,7 @@ export async function refreshPlaylists(
   user: string,
   updated?: Playlist,
   songId?: string,
+  containsSong = true,
 ) {
   if (!isPlaylistAccount(client, user)) return
   await client.cancelQueries({ queryKey: playlistKeys.all(user) })
@@ -115,7 +125,9 @@ export async function refreshPlaylists(
                 ? {
                     ...updated,
                     containsSong:
-                      songId && key[4] === songId ? true : item.containsSong,
+                      songId && key[4] === songId
+                        ? containsSong
+                        : item.containsSong,
                   }
                 : item,
             ),
@@ -138,7 +150,7 @@ export function playlistErrorMessage(error: unknown) {
       case 'PLAYLIST_SONG_ALREADY_EXISTS':
         return '이미 이 목록에 담긴 곡이에요.'
       case 'PLAYLIST_CHANGED':
-        return '목록이 변경되었어요. 새로 불러온 목록을 확인하고 다시 담아주세요.'
+        return '목록이 변경되었어요. 최신 목록을 확인한 뒤 다시 시도해 주세요.'
       case 'PLAYLIST_NOT_FOUND':
         return '목록을 찾을 수 없어요. 목록을 다시 확인해 주세요.'
       case 'CATALOG_NOT_FOUND':

@@ -125,9 +125,14 @@ API_PROXY_TARGET=https://stelody-backend.onrender.com
 - 곡 상세의 `＋ 플레이리스트`는 추가 선택창을 엽니다. `songId`를 포함한 목록 조회의 `containsSong`으로 이미 담긴 곡을 구분하고, 선택한 목록의 `version`과 곡 ID로 추가합니다. 성공하면 목록을 갱신하고 선택창을 닫습니다. 일반 곡 카드에는 추가 버튼을 배치하지 않습니다.
 - 선택창에서 새 목록을 만들고 곡을 담을 수 있습니다. 생성 성공 후 곡 추가만 실패하면 생성된 목록을 유지하며 재시도에서 다시 생성하지 않습니다. 버전 충돌은 최신 목록을 보여준 뒤 사용자가 다시 담도록 합니다. 변경 요청은 자동 재전송하지 않습니다.
 - 비로그인 시 Google 로그인 후 원래 곡 상세에서 선택창을 다시 엽니다. 로그인 복귀만으로 목록을 생성하거나 곡을 추가하지 않습니다. 저장 의도는 즐겨찾기와 구분하며 탭 단위 만료·계정 일치·안전한 복귀 경로 규칙을 공유합니다.
-- `/library/playlists/:playlistId`: 저장된 순서대로 썸네일·제목·참여자를 표시하고 커버곡에는 원곡 정보를 표시합니다. 상단은 총 곡 수와 이용 불가 곡 수를 구분하며, 이용 불가 곡이 없으면 해당 문구를 숨깁니다. 이용 불가 항목은 순서를 유지하며 곡 정보·링크를 숨깁니다. 페이지 간 버전이 다르면 합치지 않고, 잘못된 커서·버전 충돌은 첫 페이지부터 다시 조회합니다. 이름 변경·목록 삭제·곡 제거·순서 편집은 후속 기능입니다.
+- `/library/playlists/:playlistId`: 저장된 순서대로 썸네일·제목·참여자를 표시하고 커버곡에는 원곡 정보를 표시합니다. 상단은 총 곡 수와 이용 불가 곡 수를 구분하며, 이용 불가 곡이 없으면 해당 문구를 숨깁니다. 이용 불가 항목은 순서를 유지하며 곡 정보·링크를 숨기고 제거 동작을 제공합니다.
+- 상세는 같은 `version`의 모든 페이지를 조회한 뒤 편집을 허용합니다. 드래그·위아래 버튼은 로컬 순서를 바꾸고, 저장할 때 이용 불가 곡을 포함한 전체 항목 ID를 전달합니다. 취소는 저장된 순서로 복원합니다. 순서를 저장하거나 취소하기 전에는 다른 변경과 화면 이동을 잠그며, 페이지를 새로고침하거나 닫을 때 브라우저가 저장되지 않은 변경을 안내합니다.
+- `/library/playlists/:playlistId/edit`: 기존 이름을 표시하고 앞뒤 공백 제거·Unicode 코드 포인트 1~50자 검증 후 저장합니다. 실패하면 입력을 유지합니다. 버전 충돌 시 최신 목록을 확인한 뒤 사용자가 다시 저장합니다.
+- 곡 제거는 선택한 항목 ID와 조회 버전으로 즉시 반영합니다. 다른 곡의 상대 순서와 즐겨찾기는 유지합니다. 목록 삭제는 현재 화면 위에서 목록명·담긴 항목 수·삭제 영향을 확인하고, 성공 후 목록으로 돌아옵니다. 빈 목록 카드에도 `곡 찾기` 옆에 `목록 열기`를 표시하며, 빈 상세에서도 이름 수정·삭제를 제공합니다.
+- 변경 요청은 자동 재전송하지 않습니다. 순서 저장 충돌·응답 유실 때는 기존 편집을 자동으로 덮어쓰거나 새 버전만 넣어 재전송하지 않고, 전체 목록을 다시 확인하도록 합니다. 조회한 페이지가 불완전하거나 버전이 달라도 편집을 차단합니다.
+- 드래그는 고정 버전의 dnd-kit으로 마우스·터치·키보드를 지원하며 위아래 버튼을 함께 제공합니다. 적용 API는 [Sortable 공식 문서](https://dndkit.com/legacy/presets/sortable/overview/)를 기준으로 합니다.
 - 개인 Query 키는 계정과 목록·곡 ID로 구분합니다. 세션 만료는 개인 캐시를 정리하고 로그인으로 연결하며, 403·404는 기존 개인 목록 대신 접근 불가를 표시합니다. 선택창은 포커스 이동·Escape·원래 버튼으로 포커스 복귀를 지원하며 저장 중에는 닫기·중복 제출을 막습니다.
-- 디자인 기준: [PC 목록](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-989), [모바일 목록](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-11119), [곡 추가 선택창](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=70-10241), [새 목록 생성](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-1133), [상세](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-7433). 상세는 이번 범위인 곡 조회와 곡 찾기 동작을 제공합니다.
+- 디자인 기준: [PC 목록](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-989), [모바일 목록](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-11119), [곡 추가 선택창](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=70-10241), [새 목록 생성](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-1133), [상세·편집](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=38-7433), [모바일 이름 수정](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=4-2036), [모바일 삭제 확인](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=226-26502).
 
 ## API 계약
 
