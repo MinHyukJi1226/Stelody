@@ -93,3 +93,10 @@ export function removePlaylistItem(playlist: Playlist, itemId: string) {
     { method: 'DELETE' },
   )
 }
+
+export function savePlaylistOrder(playlist: Playlist, itemIds: string[]) {
+  return apiClient.request<Playlist>(
+    `/me/playlists/${encodeURIComponent(playlist.id)}/order`,
+    { method: 'PUT', body: { itemIds, version: playlist.version } },
+  )
+}

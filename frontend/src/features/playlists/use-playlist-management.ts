@@ -12,6 +12,7 @@ import {
   deletePlaylist,
   removePlaylistItem,
   renamePlaylist,
+  savePlaylistOrder,
   type Playlist,
   type PlaylistPage,
 } from './api'
@@ -21,6 +22,7 @@ type Change = { playlist: Playlist } & (
   | { kind: 'rename'; name: string }
   | { kind: 'delete' }
   | { kind: 'remove'; itemId: string; songId: string }
+  | { kind: 'order'; itemIds: string[] }
 )
 type Result = { kind: 'deleted' } | { kind: 'saved'; playlist: Playlist }
 
@@ -44,6 +46,11 @@ export function usePlaylistManagement(user: string, returnTo: string) {
           return {
             kind: 'saved',
             playlist: await removePlaylistItem(change.playlist, change.itemId),
+          }
+        case 'order':
+          return {
+            kind: 'saved',
+            playlist: await savePlaylistOrder(change.playlist, change.itemIds),
           }
         case 'delete':
           await deletePlaylist(change.playlist)

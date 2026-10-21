@@ -9,6 +9,7 @@ import {
   deletePlaylist,
   removePlaylistItem,
   renamePlaylist,
+  savePlaylistOrder,
   type Playlist,
   type PlaylistItem,
 } from './api'
@@ -50,7 +51,7 @@ beforeEach(() => {
 })
 afterEach(() => client.clear())
 
-it('이름 수정·곡 제거·삭제는 조회 버전과 항목 ID를 정확한 위치에 전달한다', async () => {
+it('이름 수정·곡 제거·순서 저장·삭제는 조회 버전과 항목 ID를 정확한 위치에 전달한다', async () => {
   const requests: unknown[] = []
   server.use(
     http.get('*/api/v1/auth/csrf', () =>
@@ -76,6 +77,10 @@ it('이름 수정·곡 제거·삭제는 조회 버전과 항목 ID를 정확한
         return HttpResponse.json(playlist)
       },
     ),
+    http.put('*/api/v1/me/playlists/:id/order', async ({ request }) => {
+      requests.push(['order', await request.json()])
+      return HttpResponse.json(playlist)
+    }),
     http.delete('*/api/v1/me/playlists/:id', ({ request }) => {
       requests.push([
         'delete',
@@ -86,10 +91,12 @@ it('이름 수정·곡 제거·삭제는 조회 버전과 항목 ID를 정확한
   )
   await renamePlaylist(playlist, '  새 이름 🎵  ')
   await removePlaylistItem(playlist, item(0).id)
+  await savePlaylistOrder(playlist, [item(1).id, item(0).id])
   await deletePlaylist(playlist)
   expect(requests).toEqual([
     ['rename', id, { name: '새 이름 🎵', version: 3 }, 'token'],
     ['remove', item(0).id, '3'],
+    ['order', { itemIds: [item(1).id, item(0).id], version: 3 }],
     ['delete', '3'],
   ])
 })

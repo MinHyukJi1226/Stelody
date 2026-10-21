@@ -165,6 +165,157 @@ async function visit(page: Page) {
     page.getByRole('heading', { name: '밤에 듣는 목소리', exact: true }),
   ).toBeVisible()
 }
+async function down(page: Page) {
+  await page.getByRole('button', { name: '첫 번째 노래 아래로 이동' }).click()
+}
+
+test('전체 페이지와 이용 불가 곡을 유지하며 위아래 편집·취소·저장·새로고침을 처리한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await visit(page)
+  expect(state.reads).toEqual([null, '0:2'])
+  await expect(rows(page)).toHaveCount(3)
+  await expect(rows(page).nth(2).getByRole('link')).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: '첫 번째 노래 위로 이동' }),
+  ).toBeDisabled()
+  await down(page)
+  await expect(rows(page).first()).toContainText(two.title)
+  await expect(
+    page.getByRole('button', { name: '이름 수정', exact: true }),
+  ).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '목록 삭제', exact: true }),
+  ).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '첫 번째 노래 목록에서 제거' }),
+  ).toBeDisabled()
+  await page.getByRole('button', { name: '취소', exact: true }).click()
+  await expect(rows(page).first()).toContainText(one.title)
+  expect(state.writes).toHaveLength(0)
+  await down(page)
+  await page.getByRole('button', { name: '변경 순서 저장' }).click()
+  await expect(
+    page.getByText('플레이리스트 순서를 저장했어요.', { exact: true }),
+  ).toBeVisible()
+  expect(state.writes).toEqual([
+    {
+      method: 'PUT',
+      kind: 'order',
+      version: 0,
+      body: {
+        version: 0,
+        itemIds: [initial[1]!.id, initial[0]!.id, initial[2]!.id],
+      },
+    },
+  ])
+  await expect(
+    page.getByRole('button', { name: '변경 순서 저장' }),
+  ).toBeDisabled()
+  await page.reload()
+  await expect(rows(page).first()).toContainText(two.title)
+  await expect(rows(page).nth(2)).toContainText('현재 이용할 수 없는 곡')
+})
+
+test('저장하지 않은 순서가 있으면 다른 화면 이동을 막고 취소 후 다시 이동한다', async ({
+  page,
+}) => {
+  await setup(page)
+  await visit(page)
+  await down(page)
+  const brand = page.getByRole('link', { name: 'Stelody 홈', exact: true })
+  await brand.click()
+  await expect(page).toHaveURL(path)
+  await expect(page.getByRole('alert')).toContainText(
+    '순서 변경을 저장하거나 취소한 뒤 이동해 주세요.',
+  )
+  await page.getByRole('button', { name: '취소', exact: true }).click()
+  await brand.click()
+  await expect(page).toHaveURL('/')
+})
+
+test('키보드 드래그로 순서를 바꾸고 Escape로 진행 중 이동을 취소한다', async ({
+  page,
+}) => {
+  await setup(page)
+  await visit(page)
+  const first = rows(page).filter({ hasText: one.title })
+  await first.focus()
+  await page.keyboard.press('Space')
+  await expect(first).toHaveClass(/opacity-70/)
+  await page.keyboard.press('ArrowDown')
+  await expect(
+    page.getByText('첫 번째 노래, 2번째 위치입니다.', { exact: true }),
+  ).toBeAttached()
+  await page.keyboard.press('Space')
+  await expect(rows(page).first()).toContainText(two.title)
+  await page.getByRole('button', { name: '취소', exact: true }).click()
+  await first.focus()
+  await page.keyboard.press('Space')
+  await expect(first).toHaveClass(/opacity-70/)
+  await page.keyboard.press('ArrowDown')
+  await expect(
+    page.getByText('첫 번째 노래, 2번째 위치입니다.', { exact: true }),
+  ).toBeAttached()
+  await page.keyboard.press('Escape')
+  await expect(rows(page).first()).toContainText(one.title)
+  await expect(
+    page.getByRole('button', { name: '변경 순서 저장' }),
+  ).toBeDisabled()
+})
+
+test('모바일에서 길게 누른 터치 드래그로 순서를 바꾼다', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, '모바일 터치 입력 전용')
+  await setup(page)
+  await visit(page)
+  await rows(page).nth(1).scrollIntoViewIfNeeded()
+  const first = rows(page).first(),
+    from = await first.boundingBox(),
+    to = await rows(page).nth(1).boundingBox()
+  if (!from || !to) throw new Error('곡 카드가 없습니다')
+  const session = await page.context().newCDPSession(page)
+  const x = from.x + 8,
+    y = from.y + from.height / 2,
+    end = to.y + to.height / 2
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y, id: 1 }],
+  })
+  await expect(first).toHaveClass(/opacity-70/)
+  for (let i = 1; i <= 12; i++)
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y + ((end - y) * i) / 12, id: 1 }],
+    })
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  })
+  await expect(rows(page).first()).toContainText(two.title)
+  await expect(
+    page.getByRole('button', { name: '변경 순서 저장' }),
+  ).toBeEnabled()
+})
+
+test('마우스 드래그는 상세 이동 없이 순서를 편집한다', async ({ page }) => {
+  await setup(page)
+  await visit(page)
+  await rows(page).nth(1).scrollIntoViewIfNeeded()
+  const from = await rows(page).first().boundingBox(),
+    to = await rows(page).nth(1).boundingBox()
+  if (!from || !to) throw new Error('곡 카드가 없습니다')
+  await page.mouse.move(from.x + 8, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 20, from.y + from.height / 2, { steps: 3 })
+  await page.mouse.move(to.x + 20, to.y + to.height / 2, { steps: 12 })
+  await page.mouse.up()
+  await expect(rows(page).first()).toContainText(two.title)
+  await expect(page).toHaveURL(path)
+})
 
 test('이름 수정은 현재 이름·검증·실패 입력 유지·저장 후 상세 복귀를 제공한다', async ({
   page,
@@ -307,6 +458,78 @@ test('전체 조회 중 버전 충돌은 일부 곡 편집을 막고 전체 재�
   expect(state.reads).toEqual([null, '0:2', null, '0:2'])
 })
 
+test('순서 저장 충돌은 기존 버전 재전송을 막고 전체 재조회 후 새 편집만 저장한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await visit(page)
+  await down(page)
+  state.playlist.version = 1
+  await page.getByRole('button', { name: '변경 순서 저장' }).click()
+  await expect(page.getByRole('alert')).toContainText('목록이 변경되었어요.')
+  await expect(
+    page.getByRole('button', { name: '변경 순서 저장' }),
+  ).toBeDisabled()
+  expect(state.writes).toHaveLength(1)
+  await page.getByRole('button', { name: '다시 시도' }).click()
+  await expect(rows(page).first()).toContainText(one.title)
+  await down(page)
+  await page.getByRole('button', { name: '변경 순서 저장' }).click()
+  await expect(
+    page.getByText('플레이리스트 순서를 저장했어요.', { exact: true }),
+  ).toBeVisible()
+  expect(state.writes.map((w) => w.version)).toEqual([0, 1])
+})
+
+test('순서 저장 응답 유실은 성공으로 안내하거나 자동 재전송하지 않는다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await visit(page)
+  await down(page)
+  state.loseResponse = true
+  await page.getByRole('button', { name: '변경 순서 저장' }).click()
+  await expect(page.getByRole('alert')).toContainText(
+    '처리 결과를 확인하지 못했어요.',
+  )
+  await expect(
+    page.getByText('플레이리스트 순서를 저장했어요.', { exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: '변경 순서 저장' }),
+  ).toBeDisabled()
+  expect(state.writes).toHaveLength(1)
+  await page.getByRole('button', { name: '다시 시도' }).click()
+  await expect(rows(page).first()).toContainText(two.title)
+  await expect(
+    page.getByRole('button', { name: '변경 순서 저장' }),
+  ).toBeDisabled()
+  expect(state.writes).toHaveLength(1)
+})
+
+test('저장 중에는 중복 저장·다른 변경을 막는다', async ({ page }) => {
+  const state = await setup(page)
+  await visit(page)
+  await down(page)
+  let release = () => {}
+  state.gate = new Promise<void>((r) => {
+    release = r
+  })
+  await page.getByRole('button', { name: '변경 순서 저장' }).click()
+  await expect(page.getByRole('button', { name: '저장 중…' })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '취소', exact: true }),
+  ).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '목록 삭제', exact: true }),
+  ).toBeDisabled()
+  release()
+  await expect(
+    page.getByText('플레이리스트 순서를 저장했어요.', { exact: true }),
+  ).toBeVisible()
+  expect(state.writes).toHaveLength(1)
+})
+
 test('이름 수정 충돌은 입력을 유지하고 최신 버전을 확인한 다음에만 저장한다', async ({
   page,
 }) => {
@@ -354,6 +577,23 @@ test('목록 삭제 충돌은 최신 내용을 다시 확인한 뒤 새 확인 �
   await dialog.getByRole('button', { name: '목록 삭제', exact: true }).click()
   await expect(page).toHaveURL('/library/playlists')
   expect(state.writes.map((w) => w.version)).toEqual([0, 1])
+})
+
+test('변경 요청 401은 로그인으로 이동하고 개인 편집 내용을 숨긴다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await visit(page)
+  await down(page)
+  state.failure = { status: 401, code: 'SESSION_EXPIRED' }
+  state.loggedIn = false
+  await page.getByRole('button', { name: '변경 순서 저장' }).click()
+  await expect(page).toHaveURL(`/login?returnTo=${encodeURIComponent(path)}`)
+  await expect(order(page)).toHaveCount(0)
+  expect(state.writes).toHaveLength(1)
+  await expect(
+    page.getByRole('link', { name: 'Google로 로그인', exact: true }),
+  ).toBeVisible()
 })
 
 test('이름 수정 취소는 저장하지 않고 기존 이름으로 상세에 복귀한다', async ({
