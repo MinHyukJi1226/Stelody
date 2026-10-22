@@ -58,6 +58,7 @@ async function setup(page: Page) {
     sourceFailure: 0,
     readFailure: 0,
     createFailure: null as null | { status: number; code: string },
+    changeFailure: null as null | { status: number; code: string },
     authorizationFailure: null as null | { status: number; code: string },
     loseResponse: false,
     writeGate: Promise.resolve(),
@@ -184,6 +185,11 @@ async function setup(page: Page) {
     const kind = new URL(request.url()).pathname.split('/').at(-1)!
     state.changed.push(kind)
     await state.writeGate
+    if (state.changeFailure)
+      return r.fulfill({
+        status: state.changeFailure.status,
+        json: state.changeFailure,
+      })
     if (kind === 'retry') state.job.status = 'QUEUED'
     else if (state.job.status !== 'SUCCEEDED') state.job.status = 'CANCELLED'
     state.active = ['QUEUED', 'RUNNING', 'FAILED', 'UNCERTAIN'].includes(
@@ -709,6 +715,91 @@ test('내보내기 재로그인 복귀는 연결 관리의 원래 작업 경로�
   expect(s.changed).toHaveLength(0)
 })
 
+for (const code of [
+  'YOUTUBE_QUOTA_EXCEEDED',
+  'YOUTUBE_RATE_LIMITED',
+  'EXPORT_PROCESSING_FAILED',
+])
+  for (const connection of ['RECONNECT_REQUIRED', 'DISCONNECTED'] as const)
+    test(`${code} 재시도 후 ${connection}이면 원래 작업의 연결 관리로 이동한다`, async ({
+      page,
+    }) => {
+      const s = await setup(page)
+      s.job.status = 'FAILED'
+      s.job.errorCode = code
+      await open(page, jobPath)
+      await expect(retry(page)).toBeEnabled()
+      s.connection = connection
+      s.changeFailure = { status: 409, code: 'YOUTUBE_CONNECTION_REQUIRED' }
+      await retry(page).click()
+      await expect(retry(page)).toBeDisabled()
+      const management = page.getByRole('link', { name: 'YouTube 연결 관리' })
+      await expect(management).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: '취소', exact: true }),
+      ).toBeEnabled()
+      await management.click()
+      await expect(
+        page.getByRole('link', { name: '내보내기로 돌아가기' }),
+      ).toHaveAttribute('href', jobPath)
+      s.connection = 'CONNECTED'
+      s.changeFailure = null
+      await page.goto(jobPath)
+      await expect(retry(page)).toBeEnabled()
+      expect(s.changed).toEqual(['retry'])
+      expect(s.created).toHaveLength(0)
+    })
+
+test('미확정 작업의 재연결 동선은 결과 미확정 안내와 실제 결과 링크를 유지한다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  s.job = {
+    ...s.job,
+    status: 'UNCERTAIN',
+    youtubePlaylistId: 'PL-test',
+    youtubeUrl: 'https://www.youtube.com/playlist?list=PL-test',
+  }
+  await open(page, jobPath)
+  await expect(retry(page)).toBeEnabled()
+  s.connection = 'RECONNECT_REQUIRED'
+  s.changeFailure = { status: 409, code: 'YOUTUBE_CONNECTION_REQUIRED' }
+  await retry(page).click()
+  await expect(
+    page.getByRole('link', { name: 'YouTube 연결 관리' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', {
+      name: '일부 곡의 반영 결과를 확인하지 못했어요',
+    }),
+  ).toBeVisible()
+  await expect(page.getByRole('link', { name: '결과 확인' })).toHaveAttribute(
+    'href',
+    s.job.youtubeUrl!,
+  )
+  await expect(retry(page)).toBeDisabled()
+  expect(s.created).toHaveLength(0)
+  expect(s.changed).toEqual(['retry'])
+})
+
+test('연결이 유효한 일시 오류에는 재연결을 요구하지 않는다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  s.job.status = 'FAILED'
+  s.job.errorCode = 'YOUTUBE_TOKEN_UNAVAILABLE'
+  await open(page, jobPath)
+  await expect(retry(page)).toBeEnabled()
+  s.changeFailure = { status: 503, code: 'YOUTUBE_TOKEN_UNAVAILABLE' }
+  await retry(page).click()
+  await expect(page.getByRole('alert')).toBeVisible()
+  await expect(retry(page)).toBeEnabled()
+  await expect(
+    page.getByRole('link', { name: 'YouTube 연결 관리' }),
+  ).toHaveCount(0)
+  expect(s.changed).toEqual(['retry'])
+  expect(s.created).toHaveLength(0)
+})
 test('늦게 도착한 접수 응답이 떠난 화면을 다시 열지 않는다', async ({
   page,
   isMobile,

@@ -380,6 +380,11 @@ function ExportScreen({
     !query.isError &&
     connection.data?.status === 'CONNECTED' &&
     !connection.isError
+  const needsConnection =
+    !connection.isError &&
+    ['DISCONNECTED', 'RECONNECT_REQUIRED'].includes(
+      connection.data?.status ?? '',
+    )
   return (
     <div className="favorites-page flex min-w-0 flex-col gap-12">
       <section className="flex min-w-0 flex-1 flex-col items-center gap-6">
@@ -409,6 +414,7 @@ function ExportScreen({
               })}`}
               canRetry={canRetry}
               canCancel={canCancel}
+              needsConnection={needsConnection}
               notice={
                 error ? (
                   <p role="alert" className="rounded-lg bg-rose p-3 text-error">

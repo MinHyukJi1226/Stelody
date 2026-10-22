@@ -214,6 +214,7 @@ export function ExportPanel({
   notice,
   canRetry,
   canCancel,
+  needsConnection,
   onStart,
   onRetry,
   onCancel,
@@ -230,6 +231,7 @@ export function ExportPanel({
   notice?: ReactNode
   canRetry: boolean
   canCancel: boolean
+  needsConnection: boolean
   onStart: () => void
   onRetry: () => void
   onCancel: () => void
@@ -366,7 +368,7 @@ export function ExportPanel({
           </Button>
         )}
         {view === 'uncertain' && resultLink}
-        {view === 'permission' && (
+        {(view === 'permission' || (retryable && needsConnection)) && (
           <Button asChild>
             <Link to={connectionPath}>YouTube 연결 관리</Link>
           </Button>
