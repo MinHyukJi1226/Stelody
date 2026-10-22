@@ -57,8 +57,20 @@ public class WithdrawalController {
   @DeleteMapping("/api/v1/me")
   @Operation(summary = "회원 탈퇴 확정")
   public ResponseEntity<Void> withdraw(
-      @AuthenticationPrincipal SessionUser user, HttpServletRequest request) {
+      @AuthenticationPrincipal SessionUser user,
+      HttpServletRequest request,
+      HttpServletResponse response) {
     withdrawals.withdraw(user.id(), request.getSession().getId());
+    response.addHeader(
+        "Set-Cookie",
+        ResponseCookie.from(com.stelody.auth.service.PersistentLoginService.COOKIE, "")
+            .secure(true)
+            .httpOnly(true)
+            .sameSite("Lax")
+            .path("/")
+            .maxAge(0)
+            .build()
+            .toString());
     request.getSession().invalidate();
     SecurityContextHolder.clearContext();
     return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();

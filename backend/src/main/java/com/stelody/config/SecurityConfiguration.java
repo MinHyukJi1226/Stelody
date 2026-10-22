@@ -45,6 +45,7 @@ public class SecurityConfiguration {
       ApiProblems problems,
       AccountService accounts,
       LoginHandlers handlers,
+      com.stelody.auth.service.PersistentLoginService persistent,
       GoogleLoginClients loginClients,
       GoogleOidcUserService googleUsers,
       ReauthenticationRequests reauthenticationRequests,
@@ -216,16 +217,35 @@ public class SecurityConfiguration {
             new LocalLoginCallbackFilter(reauthenticationRequests),
             OAuth2LoginAuthenticationFilter.class)
         .addFilterAfter(
-            new AccountSessionFilter(accounts, problems, sessions),
+            new AccountSessionFilter(accounts, problems, sessions, persistent),
             SecurityContextHolderFilter.class)
         .logout(
             logout ->
                 logout
                     .logoutUrl("/api/v1/auth/logout")
+                    .addLogoutHandler(
+                        (request, response, auth) -> {
+                          try {
+                            persistent.revoke(request, response);
+                          } catch (org.springframework.dao.DataAccessException
+                              | org.springframework.transaction.TransactionException e) {
+                            request.setAttribute("persistentLogoutFailed", true);
+                          }
+                        })
                     .invalidateHttpSession(true)
                     .clearAuthentication(true)
                     .deleteCookies("SESSION")
-                    .logoutSuccessHandler((request, response, auth) -> response.setStatus(204)))
+                    .logoutSuccessHandler(
+                        (request, response, auth) -> {
+                          if (Boolean.TRUE.equals(request.getAttribute("persistentLogoutFailed")))
+                            problems.write(
+                                request,
+                                response,
+                                503,
+                                "LOGIN_STORAGE_UNAVAILABLE",
+                                "로그아웃을 완료하지 못했습니다. 다시 시도해 주세요");
+                          else response.setStatus(204);
+                        }))
         .exceptionHandling(
             errors ->
                 errors

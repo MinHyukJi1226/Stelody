@@ -4,12 +4,12 @@ import com.stelody.auth.domain.LocalLogin;
 import com.stelody.auth.domain.LoginReturn;
 import com.stelody.auth.domain.SessionUser;
 import com.stelody.auth.service.GoogleOidcUserService.LocalOidcUser;
+import com.stelody.auth.service.PersistentLoginService;
 import com.stelody.auth.service.ReauthenticationService;
 import com.stelody.user.web.AccountException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Instant;
 import org.springframework.dao.DataAccessException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,10 +22,15 @@ import org.springframework.transaction.TransactionException;
 
 @Component
 public class LoginHandlers {
+  private final PersistentLoginService persistent;
   private final ApiProblems problems;
   private final ReauthenticationService reauthentication;
 
-  public LoginHandlers(ApiProblems problems, ReauthenticationService reauthentication) {
+  public LoginHandlers(
+      ApiProblems problems,
+      ReauthenticationService reauthentication,
+      PersistentLoginService persistent) {
+    this.persistent = persistent;
     this.problems = problems;
     this.reauthentication = reauthentication;
   }
@@ -35,13 +40,21 @@ public class LoginHandlers {
       throws IOException {
     var user = (LocalOidcUser) authentication.getPrincipal();
     var previous = user.reauthentication();
+    SessionUser principal;
+    try {
+      principal =
+          previous == null
+              ? persistent.issue(user.account().id(), request, response)
+              : previous.user();
+    } catch (DataAccessException | TransactionException e) {
+      SecurityContextHolder.clearContext();
+      if (request.getSession(false) != null) request.getSession(false).invalidate();
+      problems.write(
+          request, response, 503, "LOGIN_STORAGE_UNAVAILABLE", "로그인을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요");
+      return;
+    }
     var local =
-        UsernamePasswordAuthenticationToken.authenticated(
-            previous == null
-                ? new SessionUser(user.account().id(), Instant.now())
-                : previous.user(),
-            null,
-            user.getAuthorities());
+        UsernamePasswordAuthenticationToken.authenticated(principal, null, user.getAuthorities());
     var context = SecurityContextHolder.createEmptyContext();
     context.setAuthentication(local);
     SecurityContextHolder.setContext(context);
@@ -50,6 +63,7 @@ public class LoginHandlers {
       // Store only local identity even if confirming the proof fails; never persist Google tokens.
       try {
         reauthentication.confirm(previous, request.getSession().getId());
+        persistent.reauthenticated(previous.user(), request, response);
       } catch (AccountException e) {
         problems.write(request, response, e.status(), e.code(), e.getMessage());
         return;

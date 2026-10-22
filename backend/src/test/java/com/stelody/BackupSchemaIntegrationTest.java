@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -93,6 +93,9 @@ class BackupSchemaIntegrationTest {
     if (version >= 24)
       owner.execute(
           "INSERT INTO app.youtube_authorization(user_id,generation,state_hash,session_hash,verifier,nonce,expires_at,return_path,callback_client,callback_uri) VALUES('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'state','session','encrypted-verifier','nonce',now()+interval '5 minutes','/library/youtube','local','http://localhost:5173/api/v1/me/youtube/callback/local')");
+    if (version >= 25)
+      owner.execute(
+          "INSERT INTO app.persistent_login(id,user_id,token_hash,csrf_token,created_at,expires_at) VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000001',repeat('a',64),'test-csrf',now(),now()+interval '30 days')");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
     String directory = "/tmp/backups-v" + version;
@@ -147,6 +150,25 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 25) {
+      assertThat(runtime.queryForObject("SELECT count(*) FROM app.persistent_login", Integer.class))
+          .isZero();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege(current_user,'app.persistent_login','SELECT,INSERT,UPDATE,DELETE')",
+                  Boolean.class))
+          .isTrue();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege('stelody_collector','app.persistent_login','SELECT')",
+                  Boolean.class))
+          .isFalse();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege('stelody_operator','app.persistent_login','SELECT')",
+                  Boolean.class))
+          .isFalse();
+    }
     if (version >= 24) {
       assertThat(
               runtime.queryForObject(

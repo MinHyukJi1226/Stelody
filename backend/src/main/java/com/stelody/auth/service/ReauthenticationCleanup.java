@@ -9,9 +9,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class ReauthenticationCleanup {
   private static final Logger log = LoggerFactory.getLogger(ReauthenticationCleanup.class);
+  private final com.stelody.auth.repository.PersistentLoginRepository persistent;
   private final WithdrawalRepository store;
 
-  public ReauthenticationCleanup(WithdrawalRepository store) {
+  public ReauthenticationCleanup(
+      WithdrawalRepository store,
+      com.stelody.auth.repository.PersistentLoginRepository persistent) {
+    this.persistent = persistent;
     this.store = store;
   }
 
@@ -21,6 +25,7 @@ public class ReauthenticationCleanup {
   public void tick() {
     try {
       store.expire();
+      persistent.cleanup();
     } catch (RuntimeException error) {
       log.warn("Reauthentication cleanup failed; the next invocation will retry");
     }

@@ -80,6 +80,28 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsFixedRegularUserLoginAndStorageFailureWithoutExposingCookieValues()
+      throws Exception {
+    var api = contract();
+    assertThat(api.at("/components/securitySchemes/session/description").asText())
+        .contains("30분", "12시간", "STELODY_LOGIN", "관리자");
+    assertThat(api.at("/paths/~1api~1v1~1auth~1google/get/description").asText())
+        .contains("30일", "ADMIN", "Secure", "HttpOnly", "SameSite=Lax", "탈퇴 재인증");
+    assertThat(api.at("/paths/~1api~1v1~1auth~1csrf/get/description").asText())
+        .contains("복구", "CSRF", "403");
+    assertThat(api.at("/paths/~1api~1v1~1auth~1logout/post/responses/204/description").asText())
+        .contains("현재 기기", "다른 기기", "STELODY_LOGIN", "폐기");
+    for (String path : new String[] {"/api/v1/me", "/api/v1/auth/csrf", "/api/v1/auth/logout"}) {
+      assertErrorCodes(
+          api, path, path.endsWith("logout") ? "post" : "get", "503", "LOGIN_STORAGE_UNAVAILABLE");
+    }
+    assertThat(api.at("/paths/~1api~1v1~1songs/get/responses/default/description").asText())
+        .contains("503 LOGIN_STORAGE_UNAVAILABLE");
+    assertThat(api.at("/paths/~1api~1v1~1auth~1logout/post/security").toString()).contains("csrf");
+    assertThat(api.at("/paths/~1api~1v1~1me/get/security").toString()).contains("session");
+  }
+
+  @Test
   void documentsActiveExportAsAnAuthenticatedNullableFullJobWithoutMutation() throws Exception {
     var api = contract();
     var op = api.path("paths").path("/api/v1/me/youtube-exports/active").path("get");

@@ -25,6 +25,9 @@ class SecurityConfigurationTest {
   @Autowired MockMvc mvc;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.auth.service.PersistentLoginService persistent;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.user.service.AccountService accounts;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
