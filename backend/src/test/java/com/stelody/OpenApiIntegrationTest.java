@@ -80,6 +80,36 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsActiveExportAsAnAuthenticatedNullableFullJobWithoutMutation() throws Exception {
+    var api = contract();
+    var op = api.path("paths").path("/api/v1/me/youtube-exports/active").path("get");
+    assertThat(op.path("description").asText())
+        .contains(
+            "QUEUED",
+            "RUNNING",
+            "FAILED",
+            "UNCERTAIN",
+            "job:null",
+            "playlistId",
+            "EXPORT_ALREADY_ACTIVE");
+    assertThat(op.path("parameters").isEmpty()).isTrue();
+    assertThat(op.path("security").toString()).contains("session").doesNotContain("csrf");
+    assertThat(op.path("responses").has("401")).isTrue();
+    assertThat(op.path("responses").has("404")).isFalse();
+    assertErrorCodes(
+        api, "/api/v1/me/youtube-exports/active", "get", "503", "EXPORT_LOOKUP_UNAVAILABLE");
+    String wrapper = "com.stelody.export.dto.ExportDtos.ActiveJob";
+    assertThat(op.at("/responses/200/content/application~1json/schema/$ref").asText())
+        .isEqualTo("#/components/schemas/" + wrapper);
+    var schema = api.path("components").path("schemas").path(wrapper);
+    assertThat(schema.path("required").toString()).isEqualTo("[\"job\"]");
+    var job = schema.at("/properties/job");
+    assertThat(job.path("anyOf").toString())
+        .contains("#/components/schemas/com.stelody.export.dto.ExportDtos.Job", "null");
+    assertThat(job.path("description").asText()).contains("조회 실패", "null");
+  }
+
+  @Test
   void documentsOptInLocalLoginWithoutAcceptingExternalReturnUrls() throws Exception {
     var operation = contract().at("/paths/~1api~1v1~1auth~1google/get");
     var params = new java.util.HashMap<String, JsonNode>();

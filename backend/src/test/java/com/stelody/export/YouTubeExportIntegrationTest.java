@@ -1293,6 +1293,149 @@ class YouTubeExportIntegrationTest {
     assertThat(provider.getAllServeEvents()).isEmpty();
   }
 
+  String exportSnapshot() {
+    return owner.queryForObject(
+        "SELECT jsonb_build_object('jobs',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM app.youtube_export e),'items',(SELECT jsonb_agg(to_jsonb(i) ORDER BY export_id,position) FROM app.youtube_export_item i))::text",
+        String.class);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"QUEUED", "RUNNING", "FAILED", "UNCERTAIN", "SUCCEEDED", "CANCELLED"})
+  void activeLookupMatchesNewSubmissionBlockersAndReturnsTheFullJobWithoutSideEffects(String state)
+      throws Exception {
+    connected(U1);
+    UUID source = playlist(S1, S2, S3);
+    var accepted = create(source, UUID.randomUUID());
+    UUID id = UUID.fromString(accepted.path("id").asText());
+    owner.update(
+        "UPDATE app.youtube_export SET status=?,youtube_playlist_id='external-list',error_code='YOUTUBE_REQUEST_FAILED' WHERE id=?",
+        state,
+        id);
+    owner.update(
+        "UPDATE app.youtube_export_item SET status=CASE position WHEN 0 THEN 'COPIED' WHEN 1 THEN 'SKIPPED' ELSE 'PENDING' END WHERE export_id=?",
+        id);
+    // Another playlist and a later source version must not replace the accepted snapshot.
+    owner.update("UPDATE app.playlist SET version=version+1 WHERE id=?", source);
+    UUID another = playlist(S1);
+    String before = exportSnapshot();
+    var full = job(id);
+    boolean blocking = List.of("QUEUED", "RUNNING", "FAILED", "UNCERTAIN").contains(state);
+    var found = json(get(JOBS + "active").cookie(first.cookie()), null, 200);
+    assertThat(found.size()).isEqualTo(1);
+    assertThat(found.has("job")).isTrue();
+    if (blocking) {
+      assertThat(found.path("job")).isEqualTo(full);
+      assertThat(full.path("playlistId").asText()).isEqualTo(source.toString());
+      assertThat(full.path("version")).isEqualTo(accepted.path("version"));
+      assertThat(full.path("copiedCount").asInt()).isEqualTo(1);
+      assertThat(full.path("skippedCount").asInt()).isEqualTo(1);
+      assertThat(full.path("remainingCount").asInt()).isEqualTo(1);
+      assertThat(full.path("youtubeUrl").asText()).endsWith("list=external-list");
+      assertThat(full.path("errorCode").asText()).isEqualTo("YOUTUBE_REQUEST_FAILED");
+      // A different browser session for the same account recovers the same job.
+      assertThat(json(get(JOBS + "active"), browser(U1), 200).path("job")).isEqualTo(full);
+    } else assertThat(found.path("job").isNull()).isTrue();
+    assertThat(json(get(JOBS + "active"), second, 200).path("job").isNull()).isTrue();
+    assertThat(exportSnapshot()).isEqualTo(before);
+    assertThat(provider.getAllServeEvents()).isEmpty();
+    long version = playlists.detail(U1, another).version();
+    var submitted =
+        json(
+            post("/api/v1/me/playlists/" + another + "/youtube-exports")
+                .content(
+                    mapper.writeValueAsString(
+                        Map.of("requestId", UUID.randomUUID(), "version", version))),
+            first,
+            blocking ? 409 : 202);
+    if (blocking) {
+      assertThat(submitted.path("code").asText()).isEqualTo("EXPORT_ALREADY_ACTIVE");
+      assertThat(json(get(JOBS + "active"), first, 200).path("job")).isEqualTo(full);
+    }
+  }
+
+  @Test
+  void emptyActiveLookupIsExplicitNullWithoutAYouTubeConnection() throws Exception {
+    assertThat(json(get(JOBS + "active").cookie(first.cookie()), null, 200).toString())
+        .isEqualTo("{\"job\":null}");
+    assertThat(runtime.queryForObject("SELECT count(*) FROM app.youtube_export", Long.class))
+        .isZero();
+    assertThat(provider.getAllServeEvents()).isEmpty();
+  }
+
+  @Test
+  void activeLookupExcludesTerminalHistoryAndRetainsSourceIdentityAfterSourceDeletion()
+      throws Exception {
+    connected(U1);
+    UUID source = playlist(S1);
+    UUID old = UUID.fromString(create(source, UUID.randomUUID()).path("id").asText());
+    owner.update("UPDATE app.youtube_export SET status='SUCCEEDED' WHERE id=?", old);
+    var expected = create(source, UUID.randomUUID());
+    owner.update("DELETE FROM app.playlist WHERE id=?", source);
+    owner.update(
+        "UPDATE app.youtube_connection SET status='RECONNECT_REQUIRED' WHERE user_id=?", U1);
+    String before = exportSnapshot();
+    assertThat(json(get(JOBS + "active"), first, 200).path("job")).isEqualTo(expected);
+    assertThat(exportSnapshot()).isEqualTo(before);
+    assertThat(provider.getAllServeEvents()).isEmpty();
+  }
+
+  @Test
+  void otherAccountsActiveJobDoesNotHideOwnTerminalResult() throws Exception {
+    connected(U1);
+    connected(U2);
+    UUID source = playlist(S1);
+    UUID old = UUID.fromString(create(source, UUID.randomUUID()).path("id").asText());
+    owner.update("UPDATE app.youtube_export SET status='CANCELLED' WHERE id=?", old);
+    var another = playlists.create(U2, "Other account");
+    var updated = playlistItems.add(U2, another.id(), another.version(), S1);
+    json(
+        post("/api/v1/me/playlists/" + another.id() + "/youtube-exports")
+            .content(
+                mapper.writeValueAsString(
+                    Map.of(
+                        "requestId", UUID.randomUUID(), "version", updated.playlist().version()))),
+        second,
+        202);
+    String before = exportSnapshot();
+    assertThat(json(get(JOBS + "active"), first, 200).path("job").isNull()).isTrue();
+    assertThat(json(get(JOBS + "active"), second, 200).path("job").path("playlistId").asText())
+        .isEqualTo(another.id().toString());
+    assertThat(exportSnapshot()).isEqualTo(before);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"anonymous", "idle", "absolute"})
+  void activeLookupPreservesPersonalApiSessionErrors(String expiry) throws Exception {
+    connected(U1);
+    create(playlist(S1), UUID.randomUUID());
+    if (expiry.equals("idle")) sessions.deleteById(first.sessionId());
+    if (expiry.equals("absolute")) expireLogin(sessions, first);
+    var error = json(get(JOBS + "active"), expiry.equals("anonymous") ? null : first, 401);
+    assertThat(error.has("job")).isFalse();
+    assertThat(error.has("code")).isTrue();
+    assertThat(provider.getAllServeEvents()).isEmpty();
+  }
+
+  @Test
+  void storageFailureIsAnHttpErrorInsteadOfMissingActiveJob() throws Exception {
+    connected(U1);
+    var expected = create(playlist(S1), UUID.randomUUID());
+    String before = exportSnapshot();
+    owner.execute("REVOKE SELECT ON app.youtube_export FROM stelody_app");
+    try {
+      var error = json(get(JOBS + "active"), first, 503);
+      assertThat(error.path("code").asText()).isEqualTo("EXPORT_LOOKUP_UNAVAILABLE");
+      assertThat(error.has("job")).isFalse();
+      assertThat(error.path("fieldErrors").isEmpty()).isTrue();
+      assertThat(error.toString()).doesNotContain("permission denied", "SELECT", "test-refresh");
+    } finally {
+      owner.execute("GRANT SELECT ON app.youtube_export TO stelody_app");
+    }
+    assertThat(json(get(JOBS + "active"), first, 200).path("job")).isEqualTo(expected);
+    assertThat(exportSnapshot()).isEqualTo(before);
+    assertThat(provider.getAllServeEvents()).isEmpty();
+  }
+
   @Test
   void expiredJobAndUnusedGrantAreCleanedAndRevoked() throws Exception {
     connected(U1);

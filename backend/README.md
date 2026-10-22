@@ -84,6 +84,8 @@ cd backend
   - 복귀: 303으로 `youtubeResult=success/cancelled/failed`, 취소·실패 때만 `youtubeError`를 전달합니다. 기본 화면은 `/library/youtube`이며 세션 만료·잘못된 state도 각 클라이언트의 기본 화면으로 돌아옵니다. 성공 URL만으로 연결을 확정하지 말고 GET `/api/v1/me/youtube/connection`을 다시 조회합니다. 401이면 로그인 후 다시 연결합니다. 코드·토큰·state·내부 오류는 프론트 URL로 전달하지 않습니다. 오류 코드 전체는 OpenAPI 콜백의 303 응답을 참고합니다.
 - YouTube는 같은 Google 계정의 추가 동의를 받습니다. 내보내기에는 UUID `requestId`와 목록 `version`이 필요하며 요청 당시 이름·순서를 새 비공개 목록으로 복사합니다. 이용 불가 곡은 제외합니다. `UNCERTAIN`은 기존 작업을 확인·재시도하고 새 작업으로 반복하지 않습니다. 취소·연결 해제·탈퇴는 외부 목록을 삭제하지 않습니다.
 
+활성 내보내기 복구는 `GET /api/v1/me/youtube-exports/active`를 사용합니다. 본인의 `QUEUED·RUNNING·FAILED·UNCERTAIN` 작업을 기존 `Job` 전체와 같은 `200 {job: {...}}`로 반환하며, 대상이 없으면 `200 {job: null}`입니다. `job` 필드는 항상 존재합니다. `playlistId`·`version`은 접수 당시 원본 목록·버전이며 다른 탭·기기에서도 같은 작업을 조회합니다. `SUCCEEDED·CANCELLED`는 제외하고 조회 자체는 작업을 생성·재시도·취소하거나 YouTube를 호출하지 않습니다. 기능 비활성화·연결 재동의 필요 상태에서도 조회할 수 있습니다. 미인증·세션 만료는 기존 개인 API의 401, 저장소 조회 실패는 503 `EXPORT_LOOKUP_UNAVAILABLE`입니다. 조회 실패를 작업 없음으로 처리하지 않습니다. `EXPORT_ALREADY_ACTIVE`·접수 응답 유실 시 먼저 조회하고 `job.playlistId`의 화면에서 기존 작업을 확인합니다. GET에는 CSRF 토큰이 필요하지 않으며 `Cache-Control: no-store`를 유지합니다.
+
 | 설정 | 기본값·조건 |
 | --- | --- |
 | 개인 목록 한도 | `FAVORITE_LIMIT=5000`, `PLAYLIST_LIMIT=50`, `PLAYLIST_ITEM_LIMIT=500` |

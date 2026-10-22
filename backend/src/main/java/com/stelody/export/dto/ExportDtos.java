@@ -41,6 +41,14 @@ public final class ExportDtos {
                   "DISABLED: 기능 비활성이고 저장된 연결 없음, DISCONNECTED: 연결 없음, CONNECTED: 연결됨, RECONNECT_REQUIRED: 추가 동의 필요, REVOKING: 권한 철회 처리 중. 기능 비활성화만으로 기존 연결 상태를 덮어쓰지 않으며 REVOKING 중에는 추가 동의를 시작할 수 없습니다.")
           String status) {}
 
+  @Schema(requiredProperties = {"job"})
+  public record ActiveJob(
+      @Schema(
+              nullable = true,
+              description =
+                  "현재 계정의 QUEUED·RUNNING·FAILED·UNCERTAIN 작업. 대상이 없으면 null이며 조회 실패는 HTTP 오류로 구분합니다.")
+          Job job) {}
+
   public record Create(
       @Schema(
               description =
