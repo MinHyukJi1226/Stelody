@@ -135,13 +135,23 @@ class GoogleLoginIntegrationTest {
     final CookieManager cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
     final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
 
+    void allowSecureLocalhostCookiesForJdkTestClient() {
+      // Real browsers allow Secure cookies on localhost. The JDK HTTP test client does not;
+      // emulate that localhost exception only in its test cookie jar, never on the server.
+      cookies.getCookieStore().getCookies().stream()
+          .filter(c -> c.getName().equals("STELODY_LOGIN"))
+          .forEach(c -> c.setSecure(false));
+    }
+
     HttpResponse<String> get(String path) throws Exception {
+      allowSecureLocalhostCookiesForJdkTestClient();
       return client.send(
           HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build(),
           HttpResponse.BodyHandlers.ofString());
     }
 
     HttpResponse<String> logout(String csrf) throws Exception {
+      allowSecureLocalhostCookiesForJdkTestClient();
       var request =
           HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/auth/logout"))
               .POST(HttpRequest.BodyPublishers.noBody());
@@ -162,6 +172,7 @@ class GoogleLoginIntegrationTest {
     }
 
     HttpResponse<String> mutate(String method, String path, String csrf) throws Exception {
+      allowSecureLocalhostCookiesForJdkTestClient();
       var request =
           HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
               .method(method, HttpRequest.BodyPublishers.noBody());
@@ -281,6 +292,15 @@ class GoogleLoginIntegrationTest {
     assertThat(withdrawn.headers().allValues("Set-Cookie"))
         .anySatisfy(c -> assertThat(c).contains("SESSION=", "Max-Age=0"));
     assertThat(sessions.findByPrincipalName(id.toString())).isEmpty();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.persistent_login WHERE user_id=?", Integer.class, id))
+        .isZero();
+    assertThat(withdrawn.headers().allValues("Set-Cookie"))
+        .anySatisfy(
+            c ->
+                assertThat(c)
+                    .contains("STELODY_LOGIN=", "Max-Age=0", "Secure", "HttpOnly", "SameSite=Lax"));
     assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(401);
     assertThat(other.get("/api/v1/me").statusCode()).isEqualTo(401);
     assertThat(
@@ -1047,10 +1067,18 @@ class GoogleLoginIntegrationTest {
   }
 
   @Test
-  void absoluteAndIdleSessionExpiryRequireLogin() throws Exception {
+  void absoluteAndIdleSessionExpiryRestoreLoginWithoutGoogleInteraction() throws Exception {
     for (boolean absolute : new boolean[] {true, false}) {
       var browser = login(UUID.randomUUID().toString(), "expiry@example.invalid");
       String id = mapper.readTree(browser.get("/api/v1/me").body()).get("id").asText();
+      expireSession(sessions, id, absolute);
+      google.resetRequests();
+      assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(200);
+      google.verify(0, postRequestedFor(urlEqualTo("/token")));
+      browser.cookies.getCookieStore().getCookies().stream()
+          .filter(c -> c.getName().equals("STELODY_LOGIN"))
+          .toList()
+          .forEach(c -> browser.cookies.getCookieStore().remove(null, c));
       expireSession(sessions, id, absolute);
       assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(401);
     }
@@ -1064,13 +1092,360 @@ class GoogleLoginIntegrationTest {
           session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
       context.setAuthentication(
           UsernamePasswordAuthenticationToken.authenticated(
-              new SessionUser(UUID.fromString(id), Instant.now().minusSeconds(43201)),
+              new SessionUser(
+                  UUID.fromString(id),
+                  Instant.now().minusSeconds(43201),
+                  ((SessionUser) context.getAuthentication().getPrincipal()).loginId(),
+                  ((SessionUser) context.getAuthentication().getPrincipal()).loginExpiresAt()),
               null,
               context.getAuthentication().getAuthorities()));
       session.setAttribute(
           HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
     } else session.setLastAccessedTime(Instant.now().minusSeconds(1801));
     repository.save(session);
+  }
+
+  String loginCookie(Browser browser) {
+    return browser.cookies.getCookieStore().getCookies().stream()
+        .filter(c -> c.getName().equals("STELODY_LOGIN") && !c.getValue().isEmpty())
+        .findFirst()
+        .orElseThrow()
+        .getValue();
+  }
+
+  Browser rememberedBrowser(String cookie) {
+    var browser = new Browser();
+    var c = new java.net.HttpCookie("STELODY_LOGIN", cookie);
+    c.setPath("/");
+    c.setDomain("localhost.local");
+    c.setVersion(0);
+    browser.cookies.getCookieStore().add(URI.create("http://localhost:" + port), c);
+    return browser;
+  }
+
+  @Test
+  void regularGoogleLoginCreatesOnlyHashedDeviceCredentialAndPersistentSecureCookie()
+      throws Exception {
+    var browser = new Browser();
+    var authorization = authorize(browser);
+    tokens(authorization, UUID.randomUUID().toString(), "remember@example.invalid", "none");
+    var result = callback(browser, authorization);
+    assertThat(result.statusCode()).isEqualTo(302);
+    String header =
+        result.headers().allValues("Set-Cookie").stream()
+            .filter(c -> c.startsWith("STELODY_LOGIN=") && !c.contains("Max-Age=0"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(header).contains("Secure", "HttpOnly", "SameSite=Lax", "Path=/");
+    long age = Long.parseLong(header.split("Max-Age=")[1].split(";")[0]);
+    assertThat(age).isBetween(2591990L, 2592000L);
+    String cookie = loginCookie(browser);
+    String selector = cookie.substring(0, 36), secret = cookie.substring(37);
+    var row =
+        jdbc.queryForMap(
+            "SELECT * FROM app.persistent_login WHERE id=?", UUID.fromString(selector));
+    assertThat(row.get("token_hash").toString()).hasSize(64).doesNotContain(secret);
+    assertThat(row.toString()).doesNotContain(secret, "test-access", "test-refresh");
+    assertThat(((java.sql.Timestamp) row.get("expires_at")).toInstant())
+        .isEqualTo(((java.sql.Timestamp) row.get("created_at")).toInstant().plusSeconds(2592000));
+    assertThat(sessionUser(accountId(browser)).loginId()).isEqualTo(UUID.fromString(selector));
+  }
+
+  @Test
+  void browserRestartRestoresIdentityRotatesCredentialAndKeepsTheOriginalThirtyDayDeadline()
+      throws Exception {
+    var first = login(UUID.randomUUID().toString(), "restart@example.invalid");
+    UUID user = accountId(first);
+    String old = loginCookie(first);
+    var expiry =
+        jdbc.queryForObject(
+            "SELECT expires_at FROM app.persistent_login WHERE id=?",
+            java.sql.Timestamp.class,
+            UUID.fromString(old.substring(0, 36)));
+    var restarted = rememberedBrowser(old);
+    String before = restarted.csrf();
+    google.resetRequests();
+    assertThat(accountId(restarted)).isEqualTo(user);
+    assertThat(loginCookie(restarted)).isNotEqualTo(old);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT expires_at FROM app.persistent_login WHERE id=?",
+                java.sql.Timestamp.class,
+                UUID.fromString(old.substring(0, 36))))
+        .isEqualTo(expiry);
+    assertThat(restarted.csrf()).isNotEmpty();
+    assertThat(before).isNotEmpty();
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    assertThat(restarted.get("/api/v1/me/withdrawal-confirmation").body()).contains("false");
+    assertThat(restarted.mutate("DELETE", "/api/v1/me", restarted.csrf()).statusCode())
+        .isEqualTo(409);
+  }
+
+  @Test
+  void expiredSessionCanSaveAPlaylistUsingItsExistingCsrfHeaderButMissingOrWrongCsrfStillFails()
+      throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "write@example.invalid");
+    UUID user = accountId(browser);
+    String csrf = browser.csrf();
+    expireSession(sessions, user.toString(), false);
+    browser.allowSecureLocalhostCookiesForJdkTestClient();
+    var result =
+        browser.client.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/me/playlists"))
+                .header("X-CSRF-TOKEN", csrf)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"Restored session\"}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+    assertThat(result.statusCode()).isEqualTo(201);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.playlist WHERE user_id=? AND name='Restored session'",
+                Integer.class,
+                user))
+        .isEqualTo(1);
+    for (String bad : new String[] {null, "invalid"}) {
+      expireSession(sessions, user.toString(), false);
+      assertThat(browser.mutate("POST", "/api/v1/me/playlists", bad).statusCode()).isEqualTo(403);
+    }
+  }
+
+  @Test
+  void restorationChangesAnAnonymousSessionIdAndDoesNotReviveWithdrawalProof() throws Exception {
+    var first = login(UUID.randomUUID().toString(), "fixation@example.invalid");
+    UUID user = accountId(first);
+    String remember = loginCookie(first);
+    var anonymous = new Browser();
+    anonymous.csrf();
+    String old = anonymous.cookie();
+    var token = new java.net.HttpCookie("STELODY_LOGIN", remember);
+    token.setPath("/");
+    token.setDomain("localhost.local");
+    token.setVersion(0);
+    anonymous.cookies.getCookieStore().add(URI.create("http://localhost:" + port), token);
+    assertThat(accountId(anonymous)).isEqualTo(user);
+    assertThat(anonymous.cookie()).isNotEqualTo(old);
+    assertThat(anonymous.mutate("DELETE", "/api/v1/me", anonymous.csrf()).statusCode())
+        .isEqualTo(409);
+  }
+
+  @Test
+  void replayOutsideTheConcurrentRequestGraceWindowCannotCreateASession() throws Exception {
+    var first = login(UUID.randomUUID().toString(), "replay-device@example.invalid");
+    String old = loginCookie(first);
+    var restored = rememberedBrowser(old);
+    UUID user = accountId(restored);
+    var replay = rememberedBrowser(old);
+    assertThat(accountId(replay)).isEqualTo(user);
+    assertThat(loginCookie(replay))
+        .isEqualTo(old); // Grace request never overwrites the winning cookie.
+    jdbc.update(
+        "UPDATE app.persistent_login SET previous_valid_until=now()-interval '1 second' WHERE id=?",
+        UUID.fromString(old.substring(0, 36)));
+    assertThat(rememberedBrowser(old).get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(restored.get("/api/v1/me").statusCode()).isEqualTo(200);
+    String fake = old.substring(0, 37) + "A".repeat(43);
+    assertThat(rememberedBrowser(fake).get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(accountId(rememberedBrowser(loginCookie(restored)))).isEqualTo(user);
+  }
+
+  @Test
+  void concurrentRestorationsDoNotRotateEachOthersCredentialAway() throws Exception {
+    var first = login(UUID.randomUUID().toString(), "parallel-device@example.invalid");
+    String old = loginCookie(first);
+    UUID user = accountId(first);
+    var a = rememberedBrowser(old);
+    var b = rememberedBrowser(old);
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var barrier = new java.util.concurrent.CyclicBarrier(2);
+      var x =
+          pool.submit(
+              () -> {
+                barrier.await();
+                return a.get("/api/v1/me");
+              });
+      var y =
+          pool.submit(
+              () -> {
+                barrier.await();
+                return b.get("/api/v1/me");
+              });
+      assertThat(x.get(10, java.util.concurrent.TimeUnit.SECONDS).statusCode()).isEqualTo(200);
+      assertThat(y.get(10, java.util.concurrent.TimeUnit.SECONDS).statusCode()).isEqualTo(200);
+    }
+    assertThat(accountId(a)).isEqualTo(user);
+    assertThat(accountId(b)).isEqualTo(user);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.persistent_login WHERE user_id=?", Integer.class, user))
+        .isEqualTo(1);
+    assertThat(java.util.List.of(loginCookie(a), loginCookie(b))).contains(old);
+  }
+
+  @Test
+  void thirtyDayExpiryEndsBothTheCredentialAndAnExistingRestoredSession() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "hard-expiry@example.invalid");
+    String cookie = loginCookie(browser);
+    UUID id = UUID.fromString(cookie.substring(0, 36));
+    var restored = rememberedBrowser(cookie);
+    assertThat(restored.get("/api/v1/me").statusCode()).isEqualTo(200);
+    jdbc.update(
+        "UPDATE app.persistent_login SET created_at=now()-interval '31 days',expires_at=now()-interval '1 day' WHERE id=?",
+        id);
+    assertThat(restored.get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(rememberedBrowser(loginCookie(browser)).get("/api/v1/me").statusCode())
+        .isEqualTo(401);
+  }
+
+  @Test
+  void logoutRevokesThisDeviceAndAllSessionsRestoredFromItButLeavesAnotherDeviceSignedIn()
+      throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var first = login(subject, "logout-device@example.invalid");
+    UUID user = accountId(first);
+    String stolen = loginCookie(first);
+    var concurrent = rememberedBrowser(stolen);
+    assertThat(accountId(concurrent)).isEqualTo(user);
+    var other = login(subject, "logout-device@example.invalid");
+    assertThat(first.logout(first.csrf()).statusCode()).isEqualTo(204);
+    assertThat(concurrent.get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(rememberedBrowser(stolen).get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(other.get("/api/v1/me").statusCode()).isEqualTo(200);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"ADMIN", "SUSPENDED"})
+  void accountRoleOrStatusChangesPermanentlyRevokeExistingDeviceCredentials(String change)
+      throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "changed-account@example.invalid");
+    UUID user = accountId(browser);
+    String cookie = loginCookie(browser);
+    if (change.equals("ADMIN"))
+      owner().update("UPDATE app.app_user SET role='ADMIN' WHERE id=?", user);
+    else owner().update("UPDATE app.app_user SET status='SUSPENDED' WHERE id=?", user);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.persistent_login WHERE user_id=?", Integer.class, user))
+        .isZero();
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(401);
+    assertThat(rememberedBrowser(cookie).get("/api/v1/me").statusCode()).isEqualTo(401);
+    owner().update("UPDATE app.app_user SET role='USER',status='ACTIVE' WHERE id=?", user);
+    assertThat(rememberedBrowser(cookie).get("/api/v1/me").statusCode()).isEqualTo(401);
+    if (change.equals("ADMIN")) {
+      owner().update("UPDATE app.app_user SET role='ADMIN' WHERE id=?", user);
+      var admin = login(subject, "changed-account@example.invalid");
+      assertThat(admin.get("/api/v1/me").statusCode()).isEqualTo(200);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM app.persistent_login WHERE user_id=?", Integer.class, user))
+          .isZero();
+      expireSession(sessions, user.toString(), true);
+      assertThat(admin.get("/api/v1/me").statusCode()).isEqualTo(401);
+    }
+  }
+
+  @Test
+  void accountDeletionCascadesEveryDeviceCredential() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "deleted-device@example.invalid");
+    UUID user = accountId(browser);
+    String cookie = loginCookie(browser);
+    owner().update("DELETE FROM app.app_user WHERE id=?", user);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.persistent_login WHERE user_id=?", Integer.class, user))
+        .isZero();
+    assertThat(rememberedBrowser(cookie).get("/api/v1/me").statusCode()).isEqualTo(401);
+  }
+
+  @Test
+  void databaseOutageReturns503WithoutLosingTheDeviceCookieOrPretendingToBeSignedOut()
+      throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "db-device@example.invalid");
+    String cookie = loginCookie(browser);
+    var restarted = rememberedBrowser(cookie);
+    owner().execute("REVOKE SELECT ON app.persistent_login FROM stelody_app");
+    try {
+      var result = restarted.get("/api/v1/me");
+      assertThat(result.statusCode()).isEqualTo(503);
+      assertThat(result.body())
+          .contains("LOGIN_STORAGE_UNAVAILABLE")
+          .doesNotContain(cookie, "SELECT", "permission denied");
+      assertThat(result.headers().allValues("Set-Cookie"))
+          .noneMatch(c -> c.startsWith("STELODY_LOGIN="));
+    } finally {
+      owner().execute("GRANT SELECT ON app.persistent_login TO stelody_app");
+    }
+    assertThat(restarted.get("/api/v1/me").statusCode()).isEqualTo(200);
+  }
+
+  @Test
+  void googleReauthenticationDoesNotExtendDeviceExpiryAndNewCsrfSurvivesSessionRestoration()
+      throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "reauth-device@example.invalid");
+    UUID user = accountId(browser);
+    UUID grant = UUID.fromString(loginCookie(browser).substring(0, 36));
+    var deadline =
+        jdbc.queryForObject(
+            "SELECT expires_at FROM app.persistent_login WHERE id=?",
+            java.sql.Timestamp.class,
+            grant);
+    String oldCsrf = browser.csrf();
+    var auth = reauthenticate(browser);
+    tokens(auth, subject, "reauth-device@example.invalid", "none");
+    assertThat(callback(browser, auth).statusCode()).isEqualTo(302);
+    String newCsrf = browser.csrf();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT expires_at FROM app.persistent_login WHERE id=?",
+                java.sql.Timestamp.class,
+                grant))
+        .isEqualTo(deadline);
+    assertThat(browser.logout(oldCsrf).statusCode()).isEqualTo(403);
+    expireSession(sessions, user.toString(), false);
+    assertThat(browser.logout(newCsrf).statusCode()).isEqualTo(204);
+    assertThat(deadline.toInstant()).isBefore(Instant.now().plusSeconds(2592000));
+  }
+
+  @Test
+  void logoutStorageFailureIsNotReportedAsSuccessAndCanBeRetried() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "logout-outage@example.invalid");
+    UUID user = accountId(browser);
+    String csrf = browser.csrf();
+    owner().execute("REVOKE DELETE ON app.persistent_login FROM stelody_app");
+    try {
+      var result = browser.logout(csrf);
+      assertThat(result.statusCode()).isEqualTo(503);
+      assertThat(result.body())
+          .contains("LOGIN_STORAGE_UNAVAILABLE")
+          .doesNotContain("permission denied", "DELETE FROM");
+      assertThat(result.headers().allValues("Set-Cookie"))
+          .noneMatch(c -> c.startsWith("STELODY_LOGIN="));
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM app.persistent_login WHERE user_id=?", Integer.class, user))
+          .isEqualTo(1);
+    } finally {
+      owner().execute("GRANT DELETE ON app.persistent_login TO stelody_app");
+    }
+    assertThat(browser.logout(csrf).statusCode()).isEqualTo(204);
+    assertThat(browser.get("/api/v1/me").statusCode()).isEqualTo(401);
+  }
+
+  @Test
+  void malformedDeviceCredentialDoesNotAuthenticateOrDeleteAnExistingValidCredential()
+      throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "malformed-device@example.invalid");
+    UUID user = accountId(browser);
+    String valid = loginCookie(browser);
+    for (String value : new String[] {"invalid", valid.substring(0, 36), valid + "junk", ""}) {
+      var result = rememberedBrowser(value).get("/api/v1/me");
+      assertThat(result.statusCode()).isEqualTo(401);
+      assertThat(result.headers().allValues("Set-Cookie"))
+          .anySatisfy(c -> assertThat(c).contains("STELODY_LOGIN=", "Max-Age=0"));
+    }
+    assertThat(accountId(rememberedBrowser(valid))).isEqualTo(user);
   }
 
   @Test

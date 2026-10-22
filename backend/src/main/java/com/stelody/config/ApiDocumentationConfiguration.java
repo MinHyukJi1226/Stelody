@@ -28,7 +28,7 @@ public class ApiDocumentationConfiguration {
                 .title("Stelody API")
                 .version("v1")
                 .description(
-                    "공개 곡·멤버 조회는 로그인 없이 사용합니다. 개인 API는 Google 로그인 후 SESSION 쿠키, 관리자 API는 현재 ADMIN 역할이 필요합니다. 변경 요청은 /api/v1/auth/csrf에서 받은 토큰을 X-CSRF-TOKEN 헤더로 전달합니다. 로그인·로그아웃 후 토큰을 다시 조회하세요. Google·YouTube 동의는 브라우저 이동으로 진행하며 OAuth 비밀키를 클라이언트에 전달하지 않습니다."))
+                    "공개 곡·멤버 조회는 로그인 없이 사용합니다. 개인 API는 Google 로그인 후 SESSION 쿠키, 관리자 API는 현재 ADMIN 역할이 필요합니다. 변경 요청은 /api/v1/auth/csrf에서 받은 토큰을 X-CSRF-TOKEN 헤더로 전달합니다. 로그인·로그아웃 후 토큰을 다시 조회하세요. 일반 USER는 Secure·HttpOnly·SameSite=Lax의 STELODY_LOGIN 쿠키로 최초 Google 로그인부터 30일간 세션을 자동 복구합니다. 자동 복구·탈퇴 재인증은 30일 기한을 연장하지 않습니다. ADMIN은 자동 로그인 없이 비활동 30분·최대 12시간 세션만 사용합니다. 로그인 저장소 장애는 503 LOGIN_STORAGE_UNAVAILABLE이며 로그아웃 또는 작업 성공으로 간주하지 않습니다. Google·YouTube 동의는 브라우저 이동으로 진행하며 OAuth 비밀키를 클라이언트에 전달하지 않습니다."))
         .servers(List.of(new Server().url("/")))
         .components(
             new Components()
@@ -38,7 +38,8 @@ public class ApiDocumentationConfiguration {
                         .type(SecurityScheme.Type.APIKEY)
                         .in(SecurityScheme.In.COOKIE)
                         .name("SESSION")
-                        .description("Google 로그인으로 설정되는 HttpOnly 쿠키. 같은 브라우저의 세션을 사용합니다."))
+                        .description(
+                            "Google 로그인으로 설정되는 HttpOnly 세션 쿠키. 비활동 30분·생성 후 최대 12시간입니다. 일반 USER는 별도 STELODY_LOGIN 쿠키가 유효하면 다음 API 요청에서 새 세션을 자동 생성합니다. 브라우저가 쿠키를 관리하며 프론트에서 값을 읽거나 저장하지 않습니다. 관리자·만료·폐기된 쿠키는 복구하지 않습니다."))
                 .addSecuritySchemes(
                     "csrf",
                     new SecurityScheme()
@@ -63,7 +64,9 @@ public class ApiDocumentationConfiguration {
                               new ApiResponses()
                                   .addApiResponse(
                                       "204",
-                                      new ApiResponse().description("세션과 SESSION 쿠키를 제거합니다.")))));
+                                      new ApiResponse()
+                                          .description(
+                                              "현재 기기의 로그인 유지 자격과 SESSION·STELODY_LOGIN 쿠키를 폐기합니다. 같은 자격으로 복구된 세션도 다음 요청부터 무효입니다. 다른 기기는 유지합니다. 저장소 실패 시 503이며 로그아웃 완료로 표시하지 말고 재시도합니다.")))));
       api.getPaths()
           .forEach(
               (path, item) ->
@@ -106,7 +109,8 @@ public class ApiDocumentationConfiguration {
                                 .getResponses()
                                 .addApiResponse(
                                     "default",
-                                    problem("요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요."));
+                                    problem(
+                                        "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."));
                             if (personal || admin)
                               operation
                                   .getResponses()
@@ -119,6 +123,13 @@ public class ApiDocumentationConfiguration {
                             playlistOrdering(path, verb, operation);
                             frontendErrors(path, verb, operation);
                             youtubeReturn(path, operation);
+                            if (List.of("/api/v1/me", "/api/v1/auth/csrf", "/api/v1/auth/logout")
+                                .contains(path))
+                              errorCodes(
+                                  operation,
+                                  "503",
+                                  "로그인 확인·복구·폐기 저장소 오류입니다. 로그인 해제나 변경 완료로 처리하지 말고 재시도합니다.",
+                                  "LOGIN_STORAGE_UNAVAILABLE");
                             operation
                                 .getResponses()
                                 .values()
@@ -187,7 +198,12 @@ public class ApiDocumentationConfiguration {
               "400",
               problem(
                   "INVALID_LOGIN_CLIENT: 알 수 없거나 비활성인 loginClient 또는 중복 값입니다. INVALID_LOGIN_RETURN: 허용하지 않는 내부 복귀 경로입니다."));
-      login.getResponses().addApiResponse("503", problem("Google 로그인 설정이 없습니다."));
+      login
+          .getResponses()
+          .addApiResponse(
+              "503",
+              problem(
+                  "GOOGLE_LOGIN_UNAVAILABLE: Google 로그인 설정이 없습니다. LOGIN_STORAGE_UNAVAILABLE: 로그인 유지 정보 저장 실패입니다."));
       login
           .getResponses()
           .get("302")

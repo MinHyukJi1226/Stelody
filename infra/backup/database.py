@@ -16,7 +16,7 @@ import tempfile
 import uuid
 
 MAX_AGE = timedelta(days=7)
-SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24)
+SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25)
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
@@ -30,6 +30,10 @@ BASE = Path(__file__).resolve().parent
 
 class OperationError(Exception):
     pass
+
+
+def excluded_data(version):
+    return EXCLUDED_DATA + (('app.persistent_login',) if int(version) >= 25 else ())
 
 
 def now():
@@ -153,13 +157,13 @@ def create_backup(root, descriptor):
         dump = staging / 'database.dump'
         command = ['pg_dump', '--no-password', '--format=custom', '--schema=app', '--schema=session',
                    '--extension=pg_trgm', '--no-owner', '--file=' + str(dump)]
-        command += ['--exclude-table-data=' + table for table in EXCLUDED_DATA]
+        command += ['--exclude-table-data=' + table for table in excluded_data(version)]
         run(command, log=staging / 'dump.log', pass_fds=(descriptor,))
         dump.chmod(0o600)
         run(['pg_restore', '--list', str(dump)], log=staging / 'archive-check.log', pass_fds=(descriptor,))
         manifest = {'format': 1, 'createdAt': created.isoformat(), 'expiresAt': expires.isoformat(), 'schemaVersion': int(version),
                     'schemaOwner': info['user'], 'sourceDatabase': info['database'],
-                    'sha256': digest(dump), 'excludedData': list(EXCLUDED_DATA)}
+                    'sha256': digest(dump), 'excludedData': list(excluded_data(version))}
         (staging / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         (staging / 'manifest.json').chmod(0o600)
         staging.rename(destination)
@@ -183,7 +187,7 @@ def validate_archive(directory):
     metadata = json.loads((directory / 'manifest.json').read_text())
     if metadata.get('format') != 1 or metadata.get('schemaVersion') not in SUPPORTED_SCHEMA_VERSIONS:
         raise OperationError('Unsupported backup format/schema')
-    if metadata.get('excludedData') != list(EXCLUDED_DATA):
+    if metadata.get('excludedData') != list(excluded_data(metadata['schemaVersion'])):
         raise OperationError('Backup exclusion policy does not match')
     age = now() - instant(metadata['createdAt'])
     expiry = instant(metadata['expiresAt'])
