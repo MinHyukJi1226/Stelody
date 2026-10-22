@@ -76,7 +76,7 @@ export function useYouTubeActions(
       if (!sameAccount(client, user)) return
       if (error instanceof ApiError && error.status === 401) {
         await endLocalSession(client)
-        void navigate(loginPath(youtubePath))
+        void navigate(loginPath(returnTo))
       }
     },
   })

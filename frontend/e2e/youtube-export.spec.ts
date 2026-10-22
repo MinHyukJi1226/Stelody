@@ -58,6 +58,7 @@ async function setup(page: Page) {
     sourceFailure: 0,
     readFailure: 0,
     createFailure: null as null | { status: number; code: string },
+    authorizationFailure: null as null | { status: number; code: string },
     loseResponse: false,
     writeGate: Promise.resolve(),
     readGate: Promise.resolve(),
@@ -81,6 +82,13 @@ async function setup(page: Page) {
   )
   await page.route('**/api/v1/me/youtube/authorizations', (r) => {
     state.authorizations.push(r.request().postDataJSON())
+    if (state.authorizationFailure) {
+      if (state.authorizationFailure.status === 401) state.loggedIn = false
+      return r.fulfill({
+        status: state.authorizationFailure.status,
+        json: state.authorizationFailure,
+      })
+    }
     return r.fulfill({
       json: {
         authorizationUrl:
@@ -668,6 +676,39 @@ test('연결 후 원래 작업으로 복귀하며 자동 재시도하지 않는�
   expect(s.created).toHaveLength(0)
   expect(s.changed).toHaveLength(0)
 })
+
+test('내보내기 재로그인 복귀는 연결 관리의 원래 작업 경로를 유지한다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  s.connection = 'RECONNECT_REQUIRED'
+  s.job.status = 'FAILED'
+  s.job.errorCode = 'YOUTUBE_RECONNECT_REQUIRED'
+  await open(page, jobPath)
+  await page.getByRole('link', { name: 'YouTube 연결 관리' }).click()
+  const managementPath = `/library/youtube?${new URLSearchParams({ returnTo: jobPath })}`
+  s.authorizationFailure = { status: 401, code: 'SESSION_EXPIRED' }
+  await page.getByRole('button', { name: '다시 연결', exact: true }).click()
+  await expect(page).toHaveURL(/\/login\?returnTo=/)
+  expect(new URL(page.url()).searchParams.get('returnTo')).toBe(managementPath)
+  const attempts = s.authorizations.length
+  s.loggedIn = true
+  s.authorizationFailure = null
+  await page.goto(`${page.url()}&loginResult=success`)
+  await expect(
+    page.getByRole('heading', { name: 'YouTube 연결 관리', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: '내보내기로 돌아가기' }),
+  ).toHaveAttribute('href', jobPath)
+  expect(s.authorizations).toHaveLength(attempts)
+  await page.getByRole('link', { name: '내보내기로 돌아가기' }).click()
+  await expect(page).toHaveURL(new RegExp(`jobId=${jobId}$`))
+  await expect(retry(page)).toBeDisabled()
+  expect(s.created).toHaveLength(0)
+  expect(s.changed).toHaveLength(0)
+})
+
 test('늦게 도착한 접수 응답이 떠난 화면을 다시 열지 않는다', async ({
   page,
   isMobile,
