@@ -20,6 +20,14 @@ public class ExportService {
     return store.tx(() -> store.create(user, playlist, request.requestId(), request.version()));
   }
 
+  public ExportDtos.ActiveJob activeJob(UUID user) {
+    try {
+      return new ExportDtos.ActiveJob(store.activeJob(user).orElse(null));
+    } catch (org.springframework.dao.DataAccessException e) {
+      throw new com.stelody.export.web.ExportException(503, "EXPORT_LOOKUP_UNAVAILABLE");
+    }
+  }
+
   public ExportDtos.Job job(UUID user, UUID id) {
     return store.job(user, id);
   }

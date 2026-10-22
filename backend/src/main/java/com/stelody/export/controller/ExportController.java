@@ -99,6 +99,15 @@ public class ExportController {
         .body(job);
   }
 
+  @GetMapping("/api/v1/me/youtube-exports/active")
+  @Operation(
+      summary = "현재 사용자의 기존 활성 내보내기 작업 조회",
+      description =
+          "새 접수를 차단하는 QUEUED·RUNNING·FAILED·UNCERTAIN 작업 한 건을 조회합니다. 200 {job:null}은 대상 작업 없음이며, 작업이 있으면 기존 Job 전체를 반환합니다. SUCCEEDED·CANCELLED는 제외합니다. 작업·연결 상태를 변경하거나 외부 YouTube API를 호출하지 않으며 기능 비활성화·연결 재동의 필요 상태에서도 조회할 수 있습니다. 다른 탭·기기 및 접수 응답 유실·409 EXPORT_ALREADY_ACTIVE 이후 복구에 사용하며 job.playlistId로 원본 목록을 선택합니다. 조회 오류는 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않습니다.")
+  public ExportDtos.ActiveJob activeJob(@AuthenticationPrincipal SessionUser user) {
+    return exports.activeJob(user.id());
+  }
+
   @GetMapping("/api/v1/me/youtube-exports/{id}")
   @Operation(
       summary = "내보내기 진행 상태",

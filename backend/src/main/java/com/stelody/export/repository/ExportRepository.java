@@ -15,6 +15,32 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Repository
 public class ExportRepository {
   public static final long PROCESS_LOCK = 2026100301L;
+  private static final List<String> ACTIVE_JOB_STATUSES =
+      List.of("QUEUED", "RUNNING", "FAILED", "UNCERTAIN");
+  private static final String JOB_SELECT =
+      """
+      SELECT e.*,count(i.position) AS total,count(*) FILTER (WHERE i.status='COPIED') AS copied,
+        count(*) FILTER (WHERE i.status='SKIPPED') AS skipped,count(*) FILTER(WHERE i.status='PENDING') AS remaining
+      FROM app.youtube_export e LEFT JOIN app.youtube_export_item i ON i.export_id=e.id
+      """;
+  private static final org.springframework.jdbc.core.RowMapper<ExportDtos.Job> JOB_MAPPER =
+      (r, n) -> {
+        String external = r.getString("youtube_playlist_id");
+        return new ExportDtos.Job(
+            r.getObject("id", UUID.class),
+            r.getObject("source_playlist_id", UUID.class),
+            r.getLong("source_version"),
+            r.getString("status"),
+            r.getInt("total"),
+            r.getInt("copied"),
+            r.getInt("skipped"),
+            r.getInt("remaining"),
+            external,
+            external == null ? null : "https://www.youtube.com/playlist?list=" + external,
+            r.getString("error_code"),
+            r.getTimestamp("created_at").toInstant(),
+            r.getTimestamp("updated_at").toInstant());
+      };
 
   public record Connection(
       UUID userId,
@@ -279,8 +305,9 @@ public class ExportRepository {
     if (connection(user).filter(c -> c.status().equals("CONNECTED")).isEmpty())
       throw new ExportException(409, "YOUTUBE_CONNECTION_REQUIRED");
     if (jdbc.sql(
-            "SELECT EXISTS(SELECT 1 FROM app.youtube_export WHERE user_id=:user AND status IN ('QUEUED','RUNNING','FAILED','UNCERTAIN'))")
+            "SELECT EXISTS(SELECT 1 FROM app.youtube_export WHERE user_id=:user AND status IN (:statuses))")
         .param("user", user)
+        .param("statuses", ACTIVE_JOB_STATUSES)
         .query(Boolean.class)
         .single()) throw new ExportException(409, "EXPORT_ALREADY_ACTIVE");
     var rows =
@@ -327,34 +354,19 @@ public class ExportRepository {
     return job(user, id);
   }
 
+  public Optional<ExportDtos.Job> activeJob(UUID user) {
+    return jdbc.sql(JOB_SELECT + " WHERE e.user_id=:user AND e.status IN (:statuses) GROUP BY e.id")
+        .param("user", user)
+        .param("statuses", ACTIVE_JOB_STATUSES)
+        .query(JOB_MAPPER)
+        .optional();
+  }
+
   public ExportDtos.Job job(UUID user, UUID id) {
-    return jdbc.sql(
-            """
-        SELECT e.*,count(i.position) AS total,count(*) FILTER (WHERE i.status='COPIED') AS copied,
-          count(*) FILTER (WHERE i.status='SKIPPED') AS skipped,count(*) FILTER(WHERE i.status='PENDING') AS remaining
-        FROM app.youtube_export e LEFT JOIN app.youtube_export_item i ON i.export_id=e.id
-        WHERE e.id=:id AND e.user_id=:user GROUP BY e.id
-        """)
+    return jdbc.sql(JOB_SELECT + " WHERE e.id=:id AND e.user_id=:user GROUP BY e.id")
         .param("id", id)
         .param("user", user)
-        .query(
-            (r, n) -> {
-              String external = r.getString("youtube_playlist_id");
-              return new ExportDtos.Job(
-                  id,
-                  r.getObject("source_playlist_id", UUID.class),
-                  r.getLong("source_version"),
-                  r.getString("status"),
-                  r.getInt("total"),
-                  r.getInt("copied"),
-                  r.getInt("skipped"),
-                  r.getInt("remaining"),
-                  external,
-                  external == null ? null : "https://www.youtube.com/playlist?list=" + external,
-                  r.getString("error_code"),
-                  r.getTimestamp("created_at").toInstant(),
-                  r.getTimestamp("updated_at").toInstant());
-            })
+        .query(JOB_MAPPER)
         .optional()
         .orElseThrow(ExportException::missing);
   }

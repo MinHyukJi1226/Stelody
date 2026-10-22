@@ -466,7 +466,15 @@ public class ApiDocumentationConfiguration {
           "EXPORT_ALREADY_ACTIVE",
           "NO_EXPORTABLE_SONGS");
     }
-    if (path.startsWith("/api/v1/me/youtube-exports/")) {
+    if (path.equals("/api/v1/me/youtube-exports/active")) {
+      errorCodes(
+          operation,
+          "503",
+          "EXPORT_LOOKUP_UNAVAILABLE: 저장소의 일시적 장애로 조회하지 못했습니다. 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않고 조회를 다시 시도합니다.",
+          "EXPORT_LOOKUP_UNAVAILABLE");
+    }
+    if (path.startsWith("/api/v1/me/youtube-exports/")
+        && !path.equals("/api/v1/me/youtube-exports/active")) {
       errorCodes(
           operation,
           "404",
