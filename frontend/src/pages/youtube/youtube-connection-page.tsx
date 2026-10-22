@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { sessionOptions } from '@/features/auth/session'
+import { safeReturnPath } from '@/features/auth/return-path'
 import { apiClient } from '@/shared/api/client'
 import {
   cleanYouTubeReturn,
@@ -38,7 +39,19 @@ function ConnectionScreen({ user }: { user: string }) {
   const [leaving, setLeaving] = useState(false)
   const query = useQuery(youtubeConnectionOptions(user))
   const { refetch } = query
-  const action = useYouTubeActions(user)
+  const returnValue = new URLSearchParams(location.search).get('returnTo')
+  const safeReturn = safeReturnPath(returnValue)
+  const returnTo =
+    /^\/library\/playlists\/[0-9a-f-]+\/youtube-export(?:\?|$)/i.test(
+      safeReturn,
+    )
+      ? safeReturn
+      : '/library/playlists'
+  const authorizationReturn =
+    returnTo === '/library/playlists'
+      ? '/library/youtube'
+      : `/library/youtube?${new URLSearchParams({ returnTo })}`
+  const action = useYouTubeActions(user, authorizationReturn)
   const current = query.isError ? undefined : query.data
   const mounted = useRef(false)
 
@@ -170,7 +183,11 @@ function ConnectionScreen({ user }: { user: string }) {
           onRetry={() => void query.refetch()}
         />
         <Button asChild>
-          <Link to="/library/playlists">플레이리스트로 돌아가기</Link>
+          <Link to={returnTo}>
+            {returnTo === '/library/playlists'
+              ? '플레이리스트로 돌아가기'
+              : '내보내기로 돌아가기'}
+          </Link>
         </Button>
       </section>
       <SiteFooter />

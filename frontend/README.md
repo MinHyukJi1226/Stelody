@@ -137,16 +137,28 @@ API_PROXY_TARGET=https://stelody-backend.onrender.com
 ## YouTube 연결 관리
 
 - `/library/youtube`: 로그인한 사용자의 연결 상태 조회·연결·재연결·해제를 제공합니다. 플레이리스트 목록의 정상·빈 화면에서 진입합니다. 연결 관리 화면은 플레이리스트 내보내기를 실행하지 않습니다.
-- 인증 시작은 CSRF를 포함한 `POST /me/youtube/authorizations` 응답의 Google URL로 브라우저를 이동합니다. `returnTo`는 `/library/youtube`이고 `callbackClient`는 Vite 개발 실행에서 `local`, 프로덕션 빌드에서 `default`입니다. 로컬 인증은 `http://localhost:5173`에서 진행하며 기존 `/api` 프록시와 쿠키 속성을 유지합니다.
+- 인증 시작은 CSRF를 포함한 `POST /me/youtube/authorizations` 응답의 Google URL로 브라우저를 이동합니다. `returnTo`는 `/library/youtube`이며, 내보내기에서 진입했으면 원래 내보내기 경로를 내부 쿼리로 유지합니다. 연결 완료 후 돌아가기에서 기존 작업을 열며 자동 접수·재시도하지 않습니다. `callbackClient`는 Vite 개발 실행에서 `local`, 프로덕션 빌드에서 `default`입니다. 로컬 인증은 `http://localhost:5173`에서 진행하며 기존 `/api` 프록시와 쿠키 속성을 유지합니다.
 - 복귀 시 `youtubeResult`·`youtubeError`와 OAuth 관련 파라미터를 주소에서 제거하고 `GET /me/youtube/connection`으로 실제 상태를 확인합니다. 성공 파라미터만으로 연결을 확정하지 않으며 실패·취소가 기존 연결 상태를 덮어쓰지 않습니다. 세션 만료 후에는 로그인 화면으로 이동하며, 로그인만으로 추가 동의를 자동 시작하지 않습니다.
 - 해제는 삭제 범위를 확인한 뒤 CSRF를 포함한 DELETE로 요청합니다. 처리 중에는 확인창 닫기·중복 요청을 막고, `REVOKING` 상태에서는 5초 간격으로 조회만 수행합니다. 네트워크·서버 오류로 해제 결과가 불확실하면 수동 재시도에서 상태를 먼저 확인하며, 이미 해제됐으면 DELETE를 다시 보내지 않습니다.
 - 조회 오류는 미연결과 구분해 재시도를 제공합니다. 개인 캐시와 변경 요청은 계정별로 구분하며, 로그아웃 뒤 도착한 인증 URL은 사용하지 않습니다.
 - 디자인 기준: [PC 연결 화면](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=235-28232), [모바일 연결 화면](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=235-30056), [해제 확인창](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=235-29603). PC·모바일 / 라이트·다크와 상태·결과 안내·해제 확인창을 반영합니다.
 - API·브라우저 자동 검증에는 고정 응답을 사용합니다. 실제 계정의 신규 연결·로컬 복귀·새로고침 후 연결 유지·해제 후 재연결은 사용자가 로컬 개발 주소에서 확인했습니다. 최초 재연결 실패는 재시도에서 성공했으며 당시 원인 코드는 확보하지 못했습니다. 개발 실행에서는 허용된 콜백 실패 코드만 Console에 표시하며 인증 URL이나 토큰은 기록하지 않습니다.
 
+## YouTube 플레이리스트 내보내기
+
+- `/library/playlists/:playlistId/youtube-export`: 상세 화면에서 진입해 복사 대상·건너뛸 예정 곡 수와 연결 상태를 확인한 뒤 새 비공개 YouTube 목록으로 내보냅니다. 순서 편집 중에는 진입을 막습니다.
+- 시작은 조회한 원본 `version`과 UUID `requestId`를 전달하며, 202 응답은 접수로만 취급합니다. 접수 응답이 유실되면 주소에 보관한 같은 요청 ID·버전으로 사용자가 다시 확인합니다. 새로고침이나 재진입만으로 변경 요청을 보내지 않습니다.
+- 작업 ID가 확정되면 주소의 `jobId`로 진행·결과를 조회합니다. 대기·진행 중에는 2초 간격으로 조회하며, 조회 오류는 작업 실패와 구분합니다. 확인된 곡 수와 API가 제공한 결과 URL만 표시합니다.
+- 실패·미확정은 기존 작업을 재시도하거나 취소합니다. 미확정 곡을 미복사로 단정하지 않으며, 취소가 이미 생성된 YouTube 목록·곡을 삭제하지 않음을 안내합니다. 완료 여부와 취소 경합 결과는 서버의 실제 응답을 따릅니다.
+- 접수 전 `PLAYLIST_CHANGED`는 작업이 생성되지 않은 경우입니다. 최신 원본을 다시 확인한 뒤 사용자가 새 버전으로 접수합니다. Google 재동의 후에는 원래 작업으로 돌아오며 내보내기는 자동 실행하지 않습니다.
+- 디자인 기준: Figma의 `07B · YouTube 내보내기`와 [PC 준비 화면](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=243-33655). PC·모바일 / 라이트·다크, 준비·접수·진행·재조회·재시도·취소·결과 상태를 반영합니다.
+- 실제 계정에서는 사용자가 새 비공개 YouTube 목록 생성, 완료 화면·결과 링크, 복사된 곡·순서가 정상임을 확인했습니다. 이용 불가 곡 건너뛰기·미확정·실패·취소·응답 유실은 고정 응답으로 자동 검증했습니다.
+- 작업 ID 없이 진입하면 `GET /me/youtube-exports/active`로 기존 `QUEUED·RUNNING·FAILED·UNCERTAIN` 작업을 먼저 확인합니다. 작업이 있으면 `job.playlistId`의 내보내기 화면으로 복귀하며, 다른 목록의 작업도 새로 접수하지 않습니다. 명시적인 작업 ID로 연 완료·취소 결과는 그대로 유지합니다.
+- `job:null`과 조회 실패를 구분해 조회가 실패한 동안 새 접수를 막습니다. `EXPORT_ALREADY_ACTIVE`·접수 응답 유실도 기존 작업 조회로 복구합니다. 활성 작업에 포함되지 않는 완료 결과의 응답이 유실됐으면 보관한 동일 `requestId·version`으로만 확인하며, 조회 실패를 새 요청 ID로 반복하지 않습니다. 기능 비활성·재동의 필요 상태에서도 기존 작업 조회와 취소를 제공합니다.
+
 ## API 계약
 
-`openapi/stelody.json`은 YouTube 연결 OAuth 복귀 지원 기준 커밋 `904fd25`([PR #66](https://github.com/MinHyukJi1226/Stelody/pull/66)) 이후의 운영 OpenAPI 스냅샷입니다. 저장 시 프로젝트 JSON 포맷과 기존 키 순서를 적용하므로 파일 바이트 일치를 의미하지 않습니다.
+`openapi/stelody.json`은 기존 활성 내보내기 작업 조회 기준 커밋 `fe1ec0d914d92bf802750aa8215c32ffd4889e71`([PR #68](https://github.com/MinHyukJi1226/Stelody/pull/68))의 [성공한 CI 아티팩트](https://github.com/MinHyukJi1226/Stelody/actions/runs/39788770110/artifacts/12430726816)로 교체했습니다. 운영 명세와 JSON 내용이 같음을 확인했습니다. 저장 시 프로젝트 JSON 포맷과 기존 키 순서를 적용하므로 파일 바이트 일치를 의미하지 않습니다.
 
 명세는 수동으로 편집하지 않습니다. 백엔드 변경 시 해당 커밋의 검증된 CI 아티팩트에서 교체하고 아래 명령으로 타입을 생성합니다.
 
