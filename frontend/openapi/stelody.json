@@ -6445,6 +6445,53 @@
         "summary": "YouTube 추가 동의 콜백",
         "tags": ["개인 계정·목록"]
       }
+    },
+    "/api/v1/me/youtube-exports/active": {
+      "get": {
+        "description": "새 접수를 차단하는 QUEUED·RUNNING·FAILED·UNCERTAIN 작업 한 건을 조회합니다. 200 {job:null}은 대상 작업 없음이며, 작업이 있으면 기존 Job 전체를 반환합니다. SUCCEEDED·CANCELLED는 제외합니다. 작업·연결 상태를 변경하거나 외부 YouTube API를 호출하지 않으며 기능 비활성화·연결 재동의 필요 상태에서도 조회할 수 있습니다. 다른 탭·기기 및 접수 응답 유실·409 EXPORT_ALREADY_ACTIVE 이후 복구에 사용하며 job.playlistId로 원본 목록을 선택합니다. 조회 오류는 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않습니다.\n\n현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "operationId": "get_me_youtube_exports_active",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/com.stelody.export.dto.ExportDtos.ActiveJob"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+              }
+            },
+            "description": "로그인 세션이 없거나 유효하지 않습니다.\nAUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.",
+            "x-error-codes": ["AUTHENTICATION_REQUIRED", "SESSION_EXPIRED"]
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+              }
+            },
+            "description": "EXPORT_LOOKUP_UNAVAILABLE: EXPORT_LOOKUP_UNAVAILABLE: 저장소의 일시적 장애로 조회하지 못했습니다. 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않고 조회를 다시 시도합니다.",
+            "x-error-codes": ["EXPORT_LOOKUP_UNAVAILABLE"]
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+              }
+            },
+            "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요."
+          }
+        },
+        "security": [{ "session": [] }],
+        "summary": "현재 사용자의 기존 활성 내보내기 작업 조회",
+        "tags": ["개인 계정·목록"]
+      }
     }
   },
   "components": {
@@ -8722,6 +8769,21 @@
             "maxLength": 2048
           }
         }
+      },
+      "com.stelody.export.dto.ExportDtos.ActiveJob": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/com.stelody.export.dto.ExportDtos.Job"
+              },
+              { "type": "null" }
+            ],
+            "description": "현재 계정의 QUEUED·RUNNING·FAILED·UNCERTAIN 작업. 대상이 없으면 null이며 조회 실패는 HTTP 오류로 구분합니다."
+          }
+        },
+        "required": ["job"]
       }
     },
     "securitySchemes": {

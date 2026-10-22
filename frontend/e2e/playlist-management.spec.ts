@@ -241,18 +241,19 @@ test('키보드 드래그로 순서를 바꾸고 Escape로 진행 중 이동을 
   await setup(page)
   await visit(page)
   const first = rows(page).filter({ hasText: one.title })
+  // A real key press gives the keyboard sensor time to attach its deferred listener.
   await first.focus()
-  await page.keyboard.press('Space')
+  await page.keyboard.press('Space', { delay: 50 })
   await expect(first).toHaveClass(/opacity-70/)
   await page.keyboard.press('ArrowDown')
   await expect(
     page.getByText('첫 번째 노래, 2번째 위치입니다.', { exact: true }),
   ).toBeAttached()
-  await page.keyboard.press('Space')
+  await page.keyboard.press('Space', { delay: 50 })
   await expect(rows(page).first()).toContainText(two.title)
   await page.getByRole('button', { name: '취소', exact: true }).click()
   await first.focus()
-  await page.keyboard.press('Space')
+  await page.keyboard.press('Space', { delay: 50 })
   await expect(first).toHaveClass(/opacity-70/)
   await page.keyboard.press('ArrowDown')
   await expect(

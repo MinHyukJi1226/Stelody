@@ -81,6 +81,23 @@ it('상태 조회·추가 동의·해제는 같은 API와 CSRF 계약을 사용�
   ])
 })
 
+it('추가 동의 후 원래 내보내기 작업으로 돌아올 경로를 유지한다', async () => {
+  const returnTo =
+    '/library/youtube?returnTo=%2Flibrary%2Fplaylists%2Ftest%2Fyoutube-export%3FjobId%3Dtest'
+  let body: unknown
+  server.use(
+    http.post('*/api/v1/me/youtube/authorizations', async ({ request }) => {
+      body = await request.json()
+      return HttpResponse.json({
+        authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+        expiresAt: '2100-01-01T00:00:00Z',
+      })
+    }),
+  )
+  await authorizeYouTube(returnTo)
+  expect(body).toEqual({ returnTo, callbackClient: 'local' })
+})
+
 it.each([
   'DISABLED',
   'DISCONNECTED',

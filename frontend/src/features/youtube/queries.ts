@@ -47,7 +47,10 @@ export const youtubeConnectionOptions = (user: string) =>
         : false,
   })
 
-export function useYouTubeActions(user: string) {
+export function useYouTubeActions(
+  user: string,
+  returnTo: string = youtubePath,
+) {
   const client = useQueryClient()
   const navigate = useNavigate()
   const key = youtubeKeys.write(user)
@@ -62,7 +65,7 @@ export function useYouTubeActions(user: string) {
     mutationFn: async (kind: 'authorize' | 'disconnect') => {
       if (!sameAccount(client, user)) throw new Error('계정이 변경되었습니다.')
       return kind === 'authorize'
-        ? { kind, value: await authorizeYouTube() }
+        ? { kind, value: await authorizeYouTube(returnTo) }
         : { kind, value: await disconnectYouTube() }
     },
     onSuccess: (result) => {
@@ -73,7 +76,7 @@ export function useYouTubeActions(user: string) {
       if (!sameAccount(client, user)) return
       if (error instanceof ApiError && error.status === 401) {
         await endLocalSession(client)
-        void navigate(loginPath(youtubePath))
+        void navigate(loginPath(returnTo))
       }
     },
   })

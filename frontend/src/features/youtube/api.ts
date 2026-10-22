@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { apiClient } from '@/shared/api/client'
+import { safeReturnPath } from '@/features/auth/return-path'
 import { ApiResponseError } from '@/shared/api/errors'
 import type { ApiSchemas } from '@/shared/api/types'
 
@@ -40,9 +41,11 @@ export async function getYouTubeConnection(signal?: AbortSignal) {
   )
 }
 
-export async function authorizeYouTube(): Promise<Authorization> {
+export async function authorizeYouTube(
+  returnTo: string = youtubePath,
+): Promise<Authorization> {
   const body: AuthorizationRequest = {
-    returnTo: youtubePath,
+    returnTo: safeReturnPath(returnTo),
     callbackClient: import.meta.env.DEV ? 'local' : 'default',
   }
   const parsed = authorizationSchema.safeParse(

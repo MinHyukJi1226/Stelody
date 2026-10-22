@@ -170,6 +170,14 @@ export function PlaylistEditor({
         >
           목록 삭제
         </Button>
+        <Button
+          disabled={disabled || dirty}
+          onClick={() =>
+            void navigate(`/library/playlists/${playlist.id}/youtube-export`)
+          }
+        >
+          YouTube로 내보내기
+        </Button>
       </div>
       {items.length > 0 ? (
         <>
