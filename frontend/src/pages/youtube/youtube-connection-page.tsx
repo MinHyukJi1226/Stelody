@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { sessionOptions } from '@/features/auth/session'
 import { safeReturnPath } from '@/features/auth/return-path'
+import { accountPath, withdrawalPath } from '@/features/account/api'
 import { apiClient } from '@/shared/api/client'
 import {
   cleanYouTubeReturn,
@@ -42,6 +43,8 @@ function ConnectionScreen({ user }: { user: string }) {
   const returnValue = new URLSearchParams(location.search).get('returnTo')
   const safeReturn = safeReturnPath(returnValue)
   const returnTo =
+    safeReturn === accountPath ||
+    safeReturn === withdrawalPath ||
     /^\/library\/playlists\/[0-9a-f-]+\/youtube-export(?:\?|$)/i.test(
       safeReturn,
     )
@@ -186,7 +189,11 @@ function ConnectionScreen({ user }: { user: string }) {
           <Link to={returnTo}>
             {returnTo === '/library/playlists'
               ? '플레이리스트로 돌아가기'
-              : '내보내기로 돌아가기'}
+              : returnTo === accountPath
+                ? '계정 관리로 돌아가기'
+                : returnTo === withdrawalPath
+                  ? '탈퇴 화면으로 돌아가기'
+                  : '내보내기로 돌아가기'}
           </Link>
         </Button>
       </section>

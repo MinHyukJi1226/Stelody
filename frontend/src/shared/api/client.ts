@@ -5,6 +5,8 @@ type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   signal?: AbortSignal
+  headers?: Readonly<Record<string, string>>
+  cache?: RequestCache
 }
 
 const csrfSchema = z.object({
@@ -47,7 +49,8 @@ export function createApiClient(baseUrl: string) {
     token?: CsrfToken,
   ) {
     const destination = url(path)
-    const headers = new Headers({ Accept: 'application/json' })
+    const headers = new Headers(options.headers)
+    headers.set('Accept', 'application/json')
     if (options.body !== undefined)
       headers.set('Content-Type', 'application/json')
     if (token) headers.set(token.headerName, token.token)
@@ -56,6 +59,7 @@ export function createApiClient(baseUrl: string) {
       credentials: 'include',
       redirect: 'error',
       headers,
+      ...(options.cache ? { cache: options.cache } : {}),
       ...(options.body !== undefined
         ? { body: JSON.stringify(options.body) }
         : {}),

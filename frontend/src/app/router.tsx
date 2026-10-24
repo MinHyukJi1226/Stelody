@@ -106,6 +106,21 @@ export const router = createBrowserRouter([
         ],
       },
       {
+        path: '/account',
+        lazy: async () => {
+          const { AccountPage } = await import('@/pages/account/account-page')
+          return { Component: AccountPage }
+        },
+      },
+      {
+        path: '/account/withdrawal',
+        lazy: async () => {
+          const { WithdrawalPage } =
+            await import('@/pages/account/withdrawal-page')
+          return { Component: WithdrawalPage }
+        },
+      },
+      {
         path: '/login',
         lazy: async () => {
           const { LoginPage } = await import('@/pages/login/login-page')
