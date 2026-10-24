@@ -1,5 +1,6 @@
 package com.stelody.config;
 
+import com.stelody.auth.domain.ReauthenticationReturn;
 import com.stelody.auth.service.GoogleOidcUserService;
 import com.stelody.auth.web.AccountSessionFilter;
 import com.stelody.auth.web.ApiProblems;
@@ -7,6 +8,9 @@ import com.stelody.auth.web.GoogleLoginClients;
 import com.stelody.auth.web.LocalLoginCallbackFilter;
 import com.stelody.auth.web.LoginHandlers;
 import com.stelody.auth.web.LoginReturnFilter;
+import com.stelody.auth.web.ReauthenticationCallbackFilter;
+import com.stelody.auth.web.ReauthenticationClients;
+import com.stelody.auth.web.ReauthenticationRedirects;
 import com.stelody.auth.web.ReauthenticationRequests;
 import com.stelody.user.service.AccountService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,6 +51,8 @@ public class SecurityConfiguration {
       LoginHandlers handlers,
       com.stelody.auth.service.PersistentLoginService persistent,
       GoogleLoginClients loginClients,
+      ReauthenticationClients reauthClients,
+      ReauthenticationRedirects reauthRedirects,
       GoogleOidcUserService googleUsers,
       ReauthenticationRequests reauthenticationRequests,
       ObjectProvider<ClientRegistrationRepository> clients,
@@ -62,6 +68,8 @@ public class SecurityConfiguration {
                         "/api/v1/auth/google",
                         "/api/v1/auth/authorize/google",
                         "/api/v1/auth/callback/google",
+                        ReauthenticationReturn.CALLBACK,
+                        ReauthenticationReturn.LOCAL_CALLBACK,
                         "/api/v1/me/youtube/callback",
                         "/api/v1/me/youtube/callback/local",
                         "/api/v1/songs",
@@ -213,6 +221,10 @@ public class SecurityConfiguration {
         .addFilterBefore(
             new LoginReturnFilter(problems, loginClients),
             OAuth2AuthorizationRequestRedirectFilter.class)
+        .addFilterBefore(
+            new ReauthenticationCallbackFilter(
+                reauthenticationRequests, reauthClients, reauthRedirects),
+            OAuth2LoginAuthenticationFilter.class)
         .addFilterBefore(
             new LocalLoginCallbackFilter(reauthenticationRequests),
             OAuth2LoginAuthenticationFilter.class)

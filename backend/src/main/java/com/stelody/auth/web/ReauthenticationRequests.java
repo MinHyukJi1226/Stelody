@@ -4,6 +4,7 @@ import com.stelody.auth.domain.*;
 import com.stelody.auth.service.ReauthenticationService;
 import com.stelody.export.service.YouTubeConnectionService;
 import jakarta.servlet.http.*;
+import java.net.URI;
 import java.time.Instant;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.client.web.*;
@@ -58,6 +59,13 @@ public class ReauthenticationRequests
     if (authorization == null) return null;
     ReauthenticationContext context = authorization.getAttribute(ReauthenticationContext.ATTRIBUTE);
     if (context != null) {
+      if (context.target() != null) {
+        if (!URI.create(context.target().callbackUri()).getPath().equals(request.getServletPath()))
+          throw new OAuth2AuthenticationException("invalid_reauthentication");
+        request.setAttribute(ReauthenticationReturn.ATTRIBUTE, context.target());
+      }
+      if (!Instant.now().isBefore(context.expiresAt()))
+        throw new OAuth2AuthenticationException("reauthentication_request_expired");
       var authentication = SecurityContextHolder.getContext().getAuthentication();
       if (authentication == null
           || !(authentication.getPrincipal() instanceof SessionUser user)
@@ -66,7 +74,7 @@ public class ReauthenticationRequests
           || !context
               .sessionHash()
               .equals(YouTubeConnectionService.hash(request.getSession(false).getId())))
-        throw new OAuth2AuthenticationException("invalid_reauthentication");
+        throw new OAuth2AuthenticationException("session_expired");
       reauthentication.consume(context, authorization.getState());
       request.setAttribute(ReauthenticationContext.ATTRIBUTE, context);
     } else {

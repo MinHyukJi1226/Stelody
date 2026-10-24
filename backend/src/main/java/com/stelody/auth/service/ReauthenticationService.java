@@ -1,6 +1,7 @@
 package com.stelody.auth.service;
 
 import com.stelody.auth.domain.*;
+import com.stelody.auth.web.ReauthenticationClients;
 import com.stelody.export.service.YouTubeConnectionService;
 import com.stelody.user.repository.WithdrawalRepository;
 import com.stelody.user.web.AccountException;
@@ -20,6 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class ReauthenticationService {
   private final WithdrawalRepository store;
+  private final ReauthenticationClients callbackClients;
   private final ObjectProvider<ClientRegistrationRepository> clients;
   private final TransactionTemplate transaction;
 
@@ -31,7 +33,9 @@ public class ReauthenticationService {
   public ReauthenticationService(
       WithdrawalRepository store,
       ObjectProvider<ClientRegistrationRepository> clients,
-      PlatformTransactionManager manager) {
+      PlatformTransactionManager manager,
+      ReauthenticationClients callbackClients) {
+    this.callbackClients = callbackClients;
     this.store = store;
     this.clients = clients;
     transaction = new TransactionTemplate(manager);
@@ -39,18 +43,25 @@ public class ReauthenticationService {
   }
 
   public Authorization start(SessionUser user, HttpServletRequest request) {
+    return start(user, request, null, null);
+  }
+
+  public Authorization start(
+      SessionUser user, HttpServletRequest request, String returnTo, String callbackClient) {
+    var target = callbackClients.select(returnTo, callbackClient);
     var registrations = clients.getIfAvailable();
     if (registrations == null || registrations.findByRegistrationId("google") == null)
       throw new AccountException(
           503, "GOOGLE_REAUTHENTICATION_UNAVAILABLE", "Google 재인증 설정이 필요합니다");
     String session = YouTubeConnectionService.hash(request.getSession().getId());
     Instant expires = Instant.now().plusSeconds(300);
-    var context = new ReauthenticationContext(user, session, UUID.randomUUID(), expires);
+    var context = new ReauthenticationContext(user, session, UUID.randomUUID(), expires, target);
     var resolver =
         new DefaultOAuth2AuthorizationRequestResolver(registrations, "/api/v1/auth/authorize");
     resolver.setAuthorizationRequestCustomizer(
         builder -> {
           OAuth2AuthorizationRequestCustomizers.withPkce().accept(builder);
+          if (target != null) builder.redirectUri(target.callbackUri());
           builder.scopes(Set.of("openid", "email"));
           builder.attributes(a -> a.put(ReauthenticationContext.ATTRIBUTE, context));
           builder.additionalParameters(p -> p.put("prompt", "select_account"));
@@ -81,6 +92,11 @@ public class ReauthenticationService {
                 YouTubeConnectionService.hash(state)))
               throw new OAuth2AuthenticationException("invalid_reauthentication");
           });
+    } catch (org.springframework.dao.DataAccessException
+        | org.springframework.transaction.TransactionException e) {
+      throw new OAuth2AuthenticationException("account_storage_unavailable");
+    } catch (AccountException e) {
+      throw new OAuth2AuthenticationException("session_expired");
     } catch (RuntimeException e) {
       throw new OAuth2AuthenticationException("invalid_reauthentication");
     }

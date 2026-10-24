@@ -67,6 +67,52 @@ public class ApiDocumentationConfiguration {
                                       new ApiResponse()
                                           .description(
                                               "현재 기기의 로그인 유지 자격과 SESSION·STELODY_LOGIN 쿠키를 폐기합니다. 같은 자격으로 복구된 세션도 다음 요청부터 무효입니다. 다른 기기는 유지합니다. 저장소 실패 시 503이며 로그아웃 완료로 표시하지 말고 재시도합니다.")))));
+      for (String callback :
+          List.of(
+              com.stelody.auth.domain.ReauthenticationReturn.CALLBACK,
+              com.stelody.auth.domain.ReauthenticationReturn.LOCAL_CALLBACK)) {
+        api.getPaths()
+            .addPathItem(
+                callback,
+                new PathItem()
+                    .get(
+                        new Operation()
+                            .summary("회원 탈퇴 Google 재인증 콜백")
+                            .description(
+                                "브라우저 전용 OAuth 콜백. 새 프론트 복귀 흐름은 303 Location으로 복귀합니다. reauthResult=success/cancelled/failed. 취소·실패 시 reauthError는 SESSION_EXPIRED, REAUTHENTICATION_REQUEST_INVALID, REAUTHENTICATION_REQUEST_EXPIRED, REAUTHENTICATION_ACCOUNT_MISMATCH, GOOGLE_REAUTHENTICATION_CANCELLED, GOOGLE_REAUTHENTICATION_FAILED, ACCOUNT_STORAGE_UNAVAILABLE 중 하나입니다. 결과는 안내용이며 GET /api/v1/me/withdrawal-confirmation으로 실제 재인증 여부·expiresAt을 확인하고 CSRF를 다시 조회합니다. 최종 버튼에서만 DELETE /api/v1/me를 호출합니다. 인증 코드·state·토큰·내부 오류 원문을 복귀 URL로 전달하지 않습니다. 저장된 returnTo를 확인할 수 없는 잘못된 state·세션 만료는 기본 /api/v1/me/withdrawal-confirmation으로 복귀합니다. local은 등록된 localhost origin, default는 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN 또는 같은 origin을 사용합니다. 콜백은 세션을 자동 복구하지 않으며 재인증은 30일 로그인 유지 기한을 연장하지 않습니다.")
+                            .parameters(
+                                List.of(
+                                    new Parameter()
+                                        .name("state")
+                                        .in("query")
+                                        .schema(new StringSchema()),
+                                    new Parameter()
+                                        .name("code")
+                                        .in("query")
+                                        .schema(new StringSchema()),
+                                    new Parameter()
+                                        .name("error")
+                                        .in("query")
+                                        .schema(new StringSchema())))
+                            .responses(
+                                new ApiResponses()
+                                    .addApiResponse(
+                                        "303",
+                                        new ApiResponse()
+                                            .description(
+                                                "검증된 프론트 복귀 주소. reauthResult와 허용 reauthError만 추가합니다.")
+                                            .headers(
+                                                Map.of(
+                                                    "Location",
+                                                    new Header()
+                                                        .schema(new StringSchema())
+                                                        .description(
+                                                            "서버에 저장된 내부 경로·등록된 origin으로만 복귀"))))
+                                    .addApiResponse(
+                                        "503",
+                                        problem(
+                                            "GOOGLE_REAUTHENTICATION_UNAVAILABLE: 콜백 설정을 확인할 수 없습니다.")))));
+      }
       api.getPaths()
           .forEach(
               (path, item) ->
@@ -123,6 +169,7 @@ public class ApiDocumentationConfiguration {
                             playlistOrdering(path, verb, operation);
                             frontendErrors(path, verb, operation);
                             youtubeReturn(path, operation);
+                            reauthenticationContract(path, verb, operation);
                             if (List.of("/api/v1/me", "/api/v1/auth/csrf", "/api/v1/auth/logout")
                                 .contains(path))
                               errorCodes(
@@ -514,6 +561,57 @@ public class ApiDocumentationConfiguration {
           "INVALID_EXPORT_REQUEST");
       errorCodes(operation, "409", "권한 철회 완료 후 추가 동의를 다시 시작합니다.", "YOUTUBE_REVOCATION_PENDING");
       errorCodes(operation, "503", "YouTube OAuth 설정이 없습니다.", "YOUTUBE_OAUTH_UNAVAILABLE");
+    }
+  }
+
+  private static void reauthenticationContract(String path, String verb, Operation operation) {
+    if (path.equals("/api/v1/me/reauthentications")) {
+      operation.setDescription(
+          operation.getDescription()
+              + "\n선택 JSON {returnTo, callbackClient}를 받습니다. 본문·필드·null 생략 허용. callbackClient 기본 default, 허용 default/local. returnTo는 최대 2048자 내부 UI 경로이며 외부 URL·//·공백/제어문자·역슬래시·중첩 인코딩·경로 우회·/api·/actuator 경로는 거절합니다. 응답 authorizationUrl·expiresAt과 CSRF 검증은 유지합니다. returnTo 생략 + default는 기존 Google 콜백과 확인 JSON 복귀를 유지합니다. returnTo를 지정하거나 local을 고르면 전용 콜백 및 303 결과 복귀를 사용합니다. returnTo 생략 시 기본 /api/v1/me/withdrawal-confirmation입니다. default 전용 콜백은 GOOGLE_REAUTHENTICATION_REDIRECT_URI, local은 GOOGLE_REAUTHENTICATION_LOCAL_REDIRECT_URI 및 Google 콘솔 승인 URI가 필요합니다. 로컬 URI http://localhost:5173/api/v1/auth/callback/google-reauthentication-local. 기본 프론트 origin은 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN으로 설정합니다. /api 프록시는 모든 Set-Cookie와 Secure·HttpOnly·SameSite를 그대로 전달해야 합니다. 요청·복귀 정보는 같은 세션의 OAuth state에 5분간 묶어 한 번만 사용합니다.");
+      errorCodes(
+          operation,
+          "400",
+          "입력값을 응답에 포함하지 않습니다.",
+          "INVALID_REAUTHENTICATION_RETURN",
+          "INVALID_REAUTHENTICATION_CLIENT",
+          "INVALID_REAUTHENTICATION_REQUEST");
+      errorCodes(
+          operation,
+          "503",
+          "Google 설정 또는 계정 저장소를 확인하지 못했습니다. 성공으로 처리하지 않습니다.",
+          "GOOGLE_REAUTHENTICATION_UNAVAILABLE",
+          "ACCOUNT_STORAGE_UNAVAILABLE",
+          "LOGIN_STORAGE_UNAVAILABLE");
+    }
+    if (path.equals("/api/v1/me/withdrawal-confirmation")) {
+      operation.setDescription(
+          operation.getDescription()
+              + "\nreauthenticated=false와 expiresAt=null은 현재 세션에 유효한 동일 계정 재인증이 없다는 뜻입니다. 성공 후 유효기간은 5분이며 UI 복귀 결과만으로 확정하지 않습니다. 조회 실패를 false로 간주하지 마세요.");
+      errorCodes(
+          operation,
+          "503",
+          "저장소 오류이며 유효하지 않은 재인증과 구분합니다.",
+          "ACCOUNT_STORAGE_UNAVAILABLE",
+          "LOGIN_STORAGE_UNAVAILABLE");
+    }
+    if (path.equals("/api/v1/me") && verb.equals("DELETE")) {
+      operation.setDescription(
+          operation.getDescription()
+              + "\n동일 Google 계정 재인증 5분 내 새 CSRF와 사용자의 최종 버튼으로만 요청합니다. 재인증 복귀 시 자동 탈퇴하지 않습니다. 409/503은 탈퇴 완료가 아니며 재인증 상태·연결 철회·진행 작업을 확인합니다.");
+      errorCodes(
+          operation,
+          "409",
+          "REAUTHENTICATION_REQUIRED는 재인증 없음·다른 세션·5분 만료입니다. YOUTUBE_EXPORT_BUSY는 외부 쓰기 작업 중이며 완료 후 사용자가 재시도합니다. YOUTUBE_REVOCATION_PENDING은 Google 철회 대기이며 연결 철회 완료 뒤 재인증 유효 여부를 다시 확인합니다.",
+          "REAUTHENTICATION_REQUIRED",
+          "YOUTUBE_EXPORT_BUSY",
+          "YOUTUBE_REVOCATION_PENDING");
+      errorCodes(
+          operation,
+          "503",
+          "ACCOUNT_STORAGE_UNAVAILABLE는 계정 저장소 실패, WITHDRAWAL_JOURNAL_UNAVAILABLE는 독립 탈퇴 기록 저장 실패, LOGIN_STORAGE_UNAVAILABLE는 로그인 상태 확인 실패입니다. 성공으로 표시하거나 자동 탈퇴 재전송하지 않습니다.",
+          "ACCOUNT_STORAGE_UNAVAILABLE",
+          "WITHDRAWAL_JOURNAL_UNAVAILABLE");
     }
   }
 

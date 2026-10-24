@@ -67,6 +67,13 @@ cd backend
 - 프론트는 기존 세션·CSRF API를 사용하고 모든 `Set-Cookie`를 프록시에서 그대로 전달합니다. 짧은 세션 복구에는 기존 유효 CSRF 헤더를 사용할 수 있지만, 로그인·명시적 재인증·로그아웃 뒤에는 다시 조회합니다. 503 `LOGIN_STORAGE_UNAVAILABLE`은 확인·복구·폐기 실패이며 로그인 해제나 변경 성공으로 처리하지 않습니다. 30일 만료·쿠키 삭제 후에는 Google 로그인이 필요합니다.
 - V25는 로그인 유지 자격 테이블과 계정 변경 시 폐기 트리거를 추가합니다. `SPRING_FLYWAY_ENABLED=false`인 운영에는 **새 코드 배포 전에 전용 마이그레이터로 V25를 적용**합니다. 런타임 역할만 자격 테이블에 접근하며 복구 시 자격은 제외됩니다.
 - 탈퇴는 POST `/api/v1/me/reauthentications`로 같은 계정을 재인증한 뒤 새 CSRF로 5분 내 DELETE `/api/v1/me`를 호출합니다. 철회·탈퇴 기록 저장 실패 시 계정은 유지됩니다.
+  - 선택 JSON `{"returnTo":"/확정된-탈퇴-화면","callbackClient":"local"}`을 보내고 응답 `authorizationUrl`로 브라우저를 이동합니다. `returnTo`는 최대 2,048자 내부 UI 경로만, `callbackClient`는 `default`(기본)·`local`만 허용합니다. 본문·필드·null 생략을 지원합니다. `returnTo` 생략 + default는 기존 콜백·확인 JSON 복귀를 유지하고, local에서 경로를 생략하거나 신뢰할 복귀 정보가 사라지면 `/api/v1/me/withdrawal-confirmation`으로 돌아갑니다.
+  - 새 프론트 복귀용 기본 콜백: `GOOGLE_REAUTHENTICATION_REDIRECT_URI=<같은 세션을 쓰는 공개 origin>/api/v1/auth/callback/google-reauthentication`. 프론트·API가 프록시로 연결되면 콜백도 같은 공개 `/api` 프록시를 사용합니다. `GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN=https://<프론트 도메인>`으로 복귀 origin을 지정할 수 있고 미설정 시 상대 경로로 복귀합니다. 도메인·연결 방식은 배포 준비 때 함께 확정합니다.
+  - 로컬 콜백: `GOOGLE_REAUTHENTICATION_LOCAL_REDIRECT_URI=http://localhost:5173/api/v1/auth/callback/google-reauthentication-local`. Google Web OAuth 클라이언트 승인 URI에 새 기본·로컬 콜백을 모두 등록합니다. 기존 Google 로그인·YouTube 연결 설정과 별개이며 운영 값은 배포 준비 때 설정합니다. 시작·콜백·확인·CSRF·최종 탈퇴는 같은 `/api` 프록시 세션을 사용하고 모든 `Set-Cookie` 및 Secure·HttpOnly·SameSite를 유지합니다.
+  - 새 흐름은 303으로 `reauthResult=success/cancelled/failed`, 취소·실패 시 허용 `reauthError`를 전달합니다. 원문 코드·토큰·state·오류는 URL에 넣지 않습니다. 잘못된 state·세션 만료로 저장 경로를 신뢰할 수 없으면 등록된 origin의 기본 확인 API로 복귀합니다. 오류 코드는 OpenAPI 콜백 설명을 참고합니다.
+  - 복귀 값은 안내용입니다. GET `/api/v1/me/withdrawal-confirmation`의 실제 상태·만료를 확인하고 CSRF를 다시 조회한 뒤, 사용자가 최종 버튼을 누를 때만 DELETE합니다. 재인증·5분 유효기간은 30일 로그인 유지 기한을 연장하지 않습니다. 세션이 만료된 OAuth 요청을 자동 로그인으로 되살리지 않습니다.
+  - 탈퇴 409: `REAUTHENTICATION_REQUIRED`(재인증 없음·만료·세션 변경), `YOUTUBE_EXPORT_BUSY`(작업 중), `YOUTUBE_REVOCATION_PENDING`(연결 철회 대기). 503: `ACCOUNT_STORAGE_UNAVAILABLE`·`WITHDRAWAL_JOURNAL_UNAVAILABLE`·`LOGIN_STORAGE_UNAVAILABLE`. 완료로 표시하거나 자동 탈퇴 재요청하지 않습니다. 401·403은 기존 로그인·CSRF 계약입니다.
+  - 복귀 정보는 기존 세션 OAuth 요청에 저장하므로 DB 마이그레이션은 없습니다.
 - 조회수는 대표 영상 하나의 실제 관측값이며 미관측 날짜는 null입니다. 커버는 공식 커버 영상, 오리지널은 공식 MV 또는 MV가 없을 때 공식 음원을 대표로 사용합니다. 영상 간 조회수를 합산하지 않습니다.
 - 공개 곡 검색 `q`는 공백·영어 대소문자를 구분하지 않습니다. 곡·원곡 제목과 별칭, 참여 멤버·아티스트 이름과 별칭에 같은 규칙을 적용하며 표시 제목은 검색 정규화와 별개입니다. `q`는 기존처럼 원문 최대 200자이고 빈 검색어는 빈 결과입니다.
 - GET `/api/v1/songs/{id}`의 `relatedSongs`는 같은 `work.id`의 다른 `COVER` 중 현재 곡에 없는 확정 멤버가 한 명 이상 참여한 곡만 반환합니다. 일반 공개 목록과 같은 노출·대표 영상 조건을 적용하고 곡 ID 중복 없이 조건 적용 후 `publishedAt`·곡 ID 내림차순 최대 6개입니다. 원곡 정보·일치하는 커버가 없으면 `[]`이며 페이지 조회는 지원하지 않습니다.
