@@ -9,6 +9,7 @@ import { Button } from '@/shared/ui/button'
 import { MenuIcon } from './menu-icon'
 import { AccountControl } from '@/features/auth/account-control'
 import { AccountLink } from '@/features/account/account-link'
+import { AdminLink } from '@/features/admin/admin-link'
 
 const navigation = [
   { to: '/search', label: '검색' },
@@ -44,6 +45,7 @@ export function SiteHeader({
           </Button>
         ))}
         <AccountLink />
+        <AdminLink />
         <AccountControl />
       </nav>
       <Button

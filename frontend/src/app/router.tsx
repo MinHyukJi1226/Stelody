@@ -12,6 +12,57 @@ export const router = createBrowserRouter([
     HydrateFallback: () => <StatePanel title="화면 불러오는 중…" />,
     children: [
       { path: '/', element: <HomePage /> },
+      {
+        path: '/admin',
+        lazy: async () => {
+          const { AdminGate } = await import('@/pages/admin/admin-shared')
+          return { Component: AdminGate }
+        },
+        children: [
+          {
+            index: true,
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-overview'))
+                .AdminInboxPage,
+            }),
+          },
+          {
+            path: 'collection',
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-overview'))
+                .AdminCollectionPage,
+            }),
+          },
+          {
+            path: 'reviews',
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-lists'))
+                .AdminReviewsPage,
+            }),
+          },
+          {
+            path: 'registrations',
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-lists'))
+                .AdminRegistrationsPage,
+            }),
+          },
+          {
+            path: 'special-event-reviews',
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-lists'))
+                .AdminSpecialPage,
+            }),
+          },
+          {
+            path: 'failures',
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-lists'))
+                .AdminFailuresPage,
+            }),
+          },
+        ],
+      },
       { path: '/songs', element: <SongCatalogPage /> },
       {
         path: '/songs/:songId',

@@ -96,6 +96,116 @@
 }
 
 @layer components {
+  .admin-page {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-height: calc(100dvh - 197px);
+    line-height: 1.5;
+  }
+  .admin-page > footer {
+    margin-top: auto;
+  }
+  .admin-heading {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+  .admin-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+    padding: 24px;
+    border-radius: 16px;
+    background: var(--surface);
+    overflow-wrap: anywhere;
+  }
+  .admin-panel > button,
+  .admin-panel > a {
+    align-self: flex-start;
+  }
+  .admin-notice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    border-radius: 16px;
+    padding: 16px;
+    background: var(--bg);
+    font-size: 14px;
+  }
+  .admin-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 20px;
+    margin-block: -20px;
+    table-layout: fixed;
+    text-align: left;
+  }
+  .admin-table th {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  .admin-table th,
+  .admin-table td {
+    padding: 12px;
+    background: var(--bg);
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  .admin-table td {
+    font-size: 14px;
+  }
+  .admin-table td:first-child {
+    border-radius: 12px 0 0 12px;
+  }
+  .admin-table td:last-child {
+    border-radius: 0 12px 12px 0;
+  }
+  .admin-field-label {
+    display: none;
+  }
+  @media (width < 768px) {
+    .admin-page {
+      min-height: calc(100dvh - 165px);
+    }
+    .admin-table,
+    .admin-table tbody {
+      display: block;
+    }
+    .admin-table {
+      margin: 0;
+    }
+    .admin-table thead {
+      display: none;
+    }
+    .admin-table colgroup {
+      display: none;
+    }
+    .admin-table tbody {
+      display: grid;
+      gap: 20px;
+    }
+    .admin-table tr {
+      display: grid;
+      gap: 16px;
+      padding: 24px;
+      border-radius: 12px;
+      background: var(--bg);
+    }
+    .admin-table td {
+      display: block;
+      padding: 0;
+    }
+    .admin-field-label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+  }
   .site-header {
     display: flex;
     align-items: center;
@@ -109,6 +219,17 @@
   .site-nav {
     display: flex;
     gap: 32px;
+  }
+  @media (768px <= width < 1024px) {
+    .site-header:has(.admin-entry) {
+      gap: 16px;
+    }
+    .site-header:has(.admin-entry) .site-nav {
+      gap: 8px;
+    }
+    .site-header:has(.admin-entry) .site-nav :is(a, button) {
+      padding-inline: 8px;
+    }
   }
   .mobile-menu-trigger {
     display: none;
