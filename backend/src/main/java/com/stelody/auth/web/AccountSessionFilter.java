@@ -42,6 +42,13 @@ public class AccountSessionFilter extends OncePerRequestFilter {
       if (!prepare(request, response)) return;
     } catch (org.springframework.dao.DataAccessException
         | org.springframework.transaction.TransactionException e) {
+      if (ReauthenticationRedirects.isCallback(request)) {
+        request.setAttribute(
+            com.stelody.auth.domain.ReauthenticationReturn.ERROR_ATTRIBUTE,
+            com.stelody.auth.domain.ReauthenticationReturn.Error.ACCOUNT_STORAGE_UNAVAILABLE);
+        chain.doFilter(request, response);
+        return;
+      }
       problems.write(
           request,
           response,
@@ -78,7 +85,8 @@ public class AccountSessionFilter extends OncePerRequestFilter {
             && !oauthEdge(request)
             && persistent.restore(request, response, user.id())) return true;
         if (!grantValid) persistent.clear(response);
-        if (com.stelody.export.web.YouTubeOAuthReturn.isCallback(request)) return true;
+        if (com.stelody.export.web.YouTubeOAuthReturn.isCallback(request)
+            || ReauthenticationRedirects.isCallback(request)) return true;
         problems.write(request, response, 401, "SESSION_EXPIRED", "다시 로그인해 주세요");
         return false;
       }
@@ -97,11 +105,12 @@ public class AccountSessionFilter extends OncePerRequestFilter {
   private static boolean oauthEdge(HttpServletRequest request) {
     String path = request.getRequestURI().substring(request.getContextPath().length());
     return List.of(
-            "/api/v1/auth/google",
-            "/api/v1/auth/authorize/google",
-            "/api/v1/auth/callback/google",
-            "/api/v1/me/youtube/callback",
-            "/api/v1/me/youtube/callback/local")
-        .contains(path);
+                "/api/v1/auth/google",
+                "/api/v1/auth/authorize/google",
+                "/api/v1/auth/callback/google",
+                "/api/v1/me/youtube/callback",
+                "/api/v1/me/youtube/callback/local")
+            .contains(path)
+        || ReauthenticationRedirects.isCallback(request);
   }
 }

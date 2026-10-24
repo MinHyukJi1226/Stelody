@@ -15,6 +15,12 @@ public class AccountExceptionHandler {
     this.problems = problems;
   }
 
+  @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+  void malformed(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    problems.write(
+        request, response, 400, "INVALID_REAUTHENTICATION_REQUEST", "재인증 요청 JSON 형식이 올바르지 않습니다");
+  }
+
   @ExceptionHandler(AccountException.class)
   void account(AccountException e, HttpServletRequest request, HttpServletResponse response)
       throws IOException {

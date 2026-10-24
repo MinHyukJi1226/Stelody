@@ -102,6 +102,68 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsWithdrawalFrontendReturnAndAllDeletionFailureContracts() throws Exception {
+    var api = contract();
+    var start = api.at("/paths/~1api~1v1~1me~1reauthentications/post");
+    assertThat(start.path("description").asText())
+        .contains(
+            "returnTo",
+            "callbackClient",
+            "2048",
+            "default/local",
+            "GOOGLE_REAUTHENTICATION_LOCAL_REDIRECT_URI",
+            "5분");
+    assertThat(start.at("/requestBody/required").asBoolean()).isFalse();
+    assertThat(start.path("security").toString()).contains("session", "csrf");
+    String schema = start.at("/requestBody/content/application~1json/schema/$ref").asText();
+    var input = api.at(schema.substring(1));
+    assertThat(input.at("/properties/callbackClient/enum").toString()).contains("default", "local");
+    assertThat(input.at("/properties/returnTo/maxLength").asInt()).isEqualTo(2048);
+    for (String path :
+        new String[] {
+          "/api/v1/auth/callback/google-reauthentication",
+          "/api/v1/auth/callback/google-reauthentication-local"
+        }) {
+      var callback = api.path("paths").path(path).path("get");
+      assertThat(callback.path("description").asText())
+          .contains(
+              "reauthResult=success/cancelled/failed",
+              "REAUTHENTICATION_ACCOUNT_MISMATCH",
+              "SESSION_EXPIRED",
+              "ACCOUNT_STORAGE_UNAVAILABLE",
+              "30일");
+      assertThat(callback.path("responses").has("303")).isTrue();
+      assertThat(callback.path("security").isEmpty()).isTrue();
+      for (var parameter : callback.path("parameters"))
+        assertThat(parameter.at("/schema/enum").isMissingNode()).isTrue();
+    }
+    assertErrorCodes(
+        api,
+        "/api/v1/me",
+        "delete",
+        "409",
+        "REAUTHENTICATION_REQUIRED",
+        "YOUTUBE_EXPORT_BUSY",
+        "YOUTUBE_REVOCATION_PENDING");
+    assertErrorCodes(
+        api,
+        "/api/v1/me",
+        "delete",
+        "503",
+        "ACCOUNT_STORAGE_UNAVAILABLE",
+        "WITHDRAWAL_JOURNAL_UNAVAILABLE",
+        "LOGIN_STORAGE_UNAVAILABLE");
+    assertErrorCodes(
+        api,
+        "/api/v1/me/reauthentications",
+        "post",
+        "400",
+        "INVALID_REAUTHENTICATION_RETURN",
+        "INVALID_REAUTHENTICATION_CLIENT",
+        "INVALID_REAUTHENTICATION_REQUEST");
+  }
+
+  @Test
   void documentsActiveExportAsAnAuthenticatedNullableFullJobWithoutMutation() throws Exception {
     var api = contract();
     var op = api.path("paths").path("/api/v1/me/youtube-exports/active").path("get");

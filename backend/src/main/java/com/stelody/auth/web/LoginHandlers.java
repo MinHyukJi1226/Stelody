@@ -23,13 +23,16 @@ import org.springframework.transaction.TransactionException;
 @Component
 public class LoginHandlers {
   private final PersistentLoginService persistent;
+  private final ReauthenticationRedirects redirects;
   private final ApiProblems problems;
   private final ReauthenticationService reauthentication;
 
   public LoginHandlers(
       ApiProblems problems,
       ReauthenticationService reauthentication,
-      PersistentLoginService persistent) {
+      PersistentLoginService persistent,
+      ReauthenticationRedirects redirects) {
+    this.redirects = redirects;
     this.persistent = persistent;
     this.problems = problems;
     this.reauthentication = reauthentication;
@@ -65,14 +68,29 @@ public class LoginHandlers {
         reauthentication.confirm(previous, request.getSession().getId());
         persistent.reauthenticated(previous.user(), request, response);
       } catch (AccountException e) {
+        if (redirects.respond(
+            request,
+            response,
+            "failed",
+            e.status() == 401
+                ? com.stelody.auth.domain.ReauthenticationReturn.Error.SESSION_EXPIRED
+                : com.stelody.auth.domain.ReauthenticationReturn.Error
+                    .REAUTHENTICATION_REQUEST_INVALID)) return;
         problems.write(request, response, e.status(), e.code(), e.getMessage());
         return;
       } catch (DataAccessException | TransactionException e) {
+        if (redirects.respond(
+            request,
+            response,
+            "failed",
+            com.stelody.auth.domain.ReauthenticationReturn.Error.ACCOUNT_STORAGE_UNAVAILABLE))
+          return;
         problems.write(request, response, 503, "ACCOUNT_STORAGE_UNAVAILABLE", "재인증을 완료하지 못했습니다");
         return;
       }
       response.setHeader("Cache-Control", "no-store");
       response.setHeader("Referrer-Policy", "no-referrer");
+      if (redirects.respond(request, response, "success", null)) return;
       response.sendRedirect("/api/v1/me/withdrawal-confirmation");
       return;
     }
@@ -89,6 +107,7 @@ public class LoginHandlers {
     // A public callback failure must not destroy an existing authenticated session.
     // Spring removes the matching pending authorization request during callback processing.
     SecurityContextHolder.clearContext();
+    if (redirects.failure(request, response, exception)) return;
     response.setHeader("Referrer-Policy", "no-referrer");
     var target = (LoginReturn) request.getAttribute(LoginReturn.ATTRIBUTE);
     if (target != null) {

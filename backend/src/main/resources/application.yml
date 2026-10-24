@@ -88,6 +88,10 @@ stelody:
   favorites:
     limit: ${FAVORITE_LIMIT:5000}
   auth:
+    reauthentication:
+      redirect-uri: ${GOOGLE_REAUTHENTICATION_REDIRECT_URI:}
+      local-redirect-uri: ${GOOGLE_REAUTHENTICATION_LOCAL_REDIRECT_URI:}
+      frontend-origin: ${GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN:}
     google:
       redirect-uri: ${GOOGLE_REDIRECT_URI:}
       local-redirect-uri: ${GOOGLE_LOCAL_REDIRECT_URI:}

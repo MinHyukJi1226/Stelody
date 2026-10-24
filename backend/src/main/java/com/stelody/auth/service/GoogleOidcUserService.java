@@ -43,7 +43,7 @@ public class GoogleOidcUserService extends OidcUserService {
               ? accounts.signIn(google.getSubject(), google.getEmail())
               : accounts.reauthenticate(context.user().id(), google.getSubject());
       return new LocalOidcUser(google, account, context);
-    } catch (DataAccessException exception) {
+    } catch (DataAccessException | org.springframework.transaction.TransactionException exception) {
       throw new OAuth2AuthenticationException("account_storage_unavailable");
     }
   }

@@ -94,6 +94,13 @@ class GoogleLoginIntegrationTest {
     registry.add("spring.flyway.password", () -> "test-migrator");
     registry.add("server.servlet.session.cookie.secure", () -> false);
     registry.add(
+        "stelody.auth.reauthentication.redirect-uri",
+        () -> "http://localhost:5174/api/v1/auth/callback/google-reauthentication");
+    registry.add(
+        "stelody.auth.reauthentication.local-redirect-uri",
+        () -> "http://localhost:5173/api/v1/auth/callback/google-reauthentication-local");
+    registry.add("stelody.auth.reauthentication.frontend-origin", () -> "https://app.stelody.test");
+    registry.add(
         "stelody.auth.google.local-redirect-uri",
         () -> "http://localhost:5173/api/v1/auth/callback/google");
   }
@@ -1446,6 +1453,369 @@ class GoogleLoginIntegrationTest {
           .anySatisfy(c -> assertThat(c).contains("STELODY_LOGIN=", "Max-Age=0"));
     }
     assertThat(accountId(rememberedBrowser(valid))).isEqualTo(user);
+  }
+
+  String reauthCallback(String client) {
+    return "/api/v1/auth/callback/google-reauthentication"
+        + (client.equals("local") ? "-local" : "");
+  }
+
+  HttpResponse<String> startFrontendReauth(Browser browser, String body, String csrf)
+      throws Exception {
+    browser.allowSecureLocalhostCookiesForJdkTestClient();
+    var request =
+        HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/api/v1/me/reauthentications"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(body));
+    if (csrf != null) request.header("X-CSRF-TOKEN", csrf);
+    return browser.client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+  }
+
+  Authorization frontendReauth(Browser browser, String client, String path) throws Exception {
+    var result =
+        startFrontendReauth(
+            browser,
+            mapper.writeValueAsString(Map.of("returnTo", path, "callbackClient", client)),
+            browser.csrf());
+    assertThat(result.statusCode()).isEqualTo(200);
+    var json = mapper.readTree(result.body());
+    assertThat(Instant.parse(json.get("expiresAt").asText()))
+        .isBetween(Instant.now().plusSeconds(290), Instant.now().plusSeconds(301));
+    var query =
+        org.springframework.web.util.UriComponentsBuilder.fromUriString(
+                json.get("authorizationUrl").asText())
+            .build()
+            .getQueryParams();
+    assertThat(URLDecoder.decode(query.getFirst("redirect_uri"), StandardCharsets.UTF_8))
+        .isEqualTo(
+            "http://localhost:" + (client.equals("local") ? 5173 : 5174) + reauthCallback(client));
+    assertThat(query.getFirst("code_challenge_method")).isEqualTo("S256");
+    assertThat(query.getFirst("prompt")).isEqualTo("select_account");
+    return new Authorization(query.getFirst("state"), query.getFirst("nonce"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void frontendReauthenticationReturnsToStoredUiAndPreservesFixedLoginAndConfirmationPolicy(
+      String client) throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "frontend-reauth@example.invalid");
+    UUID user = accountId(browser);
+    SessionUser before = sessionUser(user);
+    var expires =
+        jdbc.queryForObject(
+            "SELECT expires_at FROM app.persistent_login WHERE id=?",
+            java.sql.Timestamp.class,
+            before.loginId());
+    String oldCsrf = browser.csrf();
+    var auth =
+        frontendReauth(
+            browser,
+            client,
+            "/account/withdraw?tab=confirm&reauthResult=fake&%72eauthError=fake&code=private&state=private#final");
+    tokens(auth, subject, "frontend-reauth@example.invalid", "none");
+    var result =
+        browser.get(
+            reauthCallback(client)
+                + "?code=test-code&state="
+                + auth.state()
+                + "&returnTo=https://evil.test&callbackClient=evil");
+    assertThat(result.statusCode()).isEqualTo(303);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue(
+            (client.equals("local") ? "http://localhost:5173" : "https://app.stelody.test")
+                + "/account/withdraw?tab=confirm&reauthResult=success#final");
+    assertThat(result.headers().firstValue("Cache-Control")).hasValue("no-store");
+    assertThat(result.headers().firstValue("Referrer-Policy")).hasValue("no-referrer");
+    assertThat(result.headers().allValues("Set-Cookie"))
+        .noneMatch(c -> c.startsWith("STELODY_LOGIN="));
+    google.verify(
+        1,
+        postRequestedFor(urlEqualTo("/token"))
+            .withRequestBody(containing("redirect_uri="))
+            .withFormParam(
+                "redirect_uri",
+                equalTo(
+                    "http://localhost:"
+                        + (client.equals("local") ? 5173 : 5174)
+                        + reauthCallback(client))));
+    assertThat(sessionUser(user)).isEqualTo(before);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT expires_at FROM app.persistent_login WHERE id=?",
+                java.sql.Timestamp.class,
+                before.loginId()))
+        .isEqualTo(expires);
+    var proof = mapper.readTree(browser.get("/api/v1/me/withdrawal-confirmation").body());
+    assertThat(proof.path("reauthenticated").asBoolean()).isTrue();
+    assertThat(Instant.parse(proof.path("expiresAt").asText()))
+        .isBetween(Instant.now().plusSeconds(290), Instant.now().plusSeconds(301));
+    assertThat(browser.mutate("DELETE", "/api/v1/me", oldCsrf).statusCode()).isEqualTo(403);
+    assertThat(browser.mutate("DELETE", "/api/v1/me", browser.csrf()).statusCode()).isEqualTo(204);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void frontendReauthenticationCancelAndDifferentAccountReturnSafeErrorsWithoutSwitchingIdentity(
+      String client) throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "frontend-failure@example.invalid");
+    UUID user = accountId(browser);
+    String origin = client.equals("local") ? "http://localhost:5173" : "https://app.stelody.test";
+    var auth = frontendReauth(browser, client, "/account/withdraw");
+    var cancel =
+        browser.get(
+            reauthCallback(client)
+                + "?error=access_denied&error_description=private-provider-detail&state="
+                + auth.state());
+    assertThat(cancel.statusCode()).isEqualTo(303);
+    assertThat(cancel.headers().firstValue("Location"))
+        .hasValue(
+            origin
+                + "/account/withdraw?reauthResult=cancelled&reauthError=GOOGLE_REAUTHENTICATION_CANCELLED");
+    assertThat(accountId(browser)).isEqualTo(user);
+    auth = frontendReauth(browser, client, "/account/withdraw");
+    String other = UUID.randomUUID().toString();
+    tokens(auth, other, "frontend-failure@example.invalid", "none");
+    var mismatch = browser.get(reauthCallback(client) + "?code=test-code&state=" + auth.state());
+    assertThat(mismatch.statusCode()).isEqualTo(303);
+    assertThat(mismatch.headers().firstValue("Location"))
+        .hasValue(
+            origin
+                + "/account/withdraw?reauthResult=failed&reauthError=REAUTHENTICATION_ACCOUNT_MISMATCH");
+    assertThat(accountId(browser)).isEqualTo(user);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.app_user WHERE google_subject=?", Integer.class, other))
+        .isZero();
+    assertThat(
+            mapper
+                .readTree(browser.get("/api/v1/me/withdrawal-confirmation").body())
+                .path("reauthenticated")
+                .asBoolean())
+        .isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void frontendInvalidMissingAndCrossClientCallbacksNeverExchangeCodesOrTakeCallbackReturnValues(
+      String client) throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "invalid-callback@example.invalid");
+    var auth = frontendReauth(browser, client, "/account/withdraw");
+    google.resetRequests();
+    String origin = client.equals("local") ? "http://localhost:5173" : "https://app.stelody.test";
+    for (String query :
+        new String[] {
+          "?code=private&state=wrong&returnTo=https://evil.test",
+          "?error=private",
+          "?code=private&state=" + auth.state() + "&state=" + auth.state(),
+          "?code=private&error=private&state=" + auth.state()
+        }) {
+      var result = browser.get(reauthCallback(client) + query);
+      assertThat(result.statusCode()).isEqualTo(303);
+      assertThat(result.headers().firstValue("Location"))
+          .hasValue(
+              origin
+                  + "/api/v1/me/withdrawal-confirmation?reauthResult=failed&reauthError=REAUTHENTICATION_REQUEST_INVALID");
+    }
+    String other = client.equals("local") ? "default" : "local";
+    var cross = browser.get(reauthCallback(other) + "?code=private&state=" + auth.state());
+    assertThat(cross.statusCode()).isEqualTo(303);
+    assertThat(cross.headers().firstValue("Location").orElseThrow())
+        .doesNotContain("/account/withdraw", "private", auth.state());
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    assertThat(
+            mapper
+                .readTree(browser.get("/api/v1/me/withdrawal-confirmation").body())
+                .path("reauthenticated")
+                .asBoolean())
+        .isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void frontendExpiredSessionDoesNotUseTheRememberCookieToReviveTheReauthentication(String client)
+      throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "expired-frontend@example.invalid");
+    UUID user = accountId(browser);
+    var auth = frontendReauth(browser, client, "/account/withdraw");
+    expireSession(sessions, user.toString(), false);
+    google.resetRequests();
+    var result = browser.get(reauthCallback(client) + "?code=private&state=" + auth.state());
+    assertThat(result.statusCode()).isEqualTo(303);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue(
+            (client.equals("local") ? "http://localhost:5173" : "https://app.stelody.test")
+                + "/api/v1/me/withdrawal-confirmation?reauthResult=failed&reauthError=SESSION_EXPIRED");
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    assertThat(accountId(browser)).isEqualTo(user);
+    assertThat(
+            mapper
+                .readTree(browser.get("/api/v1/me/withdrawal-confirmation").body())
+                .path("reauthenticated")
+                .asBoolean())
+        .isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "https://evil.test/withdraw",
+        "//evil.test/withdraw",
+        "/api/v1/me",
+        "/a/../withdraw",
+        "/%2f%2fevil.test",
+        "",
+        "/actuator/health"
+      })
+  void frontendReturnValidationRunsBeforeSavingAnOAuthRequest(String path) throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "bad-return@example.invalid");
+    UUID user = accountId(browser);
+    var result =
+        startFrontendReauth(
+            browser, mapper.writeValueAsString(Map.of("returnTo", path)), browser.csrf());
+    assertThat(result.statusCode()).isEqualTo(400);
+    assertThat(result.body())
+        .contains("INVALID_REAUTHENTICATION_RETURN")
+        .doesNotContain("evil.test");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM app.account_reauthentication WHERE user_id=?",
+                Integer.class,
+                user))
+        .isZero();
+  }
+
+  @Test
+  void frontendStartKeepsCsrfAuthenticationAndClientValidation() throws Exception {
+    var anonymous = new Browser();
+    assertThat(startFrontendReauth(anonymous, "{}", anonymous.csrf()).statusCode()).isEqualTo(401);
+    var browser = login(UUID.randomUUID().toString(), "reauth-validation@example.invalid");
+    assertThat(startFrontendReauth(browser, "{}", null).statusCode()).isEqualTo(403);
+    var bad = startFrontendReauth(browser, "{\"callbackClient\":\"external\"}", browser.csrf());
+    assertThat(bad.statusCode()).isEqualTo(400);
+    assertThat(bad.body()).contains("INVALID_REAUTHENTICATION_CLIENT");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void expiredFrontendOAuthRequestReturnsToItsStoredScreenWithoutExchangingTheCode(String client)
+      throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "expired-state-frontend@example.invalid");
+    UUID user = accountId(browser);
+    var auth = frontendReauth(browser, client, "/account/withdraw");
+    for (var session : sessions.findByPrincipalName(user.toString()).values()) {
+      for (String attribute : session.getAttributeNames()) {
+        Object value = session.getAttribute(attribute);
+        if (value instanceof OAuth2AuthorizationRequest saved) {
+          com.stelody.auth.domain.ReauthenticationContext context =
+              saved.getAttribute(com.stelody.auth.domain.ReauthenticationContext.ATTRIBUTE);
+          if (context != null) {
+            var expired =
+                new com.stelody.auth.domain.ReauthenticationContext(
+                    context.user(),
+                    context.sessionHash(),
+                    context.generation(),
+                    Instant.now().minusSeconds(1),
+                    context.target());
+            session.setAttribute(
+                attribute,
+                OAuth2AuthorizationRequest.from(saved)
+                    .attributes(
+                        a ->
+                            a.put(
+                                com.stelody.auth.domain.ReauthenticationContext.ATTRIBUTE, expired))
+                    .build());
+          }
+        }
+      }
+      ((org.springframework.session.SessionRepository) sessions).save(session);
+    }
+    google.resetRequests();
+    var result = browser.get(reauthCallback(client) + "?code=private&state=" + auth.state());
+    assertThat(result.statusCode()).isEqualTo(303);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue(
+            (client.equals("local") ? "http://localhost:5173" : "https://app.stelody.test")
+                + "/account/withdraw?reauthResult=failed&reauthError=REAUTHENTICATION_REQUEST_EXPIRED");
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"issuer", "audience", "nonce", "expired", "signature", "unverified"})
+  void invalidProviderIdentityReturnsAnAllowedFrontendErrorWithoutConfirmingWithdrawal(
+      String defect) throws Exception {
+    String subject = UUID.randomUUID().toString();
+    var browser = login(subject, "invalid-provider-frontend@example.invalid");
+    UUID user = accountId(browser);
+    var auth = frontendReauth(browser, "local", "/account/withdraw");
+    tokens(auth, subject, "invalid-provider-frontend@example.invalid", defect);
+    var result = browser.get(reauthCallback("local") + "?code=test-code&state=" + auth.state());
+    assertThat(result.statusCode()).isEqualTo(303);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue(
+            "http://localhost:5173/account/withdraw?reauthResult=failed&reauthError=GOOGLE_REAUTHENTICATION_FAILED");
+    assertThat(accountId(browser)).isEqualTo(user);
+    assertThat(
+            mapper
+                .readTree(browser.get("/api/v1/me/withdrawal-confirmation").body())
+                .path("reauthenticated")
+                .asBoolean())
+        .isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"default", "local"})
+  void storageFailureConsumingFrontendReauthenticationDoesNotBecomeCancellationOrSuccess(
+      String client) throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "consume-outage-frontend@example.invalid");
+    var auth = frontendReauth(browser, client, "/account/withdraw");
+    google.resetRequests();
+    owner().execute("REVOKE UPDATE ON app.account_reauthentication FROM stelody_app");
+    try {
+      var result = browser.get(reauthCallback(client) + "?code=private&state=" + auth.state());
+      assertThat(result.statusCode()).isEqualTo(303);
+      assertThat(result.headers().firstValue("Location"))
+          .hasValue(
+              (client.equals("local") ? "http://localhost:5173" : "https://app.stelody.test")
+                  + "/account/withdraw?reauthResult=failed&reauthError=ACCOUNT_STORAGE_UNAVAILABLE");
+      google.verify(0, postRequestedFor(urlEqualTo("/token")));
+    } finally {
+      owner().execute("GRANT UPDATE ON app.account_reauthentication TO stelody_app");
+    }
+    assertThat(
+            mapper
+                .readTree(browser.get("/api/v1/me/withdrawal-confirmation").body())
+                .path("reauthenticated")
+                .asBoolean())
+        .isFalse();
+  }
+
+  @Test
+  void absoluteSessionExpiryUsesAFrontendSessionErrorWithoutExtendingRememberedLogin()
+      throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "absolute-expiry-frontend@example.invalid");
+    UUID user = accountId(browser);
+    var auth = frontendReauth(browser, "local", "/account/withdraw");
+    expireSession(sessions, user.toString(), true);
+    google.resetRequests();
+    var result = browser.get(reauthCallback("local") + "?code=private&state=" + auth.state());
+    assertThat(result.statusCode()).isEqualTo(303);
+    assertThat(result.headers().firstValue("Location"))
+        .hasValue(
+            "http://localhost:5173/api/v1/me/withdrawal-confirmation?reauthResult=failed&reauthError=SESSION_EXPIRED");
+    google.verify(0, postRequestedFor(urlEqualTo("/token")));
+  }
+
+  @Test
+  void malformedFrontendJsonHasTheDocumentedProblemCodeWithoutEchoingTheInput() throws Exception {
+    var browser = login(UUID.randomUUID().toString(), "malformed-frontend@example.invalid");
+    var result = startFrontendReauth(browser, "{\"returnTo\":[\"private-input\"]}", browser.csrf());
+    assertThat(result.statusCode()).isEqualTo(400);
+    assertThat(result.body())
+        .contains("INVALID_REAUTHENTICATION_REQUEST")
+        .doesNotContain("private-input");
   }
 
   @Test

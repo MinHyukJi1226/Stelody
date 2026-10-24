@@ -17,6 +17,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({
   SecurityConfiguration.class,
   com.stelody.auth.web.GoogleLoginClients.class,
+  com.stelody.auth.web.ReauthenticationClients.class,
+  com.stelody.auth.web.ReauthenticationRedirects.class,
   com.stelody.auth.web.ApiProblems.class,
   com.stelody.auth.web.LoginHandlers.class,
   com.stelody.auth.service.GoogleOidcUserService.class

@@ -31,13 +31,32 @@ public class WithdrawalController {
   @Schema(requiredProperties = {"authorizationUrl", "expiresAt"})
   public record Authorization(String authorizationUrl, Instant expiresAt) {}
 
+  public record ReauthenticationInput(
+      @Schema(
+              description = "사이트 내부 UI 경로. 생략하면 기존 재인증 확인 API로 복귀",
+              maxLength = 2048,
+              nullable = true)
+          String returnTo,
+      @Schema(
+              description = "서버에 등록된 콜백 선택",
+              allowableValues = {"default", "local"},
+              defaultValue = "default",
+              nullable = true)
+          String callbackClient) {}
+
   @PostMapping("/api/v1/me/reauthentications")
   @Operation(summary = "탈퇴를 위한 Google 재인증 시작")
   public ResponseEntity<Authorization> start(
       @AuthenticationPrincipal SessionUser user,
       HttpServletRequest request,
-      HttpServletResponse response) {
-    var flow = reauthentication.start(user, request);
+      HttpServletResponse response,
+      @RequestBody(required = false) ReauthenticationInput input) {
+    var flow =
+        reauthentication.start(
+            user,
+            request,
+            input == null ? null : input.returnTo(),
+            input == null ? null : input.callbackClient());
     authorizations.saveAuthorizationRequest(flow.request(), request, response);
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
