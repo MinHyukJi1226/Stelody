@@ -37,19 +37,19 @@ class BackupGuardsTest(unittest.TestCase):
         path.chmod(0o600)
 
     def test_validated_archives_remain_valid_but_unknown_schema_is_rejected(self):
-        for version in (19, 20, 21, 22, 23, 24, 25):
+        for version in (19, 20, 21, 22, 23, 24, 25, 26):
             self.metadata['schemaVersion'] = version
             self.metadata['excludedData'] = list(backup.excluded_data(version))
             self.save_manifest()
             self.assertEqual(version, backup.validate_archive(self.bundle)['schemaVersion'])
-        self.metadata['schemaVersion'] = 26
+        self.metadata['schemaVersion'] = 27
         self.save_manifest()
         with self.assertRaisesRegex(backup.OperationError, 'Unsupported backup format/schema'):
             backup.validate_archive(self.bundle)
 
     def test_unvalidated_database_schema_rejected_before_dump(self):
         with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner'}), \
-             patch.object(backup, 'sql', return_value='26'), patch.object(backup, 'run') as command:
+             patch.object(backup, 'sql', return_value='27'), patch.object(backup, 'run') as command:
             with self.assertRaisesRegex(backup.OperationError, 'Unsupported database schema'):
                 backup.backup(self.root)
             command.assert_not_called()
@@ -73,6 +73,17 @@ class BackupGuardsTest(unittest.TestCase):
         self.save_manifest()
         backup.validate_archive(self.bundle)
         self.assertIn('app.persistent_login', self.metadata['excludedData'])
+
+    def test_withdrawal_results_are_excluded_only_for_v26_and_later(self):
+        self.assertNotIn('app.withdrawal_result', backup.excluded_data(25))
+        self.assertIn('app.withdrawal_result', backup.excluded_data(26))
+        self.metadata.update(schemaVersion=26, excludedData=list(backup.excluded_data(25)))
+        self.save_manifest()
+        with self.assertRaisesRegex(backup.OperationError, 'exclusion policy'):
+            backup.validate_archive(self.bundle)
+        self.metadata['excludedData'] = list(backup.excluded_data(26))
+        self.save_manifest()
+        backup.validate_archive(self.bundle)
 
     def ledger(self, **overrides):
         timestamp = backup.now().isoformat()

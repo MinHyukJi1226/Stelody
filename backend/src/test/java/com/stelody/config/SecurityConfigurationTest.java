@@ -89,6 +89,9 @@ class SecurityConfigurationTest {
   @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.user.service.WithdrawalService withdrawals;
 
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.user.service.WithdrawalResults withdrawalResults;
+
   @Test
   void missingGoogleConfigurationIsReportedWithoutFakeLogin() throws Exception {
     mvc.perform(get("/api/v1/auth/google"))

@@ -53,6 +53,15 @@ public class ApiDocumentationConfiguration {
   OpenApiCustomizer apiContract() {
     return api -> {
       api.getComponents().addSchemas("ApiProblem", problemSchema());
+      api.getComponents()
+          .addSecuritySchemes(
+              "withdrawalQuery",
+              new SecurityScheme()
+                  .type(SecurityScheme.Type.APIKEY)
+                  .in(SecurityScheme.In.HEADER)
+                  .name("X-Withdrawal-Token")
+                  .description(
+                      "탈퇴 전에 발급받는 해당 요청의 조회 전용 토큰. 발급 후 24시간. 세션·계정 없이 사용하며 탈퇴 실행 권한은 없습니다. URL·로그에 포함하지 않습니다."));
       api.getPaths()
           .addPathItem(
               "/api/v1/auth/logout",
@@ -170,6 +179,7 @@ public class ApiDocumentationConfiguration {
                             frontendErrors(path, verb, operation);
                             youtubeReturn(path, operation);
                             reauthenticationContract(path, verb, operation);
+                            withdrawalResultContract(path, verb, operation);
                             if (List.of("/api/v1/me", "/api/v1/auth/csrf", "/api/v1/auth/logout")
                                 .contains(path))
                               errorCodes(
@@ -378,7 +388,8 @@ public class ApiDocumentationConfiguration {
     else if (verb.equals("POST")
         && (path.endsWith("/youtube-exports") || path.endsWith("/retries"))) status = "202";
     else if (verb.equals("POST")
-        && (path.equals("/api/v1/me/playlists")
+        && (path.equals("/api/v1/me/withdrawal-requests")
+            || path.equals("/api/v1/me/playlists")
             || path.matches("/api/v1/admin/(members|artists|works|songs|channels)")
             || path.endsWith("/registration")
             || path.endsWith("/videos"))) status = "201";
@@ -561,6 +572,74 @@ public class ApiDocumentationConfiguration {
           "INVALID_EXPORT_REQUEST");
       errorCodes(operation, "409", "권한 철회 완료 후 추가 동의를 다시 시작합니다.", "YOUTUBE_REVOCATION_PENDING");
       errorCodes(operation, "503", "YouTube OAuth 설정이 없습니다.", "YOUTUBE_OAUTH_UNAVAILABLE");
+    }
+  }
+
+  private static void withdrawalResultContract(String path, String verb, Operation operation) {
+    if (path.equals("/api/v1/me/withdrawal-requests")) {
+      operation.setDescription(
+          operation.getDescription()
+              + "\n탈퇴 전에 빈 본문으로 호출하여 id·queryToken·expiresAt을 먼저 확보합니다. 이 API는 탈퇴·재인증·YouTube 철회를 실행하지 않습니다. 발급 시점부터 24시간이며 재조회·재인증으로 연장하지 않습니다. 프론트는 DELETE 전에 같은 탭 sessionStorage에 세 값을 저장합니다. 발급 응답 유실 시 DELETE하지 않고 새 발급을 받습니다. queryToken은 256비트 조회 전용 권한이며 서버에는 해시만 저장합니다. 다른 요청이나 계정 조회·탈퇴 실행에는 사용할 수 없습니다.");
+      errorCodes(
+          operation,
+          "503",
+          "발급 저장소 오류. DELETE를 실행하지 않습니다.",
+          "ACCOUNT_STORAGE_UNAVAILABLE",
+          "LOGIN_STORAGE_UNAVAILABLE");
+    }
+    if (path.equals("/api/v1/me") && verb.equals("DELETE")) {
+      operation.setDescription(
+          operation.getDescription()
+              + "\n응답 유실에 대비하려면 먼저 POST /api/v1/me/withdrawal-requests로 받은 id를 선택 Withdrawal-Request-Id 헤더로 전달합니다. 본인의 아직 사용하지 않은 24시간 내 ID만 허용하며 한 번만 접수합니다. 조회 토큰은 DELETE에 필요하지 않으며 로그인·CSRF·5분 재인증이 그대로 필요합니다. 미지정한 기존 클라이언트는 종전 204 계약을 유지하지만 사후 요청 결과를 조회할 수 없습니다. 응답 유실 시 같은 id·queryToken으로 GET 결과만 확인하고 자동 DELETE 또는 새 ID 반복 접수를 하지 않습니다.");
+      errorCodes(operation, "400", "ID 입력값을 오류 응답에 포함하지 않습니다.", "INVALID_WITHDRAWAL_REQUEST_ID");
+      errorCodes(
+          operation,
+          "409",
+          "ID가 없거나 다른 계정·만료·이미 접수된 요청입니다. 기존 조회 권한으로 결과를 확인합니다.",
+          "WITHDRAWAL_REQUEST_UNAVAILABLE");
+    }
+    if (path.equals("/api/v1/withdrawal-requests/{id}")) {
+      operation.setTags(List.of("개인 계정·목록"));
+      operation.setSecurity(List.of(new SecurityRequirement().addList("withdrawalQuery")));
+      operation.getParameters().stream()
+          .filter(p -> p.getName().equals("X-Withdrawal-Token"))
+          .forEach(
+              p -> {
+                p.setRequired(true);
+                p.setSchema(
+                    new StringSchema().minLength(43).maxLength(43).pattern("[A-Za-z0-9_-]{43}"));
+              });
+      operation.setDescription(
+          "로그인 세션·계정·CSRF와 독립된 조회 전용 API입니다. X-Withdrawal-Token 헤더로 해당 id의 결과만 확인합니다. GET은 탈퇴·철회·재시도·상태 변경을 실행하지 않습니다. COMPLETED는 계정 삭제와 같은 DB 트랜잭션으로 확정된 완료, PROCESSING은 접수되어 처리 중, NOT_COMPLETED는 확정된 업무 거절로 미완료, UNKNOWN은 미접수(WITHDRAWAL_NOT_SUBMITTED)·커밋 결과 불확실·처리 중단 등 확인 불가입니다. PROCESSING이 시작 후 2분을 넘기면 조회 시 UNKNOWN으로 안내하며, 이후 DB 완료가 확인되면 COMPLETED가 될 수 있습니다. 미접수는 요청이 아직 전송 중일 가능성이 있으므로 확정 미완료로 안내하지 않습니다. PROCESSING만 3초 간격으로 재조회하며 pollAfterSeconds=3 및 Retry-After: 3을 제공합니다. 나머지 상태의 pollAfterSeconds는 null입니다. UNKNOWN·조회 오류에는 자동 DELETE하지 않고 수동 재조회 또는 문의합니다. 새로고침 시 sessionStorage의 id·queryToken·expiresAt으로 같은 요청을 조회합니다. COMPLETED·NOT_COMPLETED·만료 후 보관값을 삭제하며 탭 종료 시 소실됩니다. 발급 후 24시간 만료, 서버는 만료 기록을 주기적으로 제거합니다. 404(기록 없음·잘못된 조회 권한), 410(만료), 503(저장소 장애)는 완료 증거가 아닙니다. 무세션·만료 SESSION·다른 사용자 로그인 여부와 관계없이 조회 토큰만 검증하며 다른 계정 정보는 응답하지 않습니다. Cache-Control: no-store, Referrer-Policy: no-referrer. 토큰을 URL·분석 로그에 넣지 마세요.");
+      operation.getResponses().remove("401");
+      operation
+          .getResponses()
+          .get("default")
+          .setDescription("결과 조회 오류이며 세션 유무나 조회 실패를 탈퇴 완료로 해석하지 않습니다.");
+      errorCodes(
+          operation,
+          "400",
+          "입력값을 응답에 포함하지 않습니다.",
+          "INVALID_WITHDRAWAL_REQUEST_ID",
+          "INVALID_WITHDRAWAL_TOKEN");
+      errorCodes(
+          operation,
+          "404",
+          "기록 없음과 잘못된 권한은 동일 응답입니다. 완료로 판단하지 않습니다.",
+          "WITHDRAWAL_RESULT_NOT_FOUND");
+      errorCodes(
+          operation, "410", "유효한 조회 권한의 기록이 만료되었습니다. 완료로 판단하지 않습니다.", "WITHDRAWAL_RESULT_EXPIRED");
+      errorCodes(
+          operation,
+          "503",
+          "조회 저장소 장애입니다. 작업 없음 또는 완료로 처리하지 않습니다.",
+          "WITHDRAWAL_RESULT_STORAGE_UNAVAILABLE");
+      operation
+          .getResponses()
+          .get("200")
+          .addHeaderObject(
+              "Retry-After",
+              new Header().schema(new IntegerSchema()).description("PROCESSING일 때만 3초"));
     }
   }
 

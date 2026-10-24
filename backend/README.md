@@ -66,6 +66,11 @@ cd backend
 - 세션은 비활동 30분·생성 후 최대 12시간입니다. **일반 USER는 최초 Google 로그인부터 30일간 자동 로그인**합니다. 별도 `STELODY_LOGIN` 쿠키(Secure·HttpOnly·SameSite=Lax·Path=/)를 검증해 다음 API 요청에서 새 세션을 만들며, 복구·탈퇴 재인증은 30일 기한을 연장하지 않습니다. 관리자에게는 발급하지 않습니다. 로그아웃은 현재 기기의 자격과 복구 세션을 폐기하며 다른 기기는 유지합니다. 계정 삭제·상태·역할 변경은 모든 자격을 폐기합니다.
 - 프론트는 기존 세션·CSRF API를 사용하고 모든 `Set-Cookie`를 프록시에서 그대로 전달합니다. 짧은 세션 복구에는 기존 유효 CSRF 헤더를 사용할 수 있지만, 로그인·명시적 재인증·로그아웃 뒤에는 다시 조회합니다. 503 `LOGIN_STORAGE_UNAVAILABLE`은 확인·복구·폐기 실패이며 로그인 해제나 변경 성공으로 처리하지 않습니다. 30일 만료·쿠키 삭제 후에는 Google 로그인이 필요합니다.
 - V25는 로그인 유지 자격 테이블과 계정 변경 시 폐기 트리거를 추가합니다. `SPRING_FLYWAY_ENABLED=false`인 운영에는 **새 코드 배포 전에 전용 마이그레이터로 V25를 적용**합니다. 런타임 역할만 자격 테이블에 접근하며 복구 시 자격은 제외됩니다.
+- **탈퇴 결과 확인:** 최종 DELETE 전에 POST `/api/v1/me/withdrawal-requests`(로그인·CSRF, 본문 없음)로 `{id, queryToken, expiresAt}`을 발급받아 같은 탭 `sessionStorage`에 저장합니다. 발급 후 24시간이며 연장하지 않습니다. DELETE `/api/v1/me`에 선택 `Withdrawal-Request-Id: id`를 전달하면 한 번만 접수하며 로그인·CSRF·재인증 조건은 그대로입니다. 헤더 생략 시 기존 DELETE 계약을 유지하지만 사후 조회는 제공하지 않습니다.
+  - GET `/api/v1/withdrawal-requests/{id}` + `X-Withdrawal-Token`은 세션·계정 삭제 후에도 해당 요청만 읽습니다. 토큰은 조회 전용이며 URL·로그에 넣지 않습니다. 서버에는 해시만 저장하고 개인정보를 응답하지 않습니다.
+  - `COMPLETED`: 계정 삭제와 같은 트랜잭션으로 확정. `PROCESSING`: 접수·처리 중. `NOT_COMPLETED`: 확정된 업무 거절(`code`). `UNKNOWN`: 미접수(`WITHDRAWAL_NOT_SUBMITTED`)·커밋 불확실·처리 중단 등 확인 불가. 처리 시작 후 2분을 넘긴 PROCESSING도 UNKNOWN으로 안내하며 후속 완료가 확인되면 바뀔 수 있습니다.
+  - PROCESSING만 `pollAfterSeconds=3`·`Retry-After: 3`에 맞춰 재조회합니다. 새로고침은 저장한 같은 ID·토큰을 사용합니다. 완료·확정 미완료·만료 시 저장값을 삭제합니다. 응답 유실·UNKNOWN에는 자동 DELETE나 새 ID 반복 접수를 하지 않습니다. 미접수는 요청이 아직 전송 중일 수 있어 확정 미완료로 처리하지 않습니다.
+  - 400 `INVALID_WITHDRAWAL_REQUEST_ID`·`INVALID_WITHDRAWAL_TOKEN`, 404 `WITHDRAWAL_RESULT_NOT_FOUND`(기록 없음·잘못된 권한), 410 `WITHDRAWAL_RESULT_EXPIRED`, 503 `WITHDRAWAL_RESULT_STORAGE_UNAVAILABLE`을 구분하고 완료로 처리하지 않습니다. DELETE 409 `WITHDRAWAL_REQUEST_UNAVAILABLE`은 없거나 다른 계정·만료·이미 사용한 ID입니다. 결과 기록은 만료 후 정리하고 백업·복구에서 제외합니다. V26 결과 테이블이 필요하므로 자동 마이그레이션이 꺼진 운영에는 **새 코드 배포 전에 V26을 적용**합니다. 추가 환경변수는 없습니다.
 - 탈퇴는 POST `/api/v1/me/reauthentications`로 같은 계정을 재인증한 뒤 새 CSRF로 5분 내 DELETE `/api/v1/me`를 호출합니다. 철회·탈퇴 기록 저장 실패 시 계정은 유지됩니다.
   - 선택 JSON `{"returnTo":"/확정된-탈퇴-화면","callbackClient":"local"}`을 보내고 응답 `authorizationUrl`로 브라우저를 이동합니다. `returnTo`는 최대 2,048자 내부 UI 경로만, `callbackClient`는 `default`(기본)·`local`만 허용합니다. 본문·필드·null 생략을 지원합니다. `returnTo` 생략 + default는 기존 콜백·확인 JSON 복귀를 유지하고, local에서 경로를 생략하거나 신뢰할 복귀 정보가 사라지면 `/api/v1/me/withdrawal-confirmation`으로 돌아갑니다.
   - 새 프론트 복귀용 기본 콜백: `GOOGLE_REAUTHENTICATION_REDIRECT_URI=<같은 세션을 쓰는 공개 origin>/api/v1/auth/callback/google-reauthentication`. 프론트·API가 프록시로 연결되면 콜백도 같은 공개 `/api` 프록시를 사용합니다. `GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN=https://<프론트 도메인>`으로 복귀 origin을 지정할 수 있고 미설정 시 상대 경로로 복귀합니다. 도메인·연결 방식은 배포 준비 때 함께 확정합니다.
@@ -261,9 +266,9 @@ java -jar backend/build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover
 <details>
 <summary>암호화 백업 · 독립 탈퇴 기록 · 복구</summary>
 
-백업·복구는 V19~V25를 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
+백업·복구는 V19~V26을 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
 
-백업은 카탈로그·회원·즐겨찾기·개인 목록을 보존합니다. 세션·30일 로그인 유지 자격·재인증·YouTube 토큰/동의/내보내기·조회수 표본·수집 작업은 제외합니다. 최대 유효 기간은 7일이며 원본 자료 기한이 먼저 오면 더 짧아집니다. 복구 키와 별도 탈퇴 기록이 필요합니다.
+백업은 카탈로그·회원·즐겨찾기·개인 목록을 보존합니다. 세션·30일 로그인 유지 자격·재인증·탈퇴 결과 조회 권한/기록·YouTube 토큰/동의/내보내기·조회수 표본·수집 작업은 제외합니다. 최대 유효 기간은 7일이며 원본 자료 기한이 먼저 오면 더 짧아집니다. 복구 키와 별도 탈퇴 기록이 필요합니다.
 
 **백업 저장소:** 전용 Private B2 버킷, `stelody/backups/` 범위의 읽기·쓰기·목록·삭제 키를 사용합니다. Object Lock은 끕니다. 업로드 1일 후 숨김·숨김 1일 후 삭제·미완료 대용량 업로드 1일 후 취소를 설정합니다. 일일 처리로 실제 삭제가 늦어질 수 있습니다. 작업은 만료된 모든 버전을 VersionId로 삭제하며 업로드에는 원본 자료 기한이 5일 이상 남아야 합니다. 덤프·암호문 상한은 각각 128MiB입니다.
 

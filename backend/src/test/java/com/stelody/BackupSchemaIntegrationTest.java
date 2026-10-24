@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -96,6 +96,9 @@ class BackupSchemaIntegrationTest {
     if (version >= 25)
       owner.execute(
           "INSERT INTO app.persistent_login(id,user_id,token_hash,csrf_token,created_at,expires_at) VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000001',repeat('a',64),'test-csrf',now(),now()+interval '30 days')");
+    if (version >= 26)
+      owner.execute(
+          "INSERT INTO app.withdrawal_result(id,user_id,token_hash,status) VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000001',repeat('b',64),'PREPARED')");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
     String directory = "/tmp/backups-v" + version;
@@ -150,6 +153,23 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 26) {
+      assertThat(
+              runtime.queryForObject("SELECT count(*) FROM app.withdrawal_result", Integer.class))
+          .isZero();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege(current_user,'app.withdrawal_result','SELECT,INSERT,UPDATE,DELETE')",
+                  Boolean.class))
+          .isTrue();
+      for (String role : new String[] {"stelody_collector", "stelody_operator"})
+        assertThat(
+                runtime.queryForObject(
+                    "SELECT has_table_privilege(?,'app.withdrawal_result','SELECT')",
+                    Boolean.class,
+                    role))
+            .isFalse();
+    }
     if (version >= 25) {
       assertThat(runtime.queryForObject("SELECT count(*) FROM app.persistent_login", Integer.class))
           .isZero();

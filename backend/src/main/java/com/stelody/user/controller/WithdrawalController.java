@@ -78,8 +78,12 @@ public class WithdrawalController {
   public ResponseEntity<Void> withdraw(
       @AuthenticationPrincipal SessionUser user,
       HttpServletRequest request,
-      HttpServletResponse response) {
-    withdrawals.withdraw(user.id(), request.getSession().getId());
+      HttpServletResponse response,
+      @RequestHeader(
+              value = com.stelody.user.service.WithdrawalResults.REQUEST_HEADER,
+              required = false)
+          String requestId) {
+    withdrawals.withdraw(user.id(), request.getSession().getId(), requestId);
     response.addHeader(
         "Set-Cookie",
         ResponseCookie.from(com.stelody.auth.service.PersistentLoginService.COOKIE, "")

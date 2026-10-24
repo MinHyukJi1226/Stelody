@@ -17,13 +17,16 @@ public class WithdrawalService {
   private final YouTubeConnectionService connections;
   private final TransactionTemplate transaction;
   private final WithdrawalJournal journal;
+  private final WithdrawalResults results;
 
   public WithdrawalService(
       WithdrawalRepository store,
       ExportRepository exports,
       YouTubeConnectionService connections,
       PlatformTransactionManager manager,
-      WithdrawalJournal journal) {
+      WithdrawalJournal journal,
+      WithdrawalResults results) {
+    this.results = results;
     this.store = store;
     this.exports = exports;
     this.connections = connections;
@@ -33,6 +36,20 @@ public class WithdrawalService {
   }
 
   public void withdraw(UUID user, String session) {
+    withdraw(user, session, null);
+  }
+
+  public void withdraw(UUID user, String session, String requestId) {
+    UUID receipt = results.claim(user, requestId);
+    try {
+      perform(user, session, receipt);
+    } catch (RuntimeException e) {
+      results.failed(receipt, e);
+      throw e;
+    }
+  }
+
+  private void perform(UUID user, String session, UUID receipt) {
     String hash = YouTubeConnectionService.hash(session);
     boolean deleted =
         Boolean.TRUE.equals(
@@ -55,6 +72,7 @@ public class WithdrawalService {
                   // Keep the authorized intent if a later commit fails: recovery must err toward
                   // deletion.
                   journal.record(user);
+                  results.completed(receipt);
                   return true;
                 }));
     // Commit REVOKING and cancellation even if Google is unavailable; the worker can retry.
