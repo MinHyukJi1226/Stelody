@@ -11,12 +11,15 @@ public class ReauthenticationCleanup {
   private static final Logger log = LoggerFactory.getLogger(ReauthenticationCleanup.class);
   private final com.stelody.auth.repository.PersistentLoginRepository persistent;
   private final WithdrawalRepository store;
+  private final com.stelody.user.service.WithdrawalResults results;
 
   public ReauthenticationCleanup(
       WithdrawalRepository store,
+      com.stelody.user.service.WithdrawalResults results,
       com.stelody.auth.repository.PersistentLoginRepository persistent) {
     this.persistent = persistent;
     this.store = store;
+    this.results = results;
   }
 
   @Scheduled(
@@ -26,6 +29,7 @@ public class ReauthenticationCleanup {
     try {
       store.expire();
       persistent.cleanup();
+      results.cleanup();
     } catch (RuntimeException error) {
       log.warn("Reauthentication cleanup failed; the next invocation will retry");
     }

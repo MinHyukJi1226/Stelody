@@ -52,6 +52,49 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsPreissuedWithdrawalResultAuthorityAndUnknownOutcomes() throws Exception {
+    var api = contract();
+    var prepare = api.at("/paths/~1api~1v1~1me~1withdrawal-requests/post");
+    assertThat(prepare.path("responses").has("201")).isTrue();
+    assertThat(prepare.path("security").toString()).contains("session", "csrf");
+    var query = api.at("/paths/~1api~1v1~1withdrawal-requests~1{id}/get");
+    assertThat(query.path("security").toString())
+        .contains("withdrawalQuery")
+        .doesNotContain("session", "csrf");
+    for (var parameter : query.path("parameters"))
+      if (parameter.path("name").asText().equals("X-Withdrawal-Token")) {
+        assertThat(parameter.path("required").asBoolean()).isTrue();
+        assertThat(parameter.path("schema").path("maxLength").asInt()).isEqualTo(43);
+        assertThat(parameter.path("schema").has("enum")).isFalse();
+      }
+    assertThat(query.path("description").asText())
+        .contains(
+            "COMPLETED",
+            "PROCESSING",
+            "NOT_COMPLETED",
+            "UNKNOWN",
+            "24시간",
+            "sessionStorage",
+            "3초",
+            "2분");
+    assertErrorCodes(
+        api, "/api/v1/withdrawal-requests/{id}", "get", "404", "WITHDRAWAL_RESULT_NOT_FOUND");
+    assertErrorCodes(
+        api, "/api/v1/withdrawal-requests/{id}", "get", "410", "WITHDRAWAL_RESULT_EXPIRED");
+    assertErrorCodes(
+        api,
+        "/api/v1/withdrawal-requests/{id}",
+        "get",
+        "503",
+        "WITHDRAWAL_RESULT_STORAGE_UNAVAILABLE");
+    assertThat(api.at("/paths/~1api~1v1~1me/delete/parameters").toString())
+        .contains("Withdrawal-Request-Id");
+    assertThat(api.at("/components/securitySchemes/withdrawalQuery/name").asText())
+        .isEqualTo("X-Withdrawal-Token");
+    assertThat(query.path("responses").path("200").path("headers").has("Retry-After")).isTrue();
+  }
+
+  @Test
   void documentsEveryControllerRouteAndExportsValidatedContract() throws Exception {
     var api = contract();
     assertThat(api.path("openapi").asText()).startsWith("3.1.");
@@ -144,7 +187,8 @@ class OpenApiIntegrationTest {
         "409",
         "REAUTHENTICATION_REQUIRED",
         "YOUTUBE_EXPORT_BUSY",
-        "YOUTUBE_REVOCATION_PENDING");
+        "YOUTUBE_REVOCATION_PENDING",
+        "WITHDRAWAL_REQUEST_UNAVAILABLE");
     assertErrorCodes(
         api,
         "/api/v1/me",

@@ -109,7 +109,7 @@ class AccountWithdrawalIntegrationTest {
             new DriverManagerDataSource(
                 postgres.getJdbcUrl(), "stelody_migrator", "test-migrator"));
     owner.execute(
-        "TRUNCATE app.app_user,app.song_entry,app.channel,session.spring_session CASCADE");
+        "TRUNCATE app.withdrawal_result,app.app_user,app.song_entry,app.channel,session.spring_session CASCADE");
     for (UUID user : List.of(USER, OTHER))
       owner.update(
           "INSERT INTO app.app_user(id,google_subject,email) VALUES(?,?,?)",
@@ -253,6 +253,289 @@ class AccountWithdrawalIntegrationTest {
     assertThat(count("app.playlist_item", "playlist_id", PLAYLIST)).isEqualTo(1);
     assertThat(sessions.findByPrincipalName(USER.toString())).hasSize(2);
     mvc.perform(get("/api/v1/me").cookie(first.cookie())).andExpect(status().isOk());
+  }
+
+  com.stelody.user.service.WithdrawalResults.Prepared prepareResult(Browser browser)
+      throws Exception {
+    var response =
+        mvc.perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/api/v1/me/withdrawal-requests")
+                    .cookie(browser.cookie())
+                    .header("X-CSRF-TOKEN", browser.csrf()))
+            .andExpect(status().isCreated())
+            .andExpect(
+                header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+            .andReturn()
+            .getResponse();
+    return mapper.readValue(
+        response.getContentAsString(), com.stelody.user.service.WithdrawalResults.Prepared.class);
+  }
+
+  tools.jackson.databind.JsonNode queryResult(
+      com.stelody.user.service.WithdrawalResults.Prepared receipt, String expected)
+      throws Exception {
+    var response =
+        mvc.perform(
+                get("/api/v1/withdrawal-requests/" + receipt.id())
+                    .header("X-Withdrawal-Token", receipt.queryToken()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(expected))
+            .andExpect(header().string("Referrer-Policy", "no-referrer"))
+            .andReturn()
+            .getResponse();
+    return mapper.readTree(response.getContentAsString());
+  }
+
+  void trackedDelete(
+      com.stelody.user.service.WithdrawalResults.Prepared receipt, Browser browser, int expected)
+      throws Exception {
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/me")
+                .cookie(browser.cookie())
+                .header("X-CSRF-TOKEN", browser.csrf())
+                .header("Withdrawal-Request-Id", receipt.id()))
+        .andExpect(status().is(expected));
+  }
+
+  @Test
+  void lostResponseCanBeRecoveredWithoutAccountSessionOrNewMutation() throws Exception {
+    var receipt = prepareResult(first);
+    assertThat(receipt.expiresAt())
+        .isBetween(Instant.now().plusSeconds(86390), Instant.now().plusSeconds(86401));
+    var prepared = queryResult(receipt, "UNKNOWN");
+    assertThat(prepared.path("code").asText()).isEqualTo("WITHDRAWAL_NOT_SUBMITTED");
+    assertThat(
+            runtime.queryForObject(
+                "SELECT token_hash FROM app.withdrawal_result WHERE id=?",
+                String.class,
+                receipt.id()))
+        .isNotEqualTo(receipt.queryToken())
+        .hasSize(64);
+    trackedDelete(
+        receipt, first, 204); // Intentionally discard the DELETE response body and cookies.
+    assertThat(count("app.app_user", "id", USER)).isZero();
+    var result = queryResult(receipt, "COMPLETED");
+    assertThat(result.path("completedAt").isNull()).isFalse();
+    assertThat(result.has("userId")).isFalse();
+    assertThat(result.toString()).doesNotContain(receipt.queryToken(), USER.toString());
+    mvc.perform(
+            get("/api/v1/withdrawal-requests/" + receipt.id())
+                .cookie(first.cookie(), other.cookie())
+                .header("X-Withdrawal-Token", receipt.queryToken()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("COMPLETED"));
+    queryResult(receipt, "COMPLETED");
+    org.mockito.Mockito.verify(journal, org.mockito.Mockito.times(1)).record(USER);
+  }
+
+  @Test
+  void receiptDoesNotGrantWithdrawalOrOtherRequestsAndRequiresCsrfAtIssuance() throws Exception {
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                    "/api/v1/me/withdrawal-requests")
+                .cookie(first.cookie()))
+        .andExpect(status().isForbidden());
+    var receipt = prepareResult(first);
+    var foreign = prepareResult(other);
+    trackedDelete(receipt, other, 409);
+    mvc.perform(
+            get("/api/v1/withdrawal-requests/" + foreign.id())
+                .header("X-Withdrawal-Token", receipt.queryToken()))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("WITHDRAWAL_RESULT_NOT_FOUND"));
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/me")
+                .header("Withdrawal-Request-Id", receipt.id())
+                .header("X-Withdrawal-Token", receipt.queryToken()))
+        .andExpect(status().isForbidden());
+    queryResult(receipt, "UNKNOWN");
+    retained();
+  }
+
+  @Test
+  void missingExpiredAndInvalidResultsNeverBecomeSuccess() throws Exception {
+    var receipt = prepareResult(first);
+    mvc.perform(get("/api/v1/withdrawal-requests/" + receipt.id()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_WITHDRAWAL_TOKEN"));
+    mvc.perform(
+            get("/api/v1/withdrawal-requests/" + UUID.randomUUID())
+                .header("X-Withdrawal-Token", receipt.queryToken()))
+        .andExpect(status().isNotFound());
+    owner.update(
+        "UPDATE app.withdrawal_result SET expires_at=now()-interval '1 second' WHERE id=?",
+        receipt.id());
+    mvc.perform(
+            get("/api/v1/withdrawal-requests/" + receipt.id())
+                .header("X-Withdrawal-Token", receipt.queryToken()))
+        .andExpect(status().isGone())
+        .andExpect(jsonPath("$.code").value("WITHDRAWAL_RESULT_EXPIRED"));
+    trackedDelete(receipt, first, 409);
+    retained();
+  }
+
+  @Test
+  void businessRejectionHasDefinitiveResultAndUsedIdCannotRunAgain() throws Exception {
+    var receipt = prepareResult(another); // No reauthentication proof in this session.
+    trackedDelete(receipt, another, 409);
+    assertThat(queryResult(receipt, "NOT_COMPLETED").path("code").asText())
+        .isEqualTo("REAUTHENTICATION_REQUIRED");
+    confirm(another, USER);
+    trackedDelete(receipt, another, 409);
+    queryResult(receipt, "NOT_COMPLETED");
+    retained();
+    org.mockito.Mockito.verifyNoInteractions(journal);
+  }
+
+  @Test
+  void inFlightRequestIsVisibleAndCompletionCannotPrecedeCommit() throws Exception {
+    var receipt = prepareResult(first);
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              queryResult(receipt, "PROCESSING");
+              assertThat(count("app.app_user", "id", USER)).isEqualTo(1);
+              return null;
+            })
+        .when(journal)
+        .record(USER);
+    trackedDelete(receipt, first, 204);
+    queryResult(receipt, "COMPLETED");
+  }
+
+  @Test
+  void uncertainCommitAndStalledProcessingDoNotReportCompletion() throws Exception {
+    var receipt = prepareResult(first);
+    owner.execute(
+        "CREATE FUNCTION app.fail_receipt_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private-commit-detail'; END $$");
+    owner.execute(
+        "CREATE CONSTRAINT TRIGGER fail_receipt_commit AFTER DELETE ON app.app_user DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.fail_receipt_commit()");
+    try {
+      trackedDelete(receipt, first, 503);
+      assertThat(queryResult(receipt, "UNKNOWN").path("code").asText())
+          .isEqualTo("WITHDRAWAL_OUTCOME_UNKNOWN");
+      retained();
+    } finally {
+      owner.execute("DROP TRIGGER fail_receipt_commit ON app.app_user");
+      owner.execute("DROP FUNCTION app.fail_receipt_commit()");
+    }
+    var stalled = prepareResult(first);
+    owner.update(
+        "UPDATE app.withdrawal_result SET status='PROCESSING',started_at=now()-interval '3 minutes' WHERE id=?",
+        stalled.id());
+    queryResult(stalled, "UNKNOWN");
+    assertThat(
+            runtime.queryForObject(
+                "SELECT status FROM app.withdrawal_result WHERE id=?", String.class, stalled.id()))
+        .isEqualTo("PROCESSING");
+  }
+
+  @Test
+  void resultLookupIgnoresSessionStorageAndReportsResultStorageFailure() throws Exception {
+    var receipt = prepareResult(first);
+    owner.execute(
+        "REVOKE SELECT ON app.app_user,app.persistent_login,session.spring_session,session.spring_session_attributes FROM stelody_app");
+    try {
+      mvc.perform(
+              get("/api/v1/withdrawal-requests/" + receipt.id())
+                  .cookie(first.cookie())
+                  .header("X-Withdrawal-Token", receipt.queryToken()))
+          .andExpect(status().isOk());
+    } finally {
+      owner.execute(
+          "GRANT SELECT ON app.app_user,app.persistent_login,session.spring_session,session.spring_session_attributes TO stelody_app");
+    }
+    owner.execute("REVOKE SELECT ON app.withdrawal_result FROM stelody_app");
+    try {
+      mvc.perform(
+              get("/api/v1/withdrawal-requests/" + receipt.id())
+                  .header("X-Withdrawal-Token", receipt.queryToken()))
+          .andExpect(status().isServiceUnavailable())
+          .andExpect(jsonPath("$.code").value("WITHDRAWAL_RESULT_STORAGE_UNAVAILABLE"));
+    } finally {
+      owner.execute("GRANT SELECT ON app.withdrawal_result TO stelody_app");
+    }
+  }
+
+  @Test
+  void sameReceiptCannotExecuteConcurrentDeletesTwice() throws Exception {
+    var receipt = prepareResult(first);
+    var a = CompletableFuture.supplyAsync(() -> trackedServiceResult(receipt));
+    var b = CompletableFuture.supplyAsync(() -> trackedServiceResult(receipt));
+    assertThat(List.of(a.join(), b.join())).containsExactlyInAnyOrder(204, 409);
+    queryResult(receipt, "COMPLETED");
+    org.mockito.Mockito.verify(journal, org.mockito.Mockito.times(1)).record(USER);
+  }
+
+  int trackedServiceResult(com.stelody.user.service.WithdrawalResults.Prepared receipt) {
+    try {
+      withdrawals.withdraw(USER, first.session(), receipt.id().toString());
+      return 204;
+    } catch (AccountException e) {
+      return e.status();
+    }
+  }
+
+  @Test
+  void journalFailureIsNotCompletedAndExpiredReceiptsArePruned() throws Exception {
+    var receipt = prepareResult(first);
+    org.mockito.Mockito.doThrow(
+            new AccountException(503, "WITHDRAWAL_JOURNAL_UNAVAILABLE", "private-source-error"))
+        .when(journal)
+        .record(USER);
+    trackedDelete(receipt, first, 503);
+    assertThat(queryResult(receipt, "NOT_COMPLETED").path("code").asText())
+        .isEqualTo("WITHDRAWAL_JOURNAL_UNAVAILABLE");
+    retained();
+    var expired = prepareResult(first);
+    owner.update(
+        "UPDATE app.withdrawal_result SET expires_at=now()-interval '1 second' WHERE id=?",
+        expired.id());
+    assertThat(
+            new com.stelody.user.repository.WithdrawalResultRepository(
+                    org.springframework.jdbc.core.simple.JdbcClient.create(runtime.getDataSource()))
+                .cleanup())
+        .isEqualTo(1);
+    queryResult(receipt, "NOT_COMPLETED");
+    mvc.perform(
+            get("/api/v1/withdrawal-requests/" + expired.id())
+                .header("X-Withdrawal-Token", expired.queryToken()))
+        .andExpect(status().isNotFound());
+  }
+
+  @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+  @Autowired com.stelody.user.service.WithdrawalResults withdrawalResults;
+  @Autowired ExportRepository exportStore;
+
+  @Test
+  void committedDeletionStillReportsCompleteWhenCommitAcknowledgementIsLost() throws Exception {
+    var receipt = prepareResult(first);
+    var lostAcknowledgement =
+        new org.springframework.transaction.PlatformTransactionManager() {
+          public org.springframework.transaction.TransactionStatus getTransaction(
+              org.springframework.transaction.TransactionDefinition definition) {
+            return transactionManager.getTransaction(definition);
+          }
+
+          public void commit(org.springframework.transaction.TransactionStatus status) {
+            transactionManager.commit(status);
+            // The database has committed, but emulate losing the acknowledgement at the service
+            // boundary.
+            throw new org.springframework.transaction.TransactionSystemException(
+                "simulated lost acknowledgement");
+          }
+
+          public void rollback(org.springframework.transaction.TransactionStatus status) {
+            transactionManager.rollback(status);
+          }
+        };
+    var service =
+        new WithdrawalService(
+            proofs, exportStore, connections, lostAcknowledgement, journal, withdrawalResults);
+    assertThatThrownBy(() -> service.withdraw(USER, first.session(), receipt.id().toString()))
+        .isInstanceOf(org.springframework.transaction.TransactionSystemException.class);
+    assertThat(count("app.app_user", "id", USER)).isZero();
+    queryResult(receipt, "COMPLETED");
   }
 
   @Test

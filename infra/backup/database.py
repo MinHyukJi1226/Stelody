@@ -16,7 +16,7 @@ import tempfile
 import uuid
 
 MAX_AGE = timedelta(days=7)
-SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25)
+SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25, 26)
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
@@ -33,7 +33,8 @@ class OperationError(Exception):
 
 
 def excluded_data(version):
-    return EXCLUDED_DATA + (('app.persistent_login',) if int(version) >= 25 else ())
+    return (EXCLUDED_DATA + (('app.persistent_login',) if int(version) >= 25 else ())
+            + (('app.withdrawal_result',) if int(version) >= 26 else ()))
 
 
 def now():
@@ -243,7 +244,7 @@ def restore(directory, target, reconciliations):
         # One transaction covers sanitation and deletion replay. Keep all services stopped.
         sanitation = sanitation.replace('COMMIT;', deletions + '\nCOMMIT;')
         sql(sanitation, log)
-        for table in EXCLUDED_DATA:
+        for table in excluded_data(metadata['schemaVersion']):
             if sql('SELECT count(*) FROM ' + table + ';') != '0':
                 raise OperationError('Ephemeral data unexpectedly restored')
         if withdrawn:

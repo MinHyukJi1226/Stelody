@@ -37,6 +37,38 @@ import org.springframework.session.FindByIndexNameSessionRepository;
 @Configuration
 public class SecurityConfiguration {
   @Bean
+  @org.springframework.core.annotation.Order(1)
+  SecurityFilterChain withdrawalResultSecurity(HttpSecurity http, ApiProblems problems)
+      throws Exception {
+    http.securityMatcher("/api/v1/withdrawal-requests/**")
+        .addFilterBefore(
+            new com.stelody.user.web.WithdrawalResultRequestFilter(),
+            SecurityContextHolderFilter.class)
+        // Even anonymous authentication details read the SESSION cookie; this chain uses only a
+        // receipt token.
+        .anonymous(AbstractHttpConfigurer::disable)
+        .logout(AbstractHttpConfigurer::disable)
+        .authorizeHttpRequests(
+            a ->
+                a.requestMatchers(HttpMethod.GET, "/api/v1/withdrawal-requests/{id}")
+                    .permitAll()
+                    .anyRequest()
+                    .denyAll())
+        .sessionManagement(AbstractHttpConfigurer::disable)
+        .securityContext(
+            s ->
+                s.securityContextRepository(
+                    new org.springframework.security.web.context.NullSecurityContextRepository()))
+        .requestCache(AbstractHttpConfigurer::disable)
+        .csrf(AbstractHttpConfigurer::disable)
+        .exceptionHandling(
+            e ->
+                e.accessDeniedHandler(
+                    (r, s, x) -> problems.write(r, s, 403, "ACCESS_DENIED", "접근할 수 없습니다")));
+    return http.build();
+  }
+
+  @Bean
   UserDetailsService userDetailsService() {
     return username -> {
       throw new UsernameNotFoundException("Password login is disabled");
@@ -89,7 +121,10 @@ public class SecurityConfiguration {
                         "/api/v1/me/favorites",
                         "/api/v1/me/favorites/{songId}")
                     .authenticated()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/me/reauthentications")
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/me/reauthentications",
+                        "/api/v1/me/withdrawal-requests")
                     .authenticated()
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/me")
                     .authenticated()
