@@ -26,6 +26,7 @@ async function setup(page: Page) {
     csrf: 0,
     failure: null as { status: number; code: string } | null,
     gate: Promise.resolve(),
+    preparationGate: Promise.resolve(),
     readGate: Promise.resolve(),
     loseDelete: false,
     preparations: 0,
@@ -65,11 +66,12 @@ async function setup(page: Page) {
           : { status: 401, json: { code: 'SESSION_EXPIRED' } },
     )
   })
-  await page.route('**/api/v1/me/withdrawal-requests', (r) => {
+  await page.route('**/api/v1/me/withdrawal-requests', async (r) => {
     state.preparations++
     expect(r.request().method()).toBe('POST')
     expect(r.request().postData()).toBeNull()
     expect(r.request().headers()['x-csrf-token']).toBe('account-csrf')
+    await state.preparationGate
     return r.fulfill(
       state.prepareError
         ? {
@@ -414,22 +416,46 @@ test('재인증 실제 상태를 새로고침에도 확인하고 명시적 최�
   expect(state.deletes).toBe(1)
 })
 
-test('최종 요청 처리 중 중복 제출과 취소를 막는다', async ({ page }) => {
+test('조회 권한 발급·탈퇴 처리 중 중복 제출과 취소를 막는다', async ({
+  page,
+}) => {
   const state = await verified(page)
+  let prepare!: () => void
+  state.preparationGate = new Promise<void>((resolve) => (prepare = resolve))
   let release!: () => void
   state.gate = new Promise<void>((resolve) => (release = resolve))
-  await panel(page)
-    .getByRole('button', { name: '회원 탈퇴', exact: true })
-    .click()
-  await expect(
-    panel(page).getByRole('button', { name: '탈퇴 처리 중…' }),
-  ).toBeDisabled()
-  await expect(panel(page).getByRole('button', { name: '취소' })).toBeDisabled()
-  expect(state.deletes).toBe(1)
-  release()
-  await expect(
-    panel(page).getByRole('heading', { name: '회원 탈퇴가 완료됐어요' }),
-  ).toBeVisible()
+  try {
+    await panel(page)
+      .getByRole('button', { name: '회원 탈퇴', exact: true })
+      .click()
+    await expect.poll(() => state.preparations).toBe(1)
+    await expect(
+      panel(page).getByRole('button', { name: '탈퇴 처리 중…' }),
+    ).toBeDisabled()
+    await expect(
+      panel(page).getByRole('button', { name: '취소' }),
+    ).toBeDisabled()
+    expect(state.deletes).toBe(0)
+
+    prepare()
+    await expect.poll(() => state.deletes).toBe(1)
+    await expect(
+      panel(page).getByRole('button', { name: '탈퇴 처리 중…' }),
+    ).toBeDisabled()
+    await expect(
+      panel(page).getByRole('button', { name: '취소' }),
+    ).toBeDisabled()
+
+    release()
+    await expect(
+      panel(page).getByRole('heading', { name: '회원 탈퇴가 완료됐어요' }),
+    ).toBeVisible()
+    expect(state.preparations).toBe(1)
+    expect(state.deletes).toBe(1)
+  } finally {
+    prepare()
+    release()
+  }
 })
 
 test('서버 만료 시각이 지나면 열린 화면에서도 최종 버튼을 잠근다', async ({
