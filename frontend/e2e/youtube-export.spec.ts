@@ -672,7 +672,9 @@ test('연결 후 원래 작업으로 복귀하며 자동 재시도하지 않는�
   await page.getByRole('button', { name: '다시 연결', exact: true }).click()
   await expect.poll(() => s.authorizations.length).toBe(1)
   expect(s.authorizations[0]?.returnTo).toBe(managementPath)
-  await expect(page.getByRole('heading', { name: 'Test consent' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Test consent' }),
+  ).toBeVisible()
   s.connection = 'CONNECTED'
   await page.goto(`${managementPath}&youtubeResult=success`)
   await expect(
