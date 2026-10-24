@@ -14,6 +14,29 @@ const user = {
 }
 
 describe('세션 확인과 캐시', () => {
+  it('같은 계정의 역할이나 상태가 변경되면 관리자 캐시만 제거한다', async () => {
+    const client = createQueryClient()
+    const activeAdmin = { ...user, role: 'ADMIN' }
+    for (const next of [
+      user,
+      { ...user, role: 'ADMIN', status: 'SUSPENDED' },
+    ]) {
+      client.setQueryData(sessionOptions.queryKey, activeAdmin)
+      client.setQueryData(['private', user.id, 'admin', 'inbox'], {
+        secret: true,
+      })
+      client.setQueryData(['private', user.id, 'favorites'], ['mine'])
+      server.use(http.get('*/api/v1/me', () => HttpResponse.json(next)))
+      await expect(client.fetchQuery(sessionOptions)).resolves.toEqual(next)
+      expect(
+        client.getQueriesData({ queryKey: ['private', user.id, 'admin'] }),
+      ).toEqual([])
+      expect(client.getQueryData(['private', user.id, 'favorites'])).toEqual([
+        'mine',
+      ])
+    }
+    client.clear()
+  })
   it('계정 전환과 만료를 관측하면 이전 개인 캐시를 지운 뒤 세션을 갱신한다', async () => {
     const client = createQueryClient()
     const second = { ...user, id: '00000000-0000-4000-8000-000000000002' }

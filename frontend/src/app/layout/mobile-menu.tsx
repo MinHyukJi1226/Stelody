@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/button'
 import { MenuIcon } from './menu-icon'
 import { AccountControl } from '@/features/auth/account-control'
 import { AccountLink } from '@/features/account/account-link'
+import { AdminLink } from '@/features/admin/admin-link'
 import { sessionOptions } from '@/features/auth/session'
 import { Dialog } from '@/shared/ui/dialog'
 
@@ -54,6 +55,7 @@ export default function MobileMenu({
                 </Button>
               ))}
               <AccountLink onNavigate={() => setOpen(false)} />
+              <AdminLink mobile onNavigate={() => setOpen(false)} />
             </nav>
             <div className="mt-auto w-full">
               <AccountControl onNavigate={() => setOpen(false)} />
@@ -89,6 +91,7 @@ export default function MobileMenu({
               </Button>
             ))}
             <AccountLink onNavigate={() => setOpen(false)} />
+            <AdminLink mobile onNavigate={() => setOpen(false)} />
             <AccountControl onNavigate={() => setOpen(false)} />
           </nav>
         </Popover.Content>

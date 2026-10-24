@@ -15,6 +15,14 @@ export const sessionOptions = queryOptions({
       await clearPrivateQueries(client)
       signal.throwIfAborted()
       apiClient.invalidateCsrf()
+    } else if (
+      previous?.role !== session?.role ||
+      previous?.status !== session?.status
+    ) {
+      const queryKey = ['private', session?.id, 'admin']
+      await client.cancelQueries({ queryKey })
+      client.removeQueries({ queryKey })
+      signal.throwIfAborted()
     }
     return session
   },
