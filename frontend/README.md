@@ -156,9 +156,20 @@ API_PROXY_TARGET=https://stelody-backend.onrender.com
 - 작업 ID 없이 진입하면 `GET /me/youtube-exports/active`로 기존 `QUEUED·RUNNING·FAILED·UNCERTAIN` 작업을 먼저 확인합니다. 작업이 있으면 `job.playlistId`의 내보내기 화면으로 복귀하며, 다른 목록의 작업도 새로 접수하지 않습니다. 명시적인 작업 ID로 연 완료·취소 결과는 그대로 유지합니다.
 - `job:null`과 조회 실패를 구분해 조회가 실패한 동안 새 접수를 막습니다. `EXPORT_ALREADY_ACTIVE`·접수 응답 유실도 기존 작업 조회로 복구합니다. 활성 작업에 포함되지 않는 완료 결과의 응답이 유실됐으면 보관한 동일 `requestId·version`으로만 확인하며, 조회 실패를 새 요청 ID로 반복하지 않습니다. 기능 비활성·재동의 필요 상태에서도 기존 작업 조회와 취소를 제공합니다.
 
+## 계정 관리·회원 탈퇴
+
+- `/account`: 로그인 계정의 이메일, YouTube 연결 관리, 탈퇴 안내를 표시합니다. PC 헤더와 로그인한 모바일 메뉴에서 진입합니다.
+- `/account/withdrawal`: 삭제 범위를 안내한 뒤 `POST /me/reauthentications`의 Google URL로 이동합니다. 개발에서 `callbackClient=local`, 프로덕션에서는 `default`를 사용하며 쿠키 속성은 변경하지 않습니다.
+- 복귀 파라미터는 안내용으로만 사용하고 주소에서 제거합니다. `GET /me/withdrawal-confirmation`의 실제 확인 상태·유효기간으로 최종 버튼을 허용합니다. 새로고침·페이지 복원·재인증 성공만으로 탈퇴를 실행하지 않습니다.
+- 최종 확인 버튼을 누르면 CSRF와 함께 `DELETE /me`를 한 번 보냅니다. 204 응답에서만 완료를 표시하고 개인 캐시·세션을 정리합니다. 처리 중 중복 제출·취소를 잠그며 재인증 만료·다른 계정·취소·실패·세션 만료·YouTube 작업·철회 대기를 구분합니다.
+- 최종 DELETE 전에 `POST /me/withdrawal-requests`로 조회 권한을 발급받아 같은 탭의 `sessionStorage`에 저장한 뒤 `Withdrawal-Request-Id` 헤더로 전달합니다. 발급·저장 실패 시 DELETE를 보내지 않습니다. 조회 토큰은 URL·로그·localStorage에 넣지 않고 `GET /withdrawal-requests/{id}`의 `X-Withdrawal-Token` 헤더에만 전달합니다.
+- 응답 유실·서버 오류 후에는 사용자가 결과 확인을 눌러 같은 요청을 조회합니다. 새로고침은 저장한 권한으로 조회만 재개하며 로그인 세션이 없어도 동작합니다. `PROCESSING`만 서버의 3초 간격으로 조회하고, `UNKNOWN`·조회 장애는 수동 재조회만 제공합니다. 완료·확정 미완료·24시간 권한 만료 시 보관값을 제거하며, 401·404·410·503이나 권한 소실을 완료로 추정하지 않습니다. 다른 계정의 결과로 현재 계정을 로그아웃하지 않습니다.
+- 디자인 기준: [PC 계정 관리](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=259-44873), [모바일 탈퇴 안내](https://www.figma.com/design/XNF3BzVHQNt38qhNl0psyB?node-id=259-47317). Figma 앱에서 나머지 정상·로딩·오류·탈퇴 상태와 모바일 메뉴를 확인했습니다. 현재 자동 검증은 고정 응답을 사용하며 실제 계정을 삭제하지 않습니다.
+- 실제 계정의 Google 재인증·로컬 복귀·본인 확인 완료 표시와 최종 탈퇴는 사용자가 직접 정상 동작을 확인했습니다. 응답 유실·결과 조회·새로고침 복구·권한 저장 실패·만료는 고정 응답으로 검증합니다.
+
 ## API 계약
 
-`openapi/stelody.json`은 기존 활성 내보내기 작업 조회 기준 커밋 `fe1ec0d914d92bf802750aa8215c32ffd4889e71`([PR #68](https://github.com/MinHyukJi1226/Stelody/pull/68))의 [성공한 CI 아티팩트](https://github.com/MinHyukJi1226/Stelody/actions/runs/39788770110/artifacts/12430726816)로 교체했습니다. 운영 명세와 JSON 내용이 같음을 확인했습니다. 저장 시 프로젝트 JSON 포맷과 기존 키 순서를 적용하므로 파일 바이트 일치를 의미하지 않습니다.
+`openapi/stelody.json`은 탈퇴 요청 결과 조회 기준 커밋 `ec3cb3327a33c622e3463d6108934c1b3ee257ec`([PR #72](https://github.com/MinHyukJi1226/Stelody/pull/72))의 [성공한 CI 아티팩트](https://github.com/MinHyukJi1226/Stelody/actions/runs/40074927626/artifacts/12552688823)로 교체했습니다. 운영 명세와 JSON 내용이 같음을 확인했습니다. 저장 시 프로젝트 JSON 포맷과 기존 키 순서를 적용하므로 파일 바이트 일치를 의미하지 않습니다.
 
 명세는 수동으로 편집하지 않습니다. 백엔드 변경 시 해당 커밋의 검증된 CI 아티팩트에서 교체하고 아래 명령으로 타입을 생성합니다.
 

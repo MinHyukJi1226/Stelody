@@ -7,12 +7,14 @@ export function Dialog({
   busy = false,
   children,
   className,
+  dismissOnBackdrop = false,
 }: {
   labelledBy: string
   onDismiss: () => void
   busy?: boolean
   children: ReactNode
   className?: string
+  dismissOnBackdrop?: boolean
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -35,6 +37,18 @@ export function Dialog({
       ref={ref}
       aria-labelledby={labelledBy}
       aria-modal="true"
+      onClick={(event) => {
+        if (!dismissOnBackdrop || busy || event.target !== event.currentTarget)
+          return
+        const bounds = event.currentTarget.getBoundingClientRect()
+        if (
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom
+        )
+          onDismiss()
+      }}
       onCancel={(event) => {
         event.preventDefault()
         if (!busy) onDismiss()

@@ -8,6 +8,7 @@ import { useMediaQuery } from '@/shared/lib/use-media-query'
 import { Button } from '@/shared/ui/button'
 import { MenuIcon } from './menu-icon'
 import { AccountControl } from '@/features/auth/account-control'
+import { AccountLink } from '@/features/account/account-link'
 
 const navigation = [
   { to: '/search', label: '검색' },
@@ -42,6 +43,7 @@ export function SiteHeader({
             <NavLink to={to}>{label}</NavLink>
           </Button>
         ))}
+        <AccountLink />
         <AccountControl />
       </nav>
       <Button

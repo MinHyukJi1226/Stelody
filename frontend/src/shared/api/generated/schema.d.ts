@@ -855,7 +855,9 @@ export interface paths {
     }
     /**
      * CSRF 토큰 조회
-     * @description 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     * @description 일반 사용자 로그인 유지 쿠키가 유효하면 세션을 먼저 복구합니다. 같은 기기의 짧은 세션 복구에는 기존 유효 CSRF 헤더를 사용할 수 있습니다. 로그인·명시적 Google 재인증·로그아웃 후에는 토큰을 다시 조회합니다. CSRF 누락·불일치는 복구 후에도 403입니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_auth_csrf']
     put?: never
@@ -875,7 +877,9 @@ export interface paths {
     }
     /**
      * Google 로그인 시작
-     * @description 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     * @description 일반 USER의 성공한 Google 로그인은 30일 고정 기한의 STELODY_LOGIN 쿠키도 발급합니다. Secure·HttpOnly·SameSite=Lax·Path=/를 유지하며 프론트가 토큰을 읽거나 별도 저장하지 않습니다. 세션 비활동 30분·최대 12시간 후에는 다음 API 요청에서 자동 복구합니다. ADMIN은 발급하지 않습니다. 자동 복구는 탈퇴 재인증을 대신하지 않으며 30일 기한을 연장하지 않습니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_auth_google']
     put?: never
@@ -923,6 +927,8 @@ export interface paths {
     /**
      * 회원 탈퇴 확정
      * @description 현재 로그인 계정의 자료만 접근합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     *     동일 Google 계정 재인증 5분 내 새 CSRF와 사용자의 최종 버튼으로만 요청합니다. 재인증 복귀 시 자동 탈퇴하지 않습니다. 409/503은 탈퇴 완료가 아니며 재인증 상태·연결 철회·진행 작업을 확인합니다.
+     *     응답 유실에 대비하려면 먼저 POST /api/v1/me/withdrawal-requests로 받은 id를 선택 Withdrawal-Request-Id 헤더로 전달합니다. 본인의 아직 사용하지 않은 24시간 내 ID만 허용하며 한 번만 접수합니다. 조회 토큰은 DELETE에 필요하지 않으며 로그인·CSRF·5분 재인증이 그대로 필요합니다. 미지정한 기존 클라이언트는 종전 204 계약을 유지하지만 사후 요청 결과를 조회할 수 없습니다. 응답 유실 시 같은 id·queryToken으로 GET 결과만 확인하고 자동 DELETE 또는 새 ID 반복 접수를 하지 않습니다.
      */
     delete: operations['delete_me']
     options?: never
@@ -1138,6 +1144,7 @@ export interface paths {
     /**
      * 탈퇴를 위한 Google 재인증 시작
      * @description 현재 로그인 계정의 자료만 접근합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     *     선택 JSON {returnTo, callbackClient}를 받습니다. 본문·필드·null 생략 허용. callbackClient 기본 default, 허용 default/local. returnTo는 최대 2048자 내부 UI 경로이며 외부 URL·//·공백/제어문자·역슬래시·중첩 인코딩·경로 우회·/api·/actuator 경로는 거절합니다. 응답 authorizationUrl·expiresAt과 CSRF 검증은 유지합니다. returnTo 생략 + default는 기존 Google 콜백과 확인 JSON 복귀를 유지합니다. returnTo를 지정하거나 local을 고르면 전용 콜백 및 303 결과 복귀를 사용합니다. returnTo 생략 시 기본 /api/v1/me/withdrawal-confirmation입니다. default 전용 콜백은 GOOGLE_REAUTHENTICATION_REDIRECT_URI, local은 GOOGLE_REAUTHENTICATION_LOCAL_REDIRECT_URI 및 Google 콘솔 승인 URI가 필요합니다. 로컬 URI http://localhost:5173/api/v1/auth/callback/google-reauthentication-local. 기본 프론트 origin은 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN으로 설정합니다. /api 프록시는 모든 Set-Cookie와 Secure·HttpOnly·SameSite를 그대로 전달해야 합니다. 요청·복귀 정보는 같은 세션의 OAuth state에 5분간 묶어 한 번만 사용합니다.
      */
     post: operations['post_me_reauthentications']
     delete?: never
@@ -1156,6 +1163,7 @@ export interface paths {
     /**
      * 탈퇴 재인증 유효 여부 조회
      * @description 현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     *     reauthenticated=false와 expiresAt=null은 현재 세션에 유효한 동일 계정 재인증이 없다는 뜻입니다. 성공 후 유효기간은 5분이며 UI 복귀 결과만으로 확정하지 않습니다. 조회 실패를 false로 간주하지 마세요.
      */
     get: operations['get_me_withdrawal_confirmation']
     put?: never
@@ -1518,6 +1526,91 @@ export interface paths {
      *     현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_me_youtube_exports_active']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/callback/google-reauthentication': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 회원 탈퇴 Google 재인증 콜백
+     * @description 브라우저 전용 OAuth 콜백. 새 프론트 복귀 흐름은 303 Location으로 복귀합니다. reauthResult=success/cancelled/failed. 취소·실패 시 reauthError는 SESSION_EXPIRED, REAUTHENTICATION_REQUEST_INVALID, REAUTHENTICATION_REQUEST_EXPIRED, REAUTHENTICATION_ACCOUNT_MISMATCH, GOOGLE_REAUTHENTICATION_CANCELLED, GOOGLE_REAUTHENTICATION_FAILED, ACCOUNT_STORAGE_UNAVAILABLE 중 하나입니다. 결과는 안내용이며 GET /api/v1/me/withdrawal-confirmation으로 실제 재인증 여부·expiresAt을 확인하고 CSRF를 다시 조회합니다. 최종 버튼에서만 DELETE /api/v1/me를 호출합니다. 인증 코드·state·토큰·내부 오류 원문을 복귀 URL로 전달하지 않습니다. 저장된 returnTo를 확인할 수 없는 잘못된 state·세션 만료는 기본 /api/v1/me/withdrawal-confirmation으로 복귀합니다. local은 등록된 localhost origin, default는 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN 또는 같은 origin을 사용합니다. 콜백은 세션을 자동 복구하지 않으며 재인증은 30일 로그인 유지 기한을 연장하지 않습니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_auth_callback_google_reauthentication']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/callback/google-reauthentication-local': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 회원 탈퇴 Google 재인증 콜백
+     * @description 브라우저 전용 OAuth 콜백. 새 프론트 복귀 흐름은 303 Location으로 복귀합니다. reauthResult=success/cancelled/failed. 취소·실패 시 reauthError는 SESSION_EXPIRED, REAUTHENTICATION_REQUEST_INVALID, REAUTHENTICATION_REQUEST_EXPIRED, REAUTHENTICATION_ACCOUNT_MISMATCH, GOOGLE_REAUTHENTICATION_CANCELLED, GOOGLE_REAUTHENTICATION_FAILED, ACCOUNT_STORAGE_UNAVAILABLE 중 하나입니다. 결과는 안내용이며 GET /api/v1/me/withdrawal-confirmation으로 실제 재인증 여부·expiresAt을 확인하고 CSRF를 다시 조회합니다. 최종 버튼에서만 DELETE /api/v1/me를 호출합니다. 인증 코드·state·토큰·내부 오류 원문을 복귀 URL로 전달하지 않습니다. 저장된 returnTo를 확인할 수 없는 잘못된 state·세션 만료는 기본 /api/v1/me/withdrawal-confirmation으로 복귀합니다. local은 등록된 localhost origin, default는 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN 또는 같은 origin을 사용합니다. 콜백은 세션을 자동 복구하지 않으며 재인증은 30일 로그인 유지 기한을 연장하지 않습니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_auth_callback_google_reauthentication_local']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/me/withdrawal-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 탈퇴 전 결과 조회 ID·권한 발급
+     * @description 현재 로그인 계정의 자료만 접근합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     *     탈퇴 전에 빈 본문으로 호출하여 id·queryToken·expiresAt을 먼저 확보합니다. 이 API는 탈퇴·재인증·YouTube 철회를 실행하지 않습니다. 발급 시점부터 24시간이며 재조회·재인증으로 연장하지 않습니다. 프론트는 DELETE 전에 같은 탭 sessionStorage에 세 값을 저장합니다. 발급 응답 유실 시 DELETE하지 않고 새 발급을 받습니다. queryToken은 256비트 조회 전용 권한이며 서버에는 해시만 저장합니다. 다른 요청이나 계정 조회·탈퇴 실행에는 사용할 수 없습니다.
+     */
+    post: operations['post_me_withdrawal_requests']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/withdrawal-requests/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 탈퇴 요청 결과 읽기 전용 조회
+     * @description 로그인 세션·계정·CSRF와 독립된 조회 전용 API입니다. X-Withdrawal-Token 헤더로 해당 id의 결과만 확인합니다. GET은 탈퇴·철회·재시도·상태 변경을 실행하지 않습니다. COMPLETED는 계정 삭제와 같은 DB 트랜잭션으로 확정된 완료, PROCESSING은 접수되어 처리 중, NOT_COMPLETED는 확정된 업무 거절로 미완료, UNKNOWN은 미접수(WITHDRAWAL_NOT_SUBMITTED)·커밋 결과 불확실·처리 중단 등 확인 불가입니다. PROCESSING이 시작 후 2분을 넘기면 조회 시 UNKNOWN으로 안내하며, 이후 DB 완료가 확인되면 COMPLETED가 될 수 있습니다. 미접수는 요청이 아직 전송 중일 가능성이 있으므로 확정 미완료로 안내하지 않습니다. PROCESSING만 3초 간격으로 재조회하며 pollAfterSeconds=3 및 Retry-After: 3을 제공합니다. 나머지 상태의 pollAfterSeconds는 null입니다. UNKNOWN·조회 오류에는 자동 DELETE하지 않고 수동 재조회 또는 문의합니다. 새로고침 시 sessionStorage의 id·queryToken·expiresAt으로 같은 요청을 조회합니다. COMPLETED·NOT_COMPLETED·만료 후 보관값을 삭제하며 탭 종료 시 소실됩니다. 발급 후 24시간 만료, 서버는 만료 기록을 주기적으로 제거합니다. 404(기록 없음·잘못된 조회 권한), 410(만료), 503(저장소 장애)는 완료 증거가 아닙니다. 무세션·만료 SESSION·다른 사용자 로그인 여부와 관계없이 조회 토큰만 검증하며 다른 계정 정보는 응답하지 않습니다. Cache-Control: no-store, Referrer-Policy: no-referrer. 토큰을 URL·분석 로그에 넣지 마세요.
+     */
+    get: operations['get_withdrawal_requests_id']
     put?: never
     post?: never
     delete?: never
@@ -2753,6 +2846,37 @@ export interface components {
       /** @description 현재 계정의 QUEUED·RUNNING·FAILED·UNCERTAIN 작업. 대상이 없으면 null이며 조회 실패는 HTTP 오류로 구분합니다. */
       job: components['schemas']['com.stelody.export.dto.ExportDtos.Job'] | null
     }
+    'com.stelody.user.controller.WithdrawalController.ReauthenticationInput': {
+      /**
+       * @description 서버에 등록된 콜백 선택
+       * @default default
+       * @enum {string|null}
+       */
+      callbackClient: 'default' | 'local' | null
+      /** @description 사이트 내부 UI 경로. 생략하면 기존 재인증 확인 API로 복귀 */
+      returnTo?: string | null
+    }
+    'com.stelody.user.service.WithdrawalResults.Prepared': {
+      /** Format: date-time */
+      expiresAt: string
+      /** Format: uuid */
+      id: string
+      /** @description 조회 전용 비밀 토큰. URL·로그에 포함하지 않고 같은 탭 sessionStorage에만 보관 */
+      queryToken: string
+    }
+    'com.stelody.user.service.WithdrawalResults.Result': {
+      code: string | null
+      /** Format: date-time */
+      completedAt: string | null
+      /** Format: date-time */
+      expiresAt: string
+      /** Format: uuid */
+      id: string
+      /** Format: int32 */
+      pollAfterSeconds: number | null
+      /** @enum {string} */
+      status: 'COMPLETED' | 'PROCESSING' | 'NOT_COMPLETED' | 'UNKNOWN'
+    }
   }
   responses: never
   parameters: never
@@ -2817,7 +2941,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -2892,7 +3016,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -2956,7 +3080,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3033,7 +3157,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3100,7 +3224,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3166,7 +3290,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3241,7 +3365,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3305,7 +3429,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3382,7 +3506,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3449,7 +3573,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3507,7 +3631,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3562,7 +3686,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3615,7 +3739,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3672,7 +3796,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3728,7 +3852,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3785,7 +3909,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3844,7 +3968,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3900,7 +4024,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -3962,7 +4086,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4015,7 +4139,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4068,7 +4192,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4125,7 +4249,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4181,7 +4305,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4238,7 +4362,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4291,7 +4415,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4357,7 +4481,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4432,7 +4556,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4496,7 +4620,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4573,7 +4697,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4640,7 +4764,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4698,7 +4822,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4753,7 +4877,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4812,7 +4936,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4870,7 +4994,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4929,7 +5053,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -4995,7 +5119,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5070,7 +5194,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5134,7 +5258,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5211,7 +5335,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5278,7 +5402,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5351,7 +5475,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5428,7 +5552,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5508,7 +5632,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5565,7 +5689,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5620,7 +5744,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5679,7 +5803,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5737,7 +5861,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5795,7 +5919,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5861,7 +5985,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -5936,7 +6060,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6000,7 +6124,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6077,7 +6201,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6144,7 +6268,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6173,7 +6297,16 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.auth.controller.AuthController.CsrfResponse']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description LOGIN_STORAGE_UNAVAILABLE: 로그인 확인·복구·폐기 저장소 오류입니다. 로그인 해제나 변경 완료로 처리하지 말고 재시도합니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6216,7 +6349,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description Google 로그인 설정이 없습니다. */
+      /** @description GOOGLE_LOGIN_UNAVAILABLE: Google 로그인 설정이 없습니다. LOGIN_STORAGE_UNAVAILABLE: 로그인 유지 정보 저장 실패입니다. */
       503: {
         headers: {
           [name: string]: unknown
@@ -6225,7 +6358,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6245,7 +6378,7 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description 세션과 SESSION 쿠키를 제거합니다. */
+      /** @description 현재 기기의 로그인 유지 자격과 SESSION·STELODY_LOGIN 쿠키를 폐기합니다. 같은 자격으로 복구된 세션도 다음 요청부터 무효입니다. 다른 기기는 유지합니다. 저장소 실패 시 503이며 로그아웃 완료로 표시하지 말고 재시도합니다. */
       204: {
         headers: {
           [name: string]: unknown
@@ -6264,7 +6397,16 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description LOGIN_STORAGE_UNAVAILABLE: 로그인 확인·복구·폐기 저장소 오류입니다. 로그인 해제나 변경 완료로 처리하지 말고 재시도합니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6305,7 +6447,16 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description LOGIN_STORAGE_UNAVAILABLE: 로그인 확인·복구·폐기 저장소 오류입니다. 로그인 해제나 변경 완료로 처리하지 말고 재시도합니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6319,7 +6470,9 @@ export interface operations {
   delete_me: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        'Withdrawal-Request-Id'?: string
+      }
       path?: never
       cookie?: never
     }
@@ -6331,6 +6484,15 @@ export interface operations {
           [name: string]: unknown
         }
         content?: never
+      }
+      /** @description INVALID_WITHDRAWAL_REQUEST_ID: ID 입력값을 오류 응답에 포함하지 않습니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
       }
       /**
        * @description 로그인 세션이 없거나 유효하지 않습니다.
@@ -6356,7 +6518,31 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /**
+       * @description REAUTHENTICATION_REQUIRED, YOUTUBE_EXPORT_BUSY, YOUTUBE_REVOCATION_PENDING: REAUTHENTICATION_REQUIRED는 재인증 없음·다른 세션·5분 만료입니다. YOUTUBE_EXPORT_BUSY는 외부 쓰기 작업 중이며 완료 후 사용자가 재시도합니다. YOUTUBE_REVOCATION_PENDING은 Google 철회 대기이며 연결 철회 완료 뒤 재인증 유효 여부를 다시 확인합니다.
+       *     WITHDRAWAL_REQUEST_UNAVAILABLE: ID가 없거나 다른 계정·만료·이미 접수된 요청입니다. 기존 조회 권한으로 결과를 확인합니다.
+       */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description ACCOUNT_STORAGE_UNAVAILABLE, WITHDRAWAL_JOURNAL_UNAVAILABLE: ACCOUNT_STORAGE_UNAVAILABLE는 계정 저장소 실패, WITHDRAWAL_JOURNAL_UNAVAILABLE는 독립 탈퇴 기록 저장 실패, LOGIN_STORAGE_UNAVAILABLE는 로그인 상태 확인 실패입니다. 성공으로 표시하거나 자동 탈퇴 재전송하지 않습니다.
+       *     LOGIN_STORAGE_UNAVAILABLE: 로그인 확인·복구·폐기 저장소 오류입니다. 로그인 해제나 변경 완료로 처리하지 말고 재시도합니다.
+       */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6410,7 +6596,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6462,7 +6648,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6542,7 +6728,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6604,7 +6790,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6660,7 +6846,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6737,7 +6923,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6798,7 +6984,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6880,7 +7066,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -6966,7 +7152,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7046,7 +7232,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7138,7 +7324,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7223,7 +7409,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7315,7 +7501,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7412,7 +7598,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7430,7 +7616,11 @@ export interface operations {
       path?: never
       cookie?: never
     }
-    requestBody?: never
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['com.stelody.user.controller.WithdrawalController.ReauthenticationInput']
+      }
+    }
     responses: {
       /** @description OK */
       200: {
@@ -7439,6 +7629,15 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['com.stelody.user.controller.WithdrawalController.Authorization']
+        }
+      }
+      /** @description INVALID_REAUTHENTICATION_RETURN, INVALID_REAUTHENTICATION_CLIENT, INVALID_REAUTHENTICATION_REQUEST: 입력값을 응답에 포함하지 않습니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
         }
       }
       /**
@@ -7465,7 +7664,16 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description GOOGLE_REAUTHENTICATION_UNAVAILABLE, ACCOUNT_STORAGE_UNAVAILABLE, LOGIN_STORAGE_UNAVAILABLE: Google 설정 또는 계정 저장소를 확인하지 못했습니다. 성공으로 처리하지 않습니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7506,7 +7714,16 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description ACCOUNT_STORAGE_UNAVAILABLE, LOGIN_STORAGE_UNAVAILABLE: 저장소 오류이며 유효하지 않은 재인증과 구분합니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7558,7 +7775,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7622,7 +7839,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7704,7 +7921,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7791,7 +8008,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7824,7 +8041,7 @@ export interface operations {
         }
         content?: never
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7865,7 +8082,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7918,7 +8135,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7952,7 +8169,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.member.dto.MemberDtos.Page']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -7983,7 +8200,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.member.dto.MemberDtos.Detail']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8046,7 +8263,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8122,7 +8339,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8153,7 +8370,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Recommendations']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8184,7 +8401,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.statistics.dto.StatisticsDtos.Trending']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8213,7 +8430,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Years']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8244,7 +8461,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Detail']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8277,7 +8494,7 @@ export interface operations {
           'application/json': components['schemas']['com.stelody.statistics.dto.StatisticsDtos.Views']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8310,7 +8527,7 @@ export interface operations {
         }
         content?: never
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown
@@ -8360,7 +8577,224 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. */
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_auth_callback_google_reauthentication: {
+    parameters: {
+      query?: {
+        state?: string
+        code?: string
+        error?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description 검증된 프론트 복귀 주소. reauthResult와 허용 reauthError만 추가합니다. */
+      303: {
+        headers: {
+          /** @description 서버에 저장된 내부 경로·등록된 origin으로만 복귀 */
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description GOOGLE_REAUTHENTICATION_UNAVAILABLE: 콜백 설정을 확인할 수 없습니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_auth_callback_google_reauthentication_local: {
+    parameters: {
+      query?: {
+        state?: string
+        code?: string
+        error?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description 검증된 프론트 복귀 주소. reauthResult와 허용 reauthError만 추가합니다. */
+      303: {
+        headers: {
+          /** @description 서버에 저장된 내부 경로·등록된 origin으로만 복귀 */
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description GOOGLE_REAUTHENTICATION_UNAVAILABLE: 콜백 설정을 확인할 수 없습니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  post_me_withdrawal_requests: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.user.service.WithdrawalResults.Prepared']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 권한 또는 CSRF 검증에 실패했습니다.
+       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description ACCOUNT_STORAGE_UNAVAILABLE, LOGIN_STORAGE_UNAVAILABLE: 발급 저장소 오류. DELETE를 실행하지 않습니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_withdrawal_requests_id: {
+    parameters: {
+      query?: never
+      header: {
+        'X-Withdrawal-Token': string
+      }
+      path: {
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description PROCESSING일 때만 3초 */
+          'Retry-After'?: number
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.user.service.WithdrawalResults.Result']
+        }
+      }
+      /** @description INVALID_WITHDRAWAL_REQUEST_ID, INVALID_WITHDRAWAL_TOKEN: 입력값을 응답에 포함하지 않습니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description WITHDRAWAL_RESULT_NOT_FOUND: 기록 없음과 잘못된 권한은 동일 응답입니다. 완료로 판단하지 않습니다. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description WITHDRAWAL_RESULT_EXPIRED: 유효한 조회 권한의 기록이 만료되었습니다. 완료로 판단하지 않습니다. */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description WITHDRAWAL_RESULT_STORAGE_UNAVAILABLE: 조회 저장소 장애입니다. 작업 없음 또는 완료로 처리하지 않습니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 결과 조회 오류이며 세션 유무나 조회 실패를 탈퇴 완료로 해석하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown

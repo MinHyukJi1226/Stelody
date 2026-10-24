@@ -1,0 +1,117 @@
+export const withdrawalViews = {
+  storage: {
+    label: '결과 조회 권한 준비 오류',
+    title: '탈퇴를 시작할 수 없어요',
+    body: '결과 조회 권한을 준비하거나 브라우저에 저장하지 못했습니다. 연결 상태와 브라우저의 사이트 저장 설정을 확인한 뒤 다시 시도해 주세요. 탈퇴는 요청하지 않았습니다.',
+    tone: 'error',
+  },
+  unavailable: {
+    label: '탈퇴 결과 확인 불가',
+    title: '탈퇴 결과를 확인할 수 없어요',
+    body: '조회 권한이 없거나 만료되었거나 결과를 확인할 수 없습니다. 탈퇴 완료로 판단할 수 없으며, 탈퇴를 다시 요청하지 않습니다.',
+    tone: 'warning',
+  },
+  rejected: {
+    label: '탈퇴 미완료',
+    title: '회원 탈퇴를 완료하지 못했어요',
+    body: '서버에서 탈퇴가 완료되지 않았음을 확인했습니다. 계정 관리로 돌아가 상태를 확인해 주세요.',
+    tone: 'error',
+  },
+  guide: {
+    label: '1 · 탈퇴 안내 및 본인 확인',
+    title: '탈퇴 전 안내를 확인해 주세요',
+    body: '현재 로그인한 Google 계정으로 본인 확인이 필요합니다.',
+    tone: 'brand',
+  },
+  verified: {
+    label: '2 · 본인 확인 완료',
+    title: '마지막으로 탈퇴 여부를 확인해 주세요',
+    body: '본인 확인이 완료되었습니다. 아래 ‘회원 탈퇴’ 버튼을 직접 눌러야 탈퇴가 실행됩니다.',
+    tone: 'green',
+  },
+  starting: {
+    label: 'Google 재인증 시작 중',
+    title: 'Google 본인 확인을 시작하고 있어요',
+    body: '본인 확인을 마치면 최종 확인 화면으로 돌아옵니다. 재인증만으로는 탈퇴가 실행되지 않습니다.',
+    tone: 'brand',
+  },
+  submitting: {
+    label: '탈퇴 처리 중',
+    title: '회원 탈퇴를 처리하고 있어요',
+    body: '아직 완료된 상태가 아닙니다. 중복 요청을 막기 위해 처리가 끝날 때까지 기다려 주세요.',
+    tone: 'brand',
+  },
+  cancelled: {
+    label: '재인증 취소',
+    title: '본인 확인을 취소했어요',
+    body: '회원 탈퇴는 실행되지 않았습니다. 계속하려면 Google 재인증을 다시 진행해 주세요.',
+    tone: 'brand',
+  },
+  failed: {
+    label: '재인증 실패',
+    title: '본인 확인을 완료하지 못했어요',
+    body: '회원 탈퇴는 실행되지 않았습니다. 잠시 후 다시 인증해 주세요.',
+    tone: 'error',
+  },
+  wrong: {
+    label: '다른 Google 계정 선택',
+    title: '로그인한 계정으로 다시 인증해 주세요',
+    body: '다른 Google 계정을 선택했습니다. 아래 이메일의 계정으로 다시 인증해 주세요. 회원 탈퇴는 실행되지 않았습니다.',
+    tone: 'warning',
+  },
+  expired: {
+    label: '본인 확인 유효기간 만료',
+    title: 'Google 본인 확인을 다시 진행해 주세요',
+    body: '재인증 유효기간이 만료되었습니다. 다시 인증한 뒤 최종 탈퇴 버튼을 눌러 주세요.',
+    tone: 'warning',
+  },
+  completed: {
+    label: '탈퇴 완료',
+    title: '회원 탈퇴가 완료됐어요',
+    body: '계정·즐겨찾기·사이트 플레이리스트가 삭제되었습니다.',
+    tone: 'green',
+  },
+  session: {
+    label: '세션 만료',
+    title: '다시 로그인해 주세요',
+    body: '로그인 세션이 만료되었습니다. 로그인 후 탈퇴 절차를 다시 진행해 주세요.',
+    tone: 'warning',
+  },
+  youtube: {
+    label: 'YouTube 작업 진행 중',
+    title: '진행 중인 YouTube 작업을 확인해 주세요',
+    body: 'YouTube 작업이 진행 중이라 탈퇴를 진행할 수 없습니다. 작업 상태를 확인한 뒤 다시 시도해 주세요.',
+    tone: 'warning',
+  },
+  revoking: {
+    label: 'YouTube 연결 해제 대기',
+    title: 'YouTube 연결 해제 처리를 기다려 주세요',
+    body: 'YouTube 연결 해제를 처리하고 있습니다. 처리가 끝나면 탈퇴 결과를 다시 확인해 주세요.',
+    tone: 'warning',
+  },
+  server: {
+    label: '서버 오류',
+    title: '서버 오류가 발생했어요',
+    body: '탈퇴 요청이 처리되었을 수 있습니다. 결과를 먼저 확인해 주세요.',
+    tone: 'error',
+  },
+  unknown: {
+    label: '응답 유실 · 결과 확인 필요',
+    title: '탈퇴 결과를 확인해야 해요',
+    body: '응답을 받지 못했지만 요청이 이미 처리되었을 수 있습니다. 중복 요청을 보내지 않고 결과를 먼저 확인해 주세요.',
+    tone: 'warning',
+  },
+  checkingDelete: {
+    label: '탈퇴 가능 여부 확인 중',
+    title: 'YouTube 작업과 연결 상태를 확인하고 있어요',
+    body: '확인 후에도 본인 확인과 최종 확인을 거쳐야 합니다. 자동으로 탈퇴하지 않습니다.',
+    tone: 'brand',
+  },
+  checkingOutcome: {
+    label: '탈퇴 결과 확인 중',
+    title: '탈퇴 처리 결과를 확인하고 있어요',
+    body: '잠시 기다려 주세요. 확인이 끝날 때까지 탈퇴를 다시 요청하지 마세요.',
+    tone: 'brand',
+  },
+} as const
+export type WithdrawalView = keyof typeof withdrawalViews | 'loading'
