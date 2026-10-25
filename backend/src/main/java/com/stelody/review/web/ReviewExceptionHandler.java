@@ -24,7 +24,18 @@ public class ReviewExceptionHandler {
   public void business(
       ReviewException error, HttpServletRequest request, HttpServletResponse response)
       throws IOException {
-    problems.write(request, response, error.status(), error.code(), error.getMessage());
+    problems.write(
+        request, response, error.status(), error.code(), error.getMessage(), error.fieldErrors());
+  }
+
+  @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+  public void dataConflict(
+      Exception error, HttpServletRequest request, HttpServletResponse response)
+      throws IOException {
+    business(
+        new ReviewException(409, "CATALOG_DATA_CONFLICT", "중복 또는 연결된 항목을 확인해 주세요"),
+        request,
+        response);
   }
 
   @ExceptionHandler({

@@ -94,7 +94,6 @@ public final class DiscoveryCollector {
           repository.ruleVersion(token, run, rules.version());
           repository.checkPublicationPrivileges();
           repository.cleanup(token, clock.instant());
-          boolean completeScan = true;
           for (var channel : channels) {
             budget.remaining();
             var state =
@@ -157,11 +156,9 @@ public final class DiscoveryCollector {
                       complete,
                       bootstrap,
                       options.backfill(),
-                      scanBoundary != null,
                       clock.instant());
               if (complete) break;
             }
-            if (state.inProgress()) completeScan = false;
             if (!options.backfill()) {
               var deferred =
                   repository.needed(
@@ -170,23 +167,12 @@ public final class DiscoveryCollector {
                 var observations = videos.fetch(deferred, budget);
                 budget.remaining();
                 repository.refresh(
-                    token,
-                    channel,
-                    observations,
-                    decisions(observations, rules),
-                    scanBoundary != null,
-                    clock.instant());
+                    token, channel, observations, decisions(observations, rules), clock.instant());
               }
             }
           }
           budget.remaining();
-          repository.finish(
-              token,
-              run,
-              "SUCCEEDED",
-              null,
-              clock.instant(),
-              scanBoundary != null && !options.backfill() && completeScan);
+          repository.finish(token, run, "SUCCEEDED", null, clock.instant());
           return new VideoCollector.Result(run, "SUCCEEDED", null);
         } catch (RuntimeException error) {
           String code =

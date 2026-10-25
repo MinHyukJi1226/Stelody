@@ -157,13 +157,11 @@ export function AdminScreen({
   query,
   children,
   back = true,
-  readOnly = true,
 }: {
   title: string
   query: ReadState
   children: ReactNode
   back?: boolean
-  readOnly?: boolean
 }) {
   const user = useAdminUser()
   if (query.isError && isAdminAccessError(query.error))
@@ -193,9 +191,7 @@ export function AdminScreen({
         aria-label={title}
         aria-busy={query.isFetching}
       >
-        <p className="text-sm text-brand">
-          {readOnly ? '관리자 · 조회 전용' : '관리자 · 검토 관리'}
-        </p>
+        <p className="text-sm text-brand">관리자 · 조회 전용</p>
         {query.isError ? (
           <div role="status" className="admin-notice">
             <h2 className="font-bold">조회하지 못했어요</h2>

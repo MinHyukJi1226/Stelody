@@ -1619,34 +1619,6 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/api/v1/admin/reviews/completion': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * 검토 완료 대상 확인
-     * @description 신규 검토(PENDING+유효 REVIEW)의 ID·버전 목록을 최대 10000건 반환합니다. hasMore가 true면 나머지는 다음 검토 완료에서 처리합니다. 조회 이후 새로 들어온 후보는 삭제 대상에 포함되지 않습니다.
-     *
-     *     현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     */
-    get: operations['get_admin_reviews_completion']
-    put?: never
-    /**
-     * 검토 완료 후 미등록 후보 영구 삭제
-     * @description 대상 확인 응답의 items를 전달합니다. 관리자·CSRF가 필요하며 후보와 종속 검토 이력을 영구 삭제합니다. 등록된 곡·등록 완료 후보·보류/제외 후보·수집 지점은 보존합니다. 대상이 변경되면 409 REVIEW_VERSION_CONFLICT로 전체 취소합니다. 이미 삭제되거나 등록된 대상은 건너뛰어 동일 요청 재전송이 가능합니다. 신규 대상을 자동으로 다시 조회하여 재전송하지 않습니다. 응답은 실제 deletedCount입니다.
-     *
-     *     현재 ADMIN 역할이 필요합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     */
-    post: operations['post_admin_reviews_completion']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
 }
 export type webhooks = Record<string, never>
 export interface components {
@@ -2904,23 +2876,6 @@ export interface components {
       pollAfterSeconds: number | null
       /** @enum {string} */
       status: 'COMPLETED' | 'PROCESSING' | 'NOT_COMPLETED' | 'UNKNOWN'
-    }
-    'com.stelody.review.dto.ReviewDtos.Candidate': {
-      /** Format: uuid */
-      id: string
-      /** Format: int64 */
-      version: number
-    }
-    'com.stelody.review.dto.ReviewDtos.Complete': {
-      items: components['schemas']['com.stelody.review.dto.ReviewDtos.Candidate'][]
-    }
-    'com.stelody.review.dto.ReviewDtos.CompletionPreview': {
-      hasMore: boolean
-      items: components['schemas']['com.stelody.review.dto.ReviewDtos.Candidate'][]
-    }
-    'com.stelody.review.dto.ReviewDtos.CompletionResult': {
-      /** Format: int32 */
-      deletedCount: number
     }
   }
   responses: never
@@ -8840,134 +8795,6 @@ export interface operations {
         }
       }
       /** @description 결과 조회 오류이며 세션 유무나 조회 실패를 탈퇴 완료로 해석하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  get_admin_reviews_completion: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['com.stelody.review.dto.ReviewDtos.CompletionPreview']
-        }
-      }
-      /**
-       * @description 로그인 세션이 없거나 유효하지 않습니다.
-       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
-       */
-      401: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /**
-       * @description 권한 또는 CSRF 검증에 실패했습니다.
-       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
-       */
-      403: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  post_admin_reviews_completion: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['com.stelody.review.dto.ReviewDtos.Complete']
-      }
-    }
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['com.stelody.review.dto.ReviewDtos.CompletionResult']
-        }
-      }
-      /** @description INVALID_REVIEW_REQUEST: items의 UUID·0 이상 버전·중복 ID·최대 10000건을 확인합니다. */
-      400: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /**
-       * @description 로그인 세션이 없거나 유효하지 않습니다.
-       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
-       */
-      401: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /**
-       * @description 권한 또는 CSRF 검증에 실패했습니다.
-       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
-       */
-      403: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description REVIEW_VERSION_CONFLICT: 후보가 변경되어 전체 삭제를 취소했습니다. 관리자가 대상을 다시 확인합니다. */
-      409: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
       default: {
         headers: {
           [name: string]: unknown

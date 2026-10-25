@@ -62,6 +62,7 @@ class ReviewIntegrationTest {
   @Autowired ObjectMapper mapper;
   @Autowired FindByIndexNameSessionRepository<?> sessions;
   @Autowired ReviewService service;
+  @Autowired com.stelody.review.service.ReviewBatchService batches;
   @Autowired ReviewRepository repository;
   @Autowired PlatformTransactionManager transactions;
   @Autowired JdbcTemplate runtime;
@@ -140,48 +141,274 @@ class ReviewIntegrationTest {
             mapper.writeValueAsString(Map.of("version", version, "status", state, "reason", note)));
   }
 
-  @Test
-  void completingSnapshotDeletesOnlyUnregisteredSnapshotCandidatesAndTheirAudit() throws Exception {
-    var original = service.completionPreview();
-    UUID registered = new UUID(0, 31), fresh = new UUID(0, 32);
-    seed(registered, 31);
-    var batch = service.completionPreview();
+  com.stelody.admin.dto.CatalogAdminDtos.SongInput song(String title, UUID member) {
+    return new com.stelody.admin.dto.CatalogAdminDtos.SongInput(
+        0L,
+        title,
+        com.stelody.admin.dto.CatalogAdminDtos.SongType.COVER,
+        null,
+        com.stelody.admin.dto.CatalogAdminDtos.Visibility.PUBLISHED,
+        null,
+        List.of(),
+        List.of(member),
+        List.of(),
+        false,
+        null,
+        com.stelody.admin.dto.CatalogAdminDtos.SearchVisibility.UNCHECKED,
+        null,
+        List.of(),
+        List.of(),
+        "일괄 검토 테스트");
+  }
+
+  UUID singer() {
+    UUID member = new UUID(0, 77);
     writer.update(
-        "INSERT INTO app.song_entry(id,title,search_title,song_type,visibility) VALUES(?,'kept','kept','COVER','DRAFT')",
-        registered);
-    writer.update(
-        "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,source_observed_at,status_observed_at) VALUES(?,?,?,?,'OFFICIAL_COVER','PUBLIC','kept',now(),now())",
-        registered,
-        registered,
-        "YT%09d".formatted(31),
-        CHANNEL);
-    writer.update(
-        "UPDATE app.review_item SET review_status='REGISTERED',registered_video_id=?,version=version+1 WHERE id=?",
-        registered,
-        registered);
-    seed(fresh, 32);
-    writer.update(
-        "INSERT INTO app.admin_audit(id,review_id,before_status,after_status,after_note,changed_at) VALUES(?,?,'PENDING','PENDING','reviewed',now())",
+        "INSERT INTO app.member(id,name,search_name,activity_status) VALUES(?,'검토 가수','검토가수','ACTIVE') ON CONFLICT(id) DO NOTHING",
+        member);
+    return member;
+  }
+
+  ReviewDtos.Complete batch(List<UUID> ids) {
+    var member = singer();
+    return new ReviewDtos.Complete(
         UUID.randomUUID(),
-        REVIEW);
-    String body = mapper.writeValueAsString(new ReviewDtos.Complete(batch.items()));
-    for (int deleted : List.of(1, 0))
-      mvc.perform(
-              auth(post(ROOT + "/completion"), admin).contentType("application/json").content(body))
-          .andExpect(status().isOk())
-          .andExpect(header().string("Cache-Control", "no-store"))
-          .andExpect(jsonPath("$.deletedCount").value(deleted));
-    assertThat(writer.queryForList("SELECT id FROM app.review_item", UUID.class))
-        .containsExactlyInAnyOrder(registered, fresh);
-    assertThat(writer.queryForObject("SELECT count(*) FROM app.admin_audit", Integer.class))
-        .isZero();
-    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
-        .isEqualTo(1);
-    assertThat(original.items()).extracting(ReviewDtos.Candidate::id).containsExactly(REVIEW);
+        service.completionPreview().items().stream()
+            .map(i -> new ReviewDtos.Candidate(i.id(), i.version()))
+            .toList(),
+        ids.stream()
+            .map(
+                id ->
+                    new ReviewDtos.Selection(
+                        id,
+                        song("일괄 등록 " + id, member),
+                        com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER))
+            .toList());
   }
 
   @Test
-  void completionPreviewExcludesDeferredIgnoredExcludedAndExpiredCandidates() throws Exception {
+  void selectedSongsRegisterAndOnlyUnselectedSnapshotIsDeletedWithReplayProtection()
+      throws Exception {
+    UUID second = new UUID(0, 5), discard = new UUID(0, 6), fresh = new UUID(0, 7);
+    seed(second, 5);
+    seed(discard, 6);
+    var body = batch(List.of(REVIEW, second));
+    seed(fresh, 7);
+    writer.update(
+        "INSERT INTO app.admin_audit(id,review_id,before_status,after_status,after_note,changed_at) VALUES(?,?,'PENDING','PENDING','reviewed',now())",
+        UUID.randomUUID(),
+        discard);
+    String json = mapper.writeValueAsString(body);
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin).contentType("application/json").content(json))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(jsonPath("$.registeredSongs.length()").value(2))
+        .andExpect(jsonPath("$.deletedCount").value(1))
+        .andExpect(jsonPath("$.replayed").value(false));
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin).contentType("application/json").content(json))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.registeredSongs.length()").value(2))
+        .andExpect(jsonPath("$.deletedCount").value(0))
+        .andExpect(jsonPath("$.replayed").value(true));
+    assertThat(writer.queryForList("SELECT id FROM app.review_item", UUID.class))
+        .containsExactlyInAnyOrder(REVIEW, second, fresh);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isEqualTo(2);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class)).isEqualTo(2);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.admin_audit", Integer.class))
+        .isZero();
+    mvc.perform(get("/api/v1/songs"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(2));
+    var changed =
+        new ReviewDtos.Complete(
+            body.requestId(),
+            body.items(),
+            List.of(
+                new ReviewDtos.Selection(
+                    REVIEW,
+                    song("다른 내용", singer()),
+                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(changed)))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("REVIEW_VERSION_CONFLICT"));
+    var reused =
+        new ReviewDtos.Complete(
+            body.requestId(),
+            List.of(new ReviewDtos.Candidate(fresh, 0L)),
+            List.of(
+                new ReviewDtos.Selection(
+                    fresh,
+                    song("새 요청", singer()),
+                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(reused)))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void unselectedCandidateRegisteredByAnotherOperationIsPreserved() throws Exception {
+    UUID other = new UUID(0, 5);
+    seed(other, 5);
+    var body = batch(List.of(REVIEW));
+    writer.update(
+        "INSERT INTO app.song_entry(id,title,search_title,song_type,visibility) VALUES(?,'기존 곡','기존곡','COVER','DRAFT')",
+        other);
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,source_observed_at,status_observed_at) VALUES(?,?,?,?,'OFFICIAL_COVER','PUBLIC','기존 영상',now(),now())",
+        other,
+        other,
+        "YT000000005",
+        CHANNEL);
+    writer.update(
+        "UPDATE app.review_item SET review_status='REGISTERED',registered_video_id=?,version=version+1 WHERE id=?",
+        other,
+        other);
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(body)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.registeredSongs.length()").value(1))
+        .andExpect(jsonPath("$.deletedCount").value(0));
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE review_status='REGISTERED'",
+                Integer.class))
+        .isEqualTo(2);
+    assertThat(
+            writer.queryForObject(
+                "SELECT title FROM app.song_entry WHERE id=?", String.class, other))
+        .isEqualTo("기존 곡");
+  }
+
+  @Test
+  void nestedInputErrorsIdentifySelectedSongWithoutChangingAnything() throws Exception {
+    var valid = batch(List.of(REVIEW));
+    var invalid =
+        new ReviewDtos.Complete(
+            valid.requestId(),
+            valid.items(),
+            List.of(
+                new ReviewDtos.Selection(
+                    REVIEW,
+                    song(" ", singer()),
+                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(invalid)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("selected[0].song.title"));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isZero();
+    assertThat(writer.queryForObject("SELECT review_status FROM app.review_item", String.class))
+        .isEqualTo("PENDING");
+  }
+
+  @Test
+  void failureInSecondRegistrationRollsBackFirstRegistrationAndAllDeletion() throws Exception {
+    UUID second = new UUID(0, 5);
+    seed(second, 5);
+    seed(new UUID(0, 6), 6);
+    var valid = batch(List.of(REVIEW, second));
+    var body =
+        new ReviewDtos.Complete(
+            valid.requestId(),
+            valid.items(),
+            List.of(
+                valid.selected().getFirst(),
+                new ReviewDtos.Selection(
+                    second,
+                    song("두번째 실패", UUID.randomUUID()),
+                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(body)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_CATALOG_REFERENCE"));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isZero();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class)).isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE review_status='PENDING'",
+                Integer.class))
+        .isEqualTo(3);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void deletionFailureAlsoRollsBackRegisteredSongs() throws Exception {
+    seed(new UUID(0, 5), 5);
+    var body = batch(List.of(REVIEW));
+    writer.execute(
+        "CREATE FUNCTION app.reject_candidate_deletion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture failure' USING ERRCODE='23503'; END $$");
+    writer.execute(
+        "CREATE TRIGGER reject_candidate_deletion BEFORE DELETE ON app.review_item FOR EACH ROW EXECUTE FUNCTION app.reject_candidate_deletion()");
+    try {
+      mvc.perform(
+              auth(post(ROOT + "/completion"), admin)
+                  .contentType("application/json")
+                  .content(mapper.writeValueAsString(body)))
+          .andExpect(status().isConflict());
+      assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+          .isZero();
+      assertThat(
+              writer.queryForObject(
+                  "SELECT count(*) FROM app.review_item WHERE review_status='PENDING'",
+                  Integer.class))
+          .isEqualTo(2);
+    } finally {
+      writer.execute("DROP TRIGGER reject_candidate_deletion ON app.review_item");
+      writer.execute("DROP FUNCTION app.reject_candidate_deletion()");
+    }
+  }
+
+  @Test
+  void concurrentSameRequestCreatesOneSetOfSongs() throws Exception {
+    seed(new UUID(0, 5), 5);
+    var body = batch(List.of(REVIEW));
+    try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var start = new java.util.concurrent.CountDownLatch(1);
+      var first =
+          pool.submit(
+              () -> {
+                start.await();
+                return batches.complete(ADMIN, body);
+              });
+      var second =
+          pool.submit(
+              () -> {
+                start.await();
+                return batches.complete(ADMIN, body);
+              });
+      start.countDown();
+      var results =
+          List.of(
+              first.get(30, java.util.concurrent.TimeUnit.SECONDS),
+              second.get(30, java.util.concurrent.TimeUnit.SECONDS));
+      assertThat(results)
+          .extracting(ReviewDtos.CompletionResult::replayed)
+          .containsExactlyInAnyOrder(true, false);
+      assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+          .isEqualTo(1);
+      assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class))
+          .isEqualTo(1);
+    }
+  }
+
+  @Test
+  void previewExcludesDeferredIgnoredExcludedAndExpiredCandidates() throws Exception {
     for (int n = 10; n < 14; n++) seed(new UUID(0, n), n);
     writer.execute(
         "UPDATE app.review_item SET disposition='DEFERRED' WHERE id='00000000-0000-0000-0000-00000000000a'");
@@ -195,35 +422,32 @@ class ReviewIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items.length()").value(1))
         .andExpect(jsonPath("$.hasMore").value(false));
-    assertThat(
-            service
-                .complete(ADMIN, new ReviewDtos.Complete(service.completionPreview().items()))
-                .deletedCount())
-        .isEqualTo(1);
+    assertThat(batches.complete(ADMIN, batch(List.of(REVIEW))).registeredSongs()).hasSize(1);
     assertThat(writer.queryForObject("SELECT count(*) FROM app.review_item", Integer.class))
-        .isEqualTo(4);
+        .isEqualTo(5);
   }
 
   @Test
-  void changedCandidateRejectsWholeCompletionWithoutDeletingOtherCandidates() throws Exception {
+  void changedSnapshotRejectsAllRegistrationAndDeletion() throws Exception {
     seed(new UUID(0, 5), 5);
-    var batch = service.completionPreview();
-    writer.update("UPDATE app.review_item SET version=version+1 WHERE id=?", REVIEW);
+    var body = batch(List.of(REVIEW));
+    writer.update("UPDATE app.review_item SET version=version+1 WHERE id=?", new UUID(0, 5));
     mvc.perform(
             auth(post(ROOT + "/completion"), admin)
                 .contentType("application/json")
-                .content(mapper.writeValueAsString(new ReviewDtos.Complete(batch.items()))))
+                .content(mapper.writeValueAsString(body)))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("REVIEW_VERSION_CONFLICT"));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isZero();
     assertThat(writer.queryForObject("SELECT count(*) FROM app.review_item", Integer.class))
         .isEqualTo(2);
   }
 
   @Test
-  void completionRequiresAdminCsrfValidUniqueSnapshotAndRetainsRestrictedDeletePrivileges()
-      throws Exception {
-    String body =
-        mapper.writeValueAsString(new ReviewDtos.Complete(service.completionPreview().items()));
+  void emptySelectionCannotDeleteAndAdminCsrfAndSnapshotRemainRequired() throws Exception {
+    var valid = batch(List.of(REVIEW));
+    String body = mapper.writeValueAsString(valid);
     mvc.perform(get(ROOT + "/completion")).andExpect(status().isUnauthorized());
     mvc.perform(auth(get(ROOT + "/completion"), user)).andExpect(status().isForbidden());
     mvc.perform(
@@ -238,26 +462,30 @@ class ReviewIntegrationTest {
     for (String invalid :
         List.of(
             "{}",
-            "{\"items\":[null]}",
-            "{\"items\":[{\"id\":\"bad\",\"version\":0}]}",
+            mapper.writeValueAsString(
+                new ReviewDtos.Complete(valid.requestId(), valid.items(), List.of())),
             mapper.writeValueAsString(
                 new ReviewDtos.Complete(
-                    List.of(
-                        new ReviewDtos.Candidate(REVIEW, 0L),
-                        new ReviewDtos.Candidate(REVIEW, 0L))))))
+                    valid.requestId(),
+                    valid.items(),
+                    List.of(valid.selected().getFirst(), valid.selected().getFirst()))),
+            mapper.writeValueAsString(
+                new ReviewDtos.Complete(valid.requestId(), List.of(), valid.selected()))))
       mvc.perform(
               auth(post(ROOT + "/completion"), admin)
                   .contentType("application/json")
                   .content(invalid))
           .andExpect(status().isBadRequest());
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.review_item", Integer.class))
+        .isEqualTo(1);
     assertThatThrownBy(() -> runtime.execute("DELETE FROM app.review_item"))
         .hasRootCauseMessage("ERROR: permission denied for table review_item");
-    assertThatThrownBy(() -> runtime.execute("SELECT app.cleanup_discovery_reviews(NULL,NULL)"))
-        .hasRootCauseMessage("ERROR: permission denied for function cleanup_discovery_reviews");
     writer.update("UPDATE app.app_user SET role='USER' WHERE id=?", ADMIN);
     assertThat(
             runtime.queryForObject(
-                "SELECT app.complete_review_candidates('[]'::jsonb,?::uuid)", Integer.class, ADMIN))
+                "SELECT app.complete_review_candidates('[]','[]',NULL,NULL,?::uuid)",
+                Integer.class,
+                ADMIN))
         .isEqualTo(-2);
   }
 

@@ -47,16 +47,6 @@ public class ReviewService {
   }
 
   @Transactional
-  public ReviewDtos.CompletionResult complete(UUID actor, ReviewDtos.Complete body) {
-    if (body.items().stream().map(ReviewDtos.Candidate::id).distinct().count()
-        != body.items().size()) throw ReviewException.invalid();
-    int deleted = queries.complete(body.items(), actor);
-    if (deleted == -1) throw ReviewException.conflict();
-    if (deleted == -2) throw new ReviewException(403, "ACCESS_DENIED", "관리자 권한을 확인해 주세요");
-    return new ReviewDtos.CompletionResult(deleted);
-  }
-
-  @Transactional
   public ReviewDtos.Item change(UUID id, UUID actor, ReviewDtos.Change change) {
     if (change.version() == null
         || change.version() < 0

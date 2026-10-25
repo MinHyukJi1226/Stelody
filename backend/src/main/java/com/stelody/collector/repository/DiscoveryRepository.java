@@ -62,7 +62,6 @@ public final class DiscoveryRepository {
           AND has_table_privilege(current_user,'app.member','SELECT')
           AND has_table_privilege(current_user,'app.member_alias','SELECT')
           AND has_function_privilege(current_user,'app.publish_discovered_cover(uuid,timestamptz,uuid,bigint,text,boolean,text,uuid)','EXECUTE')
-          AND has_function_privilege(current_user,'app.cleanup_discovery_reviews(uuid,uuid)','EXECUTE')
         """)
             .query(Boolean.class)
             .single();
@@ -113,7 +112,7 @@ public final class DiscoveryRepository {
                   """
           INSERT INTO app.discovery_channel_state(channel_id,uploads_id) VALUES(:id,:uploads)
           ON CONFLICT(channel_id) DO UPDATE SET uploads_id=EXCLUDED.uploads_id,
-            page_token=NULL,pending_head_id=NULL,in_progress=false,backfill_token=NULL,backfill_complete=false,scan_started_at=NULL
+            page_token=NULL,pending_head_id=NULL,in_progress=false,backfill_token=NULL,backfill_complete=false
           WHERE discovery_channel_state.uploads_id<>EXCLUDED.uploads_id
           """)
               .param("id", channel.id())
@@ -168,7 +167,6 @@ public final class DiscoveryRepository {
       boolean complete,
       boolean bootstrap,
       boolean backfill,
-      boolean scheduled,
       Instant now) {
     return transactions.execute(
         status -> {
@@ -200,7 +198,6 @@ public final class DiscoveryRepository {
                 .param("historyDone", bootstrap ? next == null : before.backfillComplete())
                 .param("id", channel.id())
                 .update();
-            markScheduledCleanup(channel, scheduled, now);
           }
           jdbc.sql(
                   "UPDATE app.discovery_run SET pages=pages+1,candidates=candidates+:count WHERE id=:id")
@@ -358,24 +355,13 @@ public final class DiscoveryRepository {
       Channel channel,
       Map<String, VideoObservation> values,
       Map<String, Decision> decisions,
-      boolean scheduled,
       Instant now) {
     transactions.executeWithoutResult(
         status -> {
           fence(token);
           allowed(channel);
           save(token, channel, values, decisions, now);
-          markScheduledCleanup(channel, scheduled, now);
         });
-  }
-
-  private void markScheduledCleanup(Channel channel, boolean scheduled, Instant now) {
-    if (!scheduled || !autoPublicationAllowed) return;
-    jdbc.sql(
-            "UPDATE app.discovery_channel_state SET scan_started_at=COALESCE(scan_started_at,:now) WHERE channel_id=:channel AND EXISTS(SELECT 1 FROM app.cover_publication_control WHERE singleton AND enabled)")
-        .param("now", ts(now))
-        .param("channel", channel.id())
-        .update();
   }
 
   public void resetPage(UUID token, Channel channel, boolean backfill) {
@@ -386,18 +372,13 @@ public final class DiscoveryRepository {
           jdbc.sql(
                   backfill
                       ? "UPDATE app.discovery_channel_state SET backfill_token=NULL,backfill_complete=false WHERE channel_id=:id"
-                      : "UPDATE app.discovery_channel_state SET page_token=NULL,pending_head_id=NULL,in_progress=false,scan_started_at=NULL WHERE channel_id=:id")
+                      : "UPDATE app.discovery_channel_state SET page_token=NULL,pending_head_id=NULL,in_progress=false WHERE channel_id=:id")
               .param("id", channel.id())
               .update();
         });
   }
 
   public void finish(UUID token, UUID run, String state, String error, Instant now) {
-    finish(token, run, state, error, now, false);
-  }
-
-  public void finish(
-      UUID token, UUID run, String state, String error, Instant now, boolean completeScan) {
     transactions.executeWithoutResult(
         status -> {
           fence(token);
@@ -408,13 +389,6 @@ public final class DiscoveryRepository {
               .param("now", ts(now))
               .param("id", run)
               .update();
-          if (completeScan && autoPublicationAllowed && state.equals("SUCCEEDED")) {
-            jdbc.sql("SELECT app.cleanup_discovery_reviews(:run,:token)")
-                .param("run", run)
-                .param("token", token)
-                .query(Integer.class)
-                .single();
-          }
         });
   }
 
