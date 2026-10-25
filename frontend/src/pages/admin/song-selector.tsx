@@ -63,7 +63,7 @@ function SelectionRows({
           <input
             type={multiple ? 'checkbox' : 'radio'}
             name="song-selection"
-            checked={selected.includes(row.id)}
+            checked={row.id ? selected.includes(row.id) : selected.length === 0}
             onChange={() => onToggle(row.id)}
           />
           <span className="min-w-0 break-words">
@@ -117,6 +117,14 @@ function EntitySelector(props: Props & { kind: EntityKind }) {
           : '기존 항목 하나를 선택합니다.'}{' '}
         선택은 최종 저장 전 초안에만 적용합니다.
       </p>
+      {!multiple && (
+        <SelectionRows
+          rows={[{ id: '', name: '원곡 연결 안 함' }]}
+          selected={selected}
+          multiple={false}
+          onToggle={() => setSelected([])}
+        />
+      )}
       {query.isError ? (
         <div role="status">
           <p>목록을 조회하지 못했어요.</p>
@@ -159,7 +167,11 @@ function EntitySelector(props: Props & { kind: EntityKind }) {
       <div className="grid justify-items-start gap-2">
         <Button
           variant="primary"
-          disabled={query.isPending || query.isError || selected.length > 100}
+          disabled={
+            ((query.isPending || query.isError) &&
+              (multiple || selected.length > 0)) ||
+            selected.length > 100
+          }
           onClick={() => props.onApply(selected)}
         >
           선택 적용
@@ -178,27 +190,26 @@ function VideoSelector(props: Props) {
         검증합니다.
       </p>
       <SelectionRows
-        rows={props.videos.map((v) => ({
-          id: v.id,
-          name: v.sourceTitle ?? v.youtubeId,
-          detail: (
-            <>
-              {songLabel(v.kind)} · {songLabel(v.availability)} ·{' '}
-              <AdminTime value={v.publishedAt} empty="공개일 없음" />
-            </>
-          ),
-        }))}
+        rows={[
+          { id: '', name: '대표 영상 지정 안 함' },
+          ...props.videos.map((v) => ({
+            id: v.id,
+            name: v.sourceTitle ?? v.youtubeId,
+            detail: (
+              <>
+                {songLabel(v.kind)} · {songLabel(v.availability)} ·{' '}
+                <AdminTime value={v.publishedAt} empty="공개일 없음" />
+              </>
+            ),
+          })),
+        ]}
         selected={selected}
         multiple={false}
-        onToggle={(id) => setSelected([id])}
+        onToggle={(id) => setSelected(id ? [id] : [])}
       />
       {!props.videos.length && <p>연결된 영상이 없습니다.</p>}
       <div className="grid justify-items-start gap-2">
-        <Button
-          variant="primary"
-          disabled={!selected.length}
-          onClick={() => props.onApply(selected)}
-        >
+        <Button variant="primary" onClick={() => props.onApply(selected)}>
           선택 적용
         </Button>
         <Button onClick={props.onDismiss}>취소</Button>

@@ -28,6 +28,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'songs/:songId/edit',
+            handle: { preserveAdminDraft: true },
             lazy: async () => ({
               Component: (await import('@/pages/admin/admin-song-editor'))
                 .AdminSongEditorPage,

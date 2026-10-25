@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, Outlet, useLocation, useMatches } from 'react-router'
 import { sessionOptions, endLocalSession } from '@/features/auth/session'
 import { loginPath } from '@/features/auth/return-path'
 import { adminPaths, isActiveAdmin } from '@/features/admin/api'
@@ -12,6 +12,11 @@ import { SiteFooter } from '@/shared/ui/site-footer'
 
 export function AdminGate() {
   const session = useQuery(sessionOptions)
+  const preserveDraft = useMatches().some(
+    (match) =>
+      (match.handle as { preserveAdminDraft?: boolean } | undefined)
+        ?.preserveAdminDraft,
+  )
   const [admitted, setAdmitted] = useState<string | null>(null)
   if (
     session.isSuccess &&
@@ -28,6 +33,15 @@ export function AdminGate() {
       (!isActiveAdmin(session.data) || admitted !== session.data?.id))
   )
     content = <AdminAccess state="checking" />
+  else if (
+    session.isError &&
+    preserveDraft &&
+    admitted === session.data?.id &&
+    isActiveAdmin(session.data) &&
+    !isAdminAccessError(session.error)
+  )
+    // The editor renders AD00 itself so transient session failures do not unmount its draft.
+    content = <Outlet key={session.data!.id} context={session.data!.id} />
   else if (session.isError)
     content = (
       <AdminAccess state="error" onRetry={() => void session.refetch()} />
