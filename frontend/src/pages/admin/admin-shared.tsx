@@ -1,6 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, Outlet, useLocation, useMatches } from 'react-router'
 import { sessionOptions, endLocalSession } from '@/features/auth/session'
 import { loginPath } from '@/features/auth/return-path'
 import { adminPaths, isActiveAdmin } from '@/features/admin/api'
@@ -12,9 +12,36 @@ import { SiteFooter } from '@/shared/ui/site-footer'
 
 export function AdminGate() {
   const session = useQuery(sessionOptions)
+  const preserveDraft = useMatches().some(
+    (match) =>
+      (match.handle as { preserveAdminDraft?: boolean } | undefined)
+        ?.preserveAdminDraft,
+  )
+  const [admitted, setAdmitted] = useState<string | null>(null)
+  if (
+    session.isSuccess &&
+    !session.isFetching &&
+    isActiveAdmin(session.data) &&
+    admitted !== session.data!.id
+  ) {
+    setAdmitted(session.data!.id)
+  }
   let content: ReactNode
-  if (session.isPending || session.isFetching)
+  if (
+    session.isPending ||
+    (session.isFetching &&
+      (!isActiveAdmin(session.data) || admitted !== session.data?.id))
+  )
     content = <AdminAccess state="checking" />
+  else if (
+    session.isError &&
+    preserveDraft &&
+    admitted === session.data?.id &&
+    isActiveAdmin(session.data) &&
+    !isAdminAccessError(session.error)
+  )
+    // The editor renders AD00 itself so transient session failures do not unmount its draft.
+    content = <Outlet key={session.data!.id} context={session.data!.id} />
   else if (session.isError)
     content = (
       <AdminAccess state="error" onRetry={() => void session.refetch()} />
@@ -22,7 +49,7 @@ export function AdminGate() {
   else if (!session.data) content = <AdminAccess state="login" />
   else if (!isActiveAdmin(session.data))
     content = <AdminAccess state="forbidden" />
-  else content = <Outlet context={session.data.id} />
+  else content = <Outlet key={session.data.id} context={session.data.id} />
   return (
     <div className="admin-page">
       {content}
@@ -145,6 +172,9 @@ export function AdminScreen({
       <nav className="flex flex-wrap gap-2" aria-label="관리자 메뉴">
         <Button asChild>
           <Link to={adminPaths.inbox}>작업함</Link>
+        </Button>
+        <Button asChild>
+          <Link to={adminPaths.songs}>노래 목록</Link>
         </Button>
         <Button asChild>
           <Link to={adminPaths.collection}>수집 현황</Link>

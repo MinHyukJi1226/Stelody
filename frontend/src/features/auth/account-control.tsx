@@ -1,3 +1,4 @@
+import { usePageActions } from '@/shared/lib/page-action-guard'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router'
 import { Button } from '@/shared/ui/button'
@@ -6,6 +7,7 @@ import { loginPath } from './return-path'
 import { clearPrivateQueries, endLocalSession, sessionOptions } from './session'
 
 export function AccountControl({ onNavigate }: { onNavigate?: () => void }) {
+  const pageActions = usePageActions()
   const client = useQueryClient()
   const session = useQuery(sessionOptions)
   const location = useLocation()
@@ -35,7 +37,11 @@ export function AccountControl({ onNavigate }: { onNavigate?: () => void }) {
         <Button
           className="h-11 min-h-11 w-[84px] px-3 py-0 leading-5"
           disabled={mutation.isPending}
-          onClick={() => mutation.mutate()}
+          onClick={() => {
+            if (pageActions) {
+              if (pageActions.run(() => mutation.mutate())) onNavigate?.()
+            } else mutation.mutate()
+          }}
         >
           {mutation.isPending ? '로그아웃 중…' : '로그아웃'}
         </Button>
