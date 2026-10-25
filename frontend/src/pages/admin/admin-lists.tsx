@@ -1,4 +1,5 @@
 import { Button } from '@/shared/ui/button'
+import { ReviewCompletionButton } from './review-completion'
 import { songEditPath } from '@/features/admin/songs'
 import { adminLabel } from '@/features/admin/format'
 import { useAdminUser } from '@/features/admin/admin-context'
@@ -37,12 +38,15 @@ export function AdminReviewsPage() {
   const { page, onPage } = useAdminPage()
   const query = useQuery(adminReviewOptions(useAdminUser(), page))
   return (
-    <AdminScreen title="신규 검토" query={query}>
+    <AdminScreen title="신규 검토" query={query} readOnly={false}>
       <p className="text-sm text-muted">검토 대기 · 검토 대상만 표시</p>
       <p className="text-sm text-muted">
         신규 검토 대상은 검토 대기 중인 후보입니다. 출처가 만료되어 보류된
         후보는 이 목록에서 제외됩니다.
       </p>
+      <ReviewCompletionButton
+        disabled={!query.isSuccess || !query.data.items.length}
+      />
       <AdminTable
         widths={[40, 21, 23, 16]}
         headers={['영상 제목', '채널', '최초 발견 시각 (KST)', '영상 상태']}
@@ -65,7 +69,9 @@ export function AdminReviewsPage() {
           onPage={onPage}
         />
       )}
-      <ReadOnlyNote />
+      <p className="text-xs text-muted">
+        등록할 곡을 모두 등록한 뒤 검토 완료로 남은 후보를 정리하세요.
+      </p>
     </AdminScreen>
   )
 }

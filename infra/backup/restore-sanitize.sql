@@ -5,6 +5,12 @@ UPDATE app.catalog_state SET view_publication_id=NULL;
 DELETE FROM app.view_publication;
 UPDATE app.collection_control SET owner_token=NULL;
 UPDATE app.discovery_channel_state SET in_progress=false,page_token=NULL,pending_head_id=NULL;
+DO $$ BEGIN
+    IF EXISTS(SELECT 1 FROM information_schema.columns
+      WHERE table_schema='app' AND table_name='discovery_channel_state' AND column_name='scan_started_at') THEN
+        UPDATE app.discovery_channel_state SET scan_started_at=NULL;
+    END IF;
+END $$;
 UPDATE app.cover_publication_control SET enabled=false,version=version+1,edited_at=CURRENT_TIMESTAMP;
 -- Age is measured from observation, never from restoration time.
 UPDATE app.video SET source_title='',source_published_at=NULL,source_thumbnail_url=NULL,

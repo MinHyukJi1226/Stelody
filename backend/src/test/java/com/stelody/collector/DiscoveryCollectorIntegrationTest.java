@@ -667,6 +667,187 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   @Test
+  void completedChannelsRetainCleanupScopeUntilOtherChannelsFinish() {
+    enableAuto();
+    UUID other = new UUID(0, 99), token = UUID.randomUUID();
+    writer.update(
+        "INSERT INTO app.channel(id,youtube_id,name,channel_type,collection_enabled) VALUES(?,?,'other','GROUP',true)",
+        other,
+        "UC" + "b".repeat(22));
+    for (UUID channel : List.of(CHANNEL, other)) {
+      writer.update(
+          "INSERT INTO app.discovery_channel_state(channel_id,uploads_id,head_video_id,in_progress,scan_started_at,last_scanned_at) VALUES(?,'fixture-uploads','YT000000002',?,?,?)",
+          channel,
+          channel.equals(other),
+          java.sql.Timestamp.from(NOW),
+          java.sql.Timestamp.from(NOW));
+      writer.update(
+          "INSERT INTO app.review_item(id,youtube_id,channel_id,source_observed_at,availability,disposition,suggested_type,rule_version,decision_reason,first_seen_at) VALUES(?,?,?,?,'PUBLIC','REVIEW','COVER','fixture','NEEDS_REVIEW',?)",
+          UUID.randomUUID(),
+          yt(channel.equals(CHANNEL) ? 2 : 3),
+          channel,
+          java.sql.Timestamp.from(NOW),
+          java.sql.Timestamp.from(NOW));
+    }
+    var repository = new DiscoveryRepository(source, true);
+    UUID run = repository.begin(token, null, false, NOW);
+    repository.finish(token, run, "SUCCEEDED", null, NOW, true);
+    assertThat(count("review_item")).isEqualTo(2);
+    writer.update(
+        "UPDATE app.discovery_channel_state SET in_progress=false,last_scanned_at=? WHERE channel_id=?",
+        java.sql.Timestamp.from(NOW.plusSeconds(1)),
+        other);
+    run = repository.begin(token, null, false, NOW.plusSeconds(1));
+    repository.finish(token, run, "SUCCEEDED", null, NOW.plusSeconds(1), true);
+    assertThat(count("review_item")).isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.discovery_channel_state WHERE scan_started_at IS NULL AND head_video_id='YT000000002'",
+                Integer.class))
+        .isEqualTo(2);
+  }
+
+  @Test
+  void
+      scheduledAutoPublicationDeletesOnlyRemainingReviewsAndKeepsRegisteredDeferredAndCheckpoint() {
+    enableAuto();
+    page(null, null, 1, 2, 3);
+    mixedScheduledVideos();
+    assertThat(scheduledAutoRun(NOW, 3).status()).isEqualTo("SUCCEEDED");
+    assertThat(writer.queryForList("SELECT youtube_id FROM app.review_item", String.class))
+        .containsExactlyInAnyOrder(yt(1), yt(3));
+    assertThat(count("song_entry")).isEqualTo(1);
+    assertThat(count("cover_auto_registration")).isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT disposition FROM app.review_item WHERE youtube_id=?", String.class, yt(3)))
+        .isEqualTo("DEFERRED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT head_video_id FROM app.discovery_channel_state", String.class))
+        .isEqualTo(yt(1));
+    assertThat(scheduledAutoRun(NOW.plusSeconds(1), 3).status()).isEqualTo("SUCCEEDED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE youtube_id=?", Integer.class, yt(2)))
+        .isZero();
+    assertThatThrownBy(() -> collector.execute("DELETE FROM app.review_item"))
+        .hasRootCauseMessage("ERROR: permission denied for table review_item");
+    assertThatThrownBy(() -> collector.execute("SELECT app.complete_review_candidates('[]',NULL)"))
+        .hasRootCauseMessage("ERROR: permission denied for function complete_review_candidates");
+  }
+
+  @Test
+  void unfinishedScheduledScanRetainsCandidatesUntilContinuationCompletes() {
+    enableAuto();
+    // Establish an earlier head, then discover two new pages.
+    page(null, null, 1);
+    clearCovers(1);
+    assertThat(scheduledAutoRun(NOW, 1).status()).isEqualTo("SUCCEEDED");
+    page(null, "next", 2);
+    mixedScheduledVideos();
+    assertThat(scheduledAutoRun(NOW.plusSeconds(86400), 1).status()).isEqualTo("SUCCEEDED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE youtube_id=?", Integer.class, yt(2)))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT in_progress FROM app.discovery_channel_state", Boolean.class))
+        .isTrue();
+    page("next", null, 1);
+    assertThat(scheduledAutoRun(NOW.plusSeconds(86401), 1).status()).isEqualTo("SUCCEEDED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE youtube_id=?", Integer.class, yt(2)))
+        .isZero();
+    assertThat(count("song_entry")).isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT head_video_id FROM app.discovery_channel_state", String.class))
+        .isEqualTo(yt(2));
+  }
+
+  @Test
+  void failedScheduledScanAndDisabledPublicationDoNotDeleteCandidates() {
+    enableAuto();
+    page(null, null, 1);
+    clearCovers(1);
+    scheduledAutoRun(NOW, 1);
+    page(null, "next", 2);
+    mixedScheduledVideos();
+    server.stubFor(
+        get(urlPathEqualTo("/playlistItems"))
+            .withQueryParam("pageToken", equalTo("next"))
+            .willReturn(aResponse().withStatus(403)));
+    assertThat(scheduledAutoRun(NOW.plusSeconds(86400), 3).status()).isEqualTo("FAILED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE youtube_id=?", Integer.class, yt(2)))
+        .isEqualTo(1);
+    page("next", null, 1);
+    writer.execute("UPDATE app.cover_publication_control SET enabled=false");
+    assertThat(scheduledAutoRun(NOW.plusSeconds(86401), 3).status()).isEqualTo("SUCCEEDED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE youtube_id=?", Integer.class, yt(2)))
+        .isEqualTo(1);
+  }
+
+  com.stelody.collector.service.VideoCollector.Result scheduledAutoRun(Instant now, int pages) {
+    return new DiscoveryCollector(
+            source,
+            settings(),
+            new DiscoveryOptions(true, null, false, pages, true),
+            Clock.fixed(now, ZoneOffset.UTC),
+            d -> {})
+        .collectScheduled(
+            new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(20)), now);
+  }
+
+  void mixedScheduledVideos() {
+    var items = new ArrayList<Object>();
+    for (int n : new int[] {1, 2, 3})
+      items.add(
+          Map.of(
+              "id",
+              yt(n),
+              "snippet",
+              Map.of(
+                  "channelId",
+                  YTCHANNEL,
+                  "title",
+                  n == 2 ? "Song Cover" : "노래 / 아오쿠모 린 (Aokumo Rin) Cover",
+                  "publishedAt",
+                  n == 3 ? NOW.plusSeconds(86400 * 3).toString() : "2026-09-01T00:00:00Z",
+                  "liveBroadcastContent",
+                  "none"),
+              "status",
+              Map.of("privacyStatus", "public", "embeddable", true),
+              "contentDetails",
+              Map.of("duration", "PT4M")));
+    // Return only requested IDs, as the actual YouTube endpoint does.
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .willReturn(
+                okJson(
+                    mapper.writeValueAsString(
+                        Map.of("kind", "youtube#videoListResponse", "items", items)))));
+    for (int n : new int[] {1, 2, 3})
+      server.stubFor(
+          get(urlPathEqualTo("/videos"))
+              .withQueryParam("id", equalTo(yt(n)))
+              .willReturn(
+                  okJson(
+                      mapper.writeValueAsString(
+                          Map.of(
+                              "kind",
+                              "youtube#videoListResponse",
+                              "items",
+                              List.of(items.get(n - 1)))))));
+  }
+
+  @Test
   void explicitSoloCreatesPublishedCoverRepresentativeConfirmedMemberAndRegistrationHistory()
       throws Exception {
     enableAuto();

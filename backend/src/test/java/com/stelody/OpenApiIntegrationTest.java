@@ -52,6 +52,20 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsReviewCompletionSnapshotAndPermanentDeletion() throws Exception {
+    var api = contract();
+    var preview = api.at("/paths/~1api~1v1~1admin~1reviews~1completion/get");
+    var complete = api.at("/paths/~1api~1v1~1admin~1reviews~1completion/post");
+    assertThat(preview.path("description").asText()).contains("10000", "hasMore");
+    assertThat(complete.path("description").asText()).contains("영구 삭제", "수집 지점", "재전송");
+    assertThat(complete.path("security").toString()).contains("session", "csrf");
+    assertErrorCodes(
+        api, "/api/v1/admin/reviews/completion", "post", "409", "REVIEW_VERSION_CONFLICT");
+    assertErrorCodes(
+        api, "/api/v1/admin/reviews/completion", "post", "400", "INVALID_REVIEW_REQUEST");
+  }
+
+  @Test
   void documentsPreissuedWithdrawalResultAuthorityAndUnknownOutcomes() throws Exception {
     var api = contract();
     var prepare = api.at("/paths/~1api~1v1~1me~1withdrawal-requests/post");

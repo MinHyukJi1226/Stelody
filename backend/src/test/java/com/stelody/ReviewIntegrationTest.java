@@ -141,6 +141,127 @@ class ReviewIntegrationTest {
   }
 
   @Test
+  void completingSnapshotDeletesOnlyUnregisteredSnapshotCandidatesAndTheirAudit() throws Exception {
+    var original = service.completionPreview();
+    UUID registered = new UUID(0, 31), fresh = new UUID(0, 32);
+    seed(registered, 31);
+    var batch = service.completionPreview();
+    writer.update(
+        "INSERT INTO app.song_entry(id,title,search_title,song_type,visibility) VALUES(?,'kept','kept','COVER','DRAFT')",
+        registered);
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,source_observed_at,status_observed_at) VALUES(?,?,?,?,'OFFICIAL_COVER','PUBLIC','kept',now(),now())",
+        registered,
+        registered,
+        "YT%09d".formatted(31),
+        CHANNEL);
+    writer.update(
+        "UPDATE app.review_item SET review_status='REGISTERED',registered_video_id=?,version=version+1 WHERE id=?",
+        registered,
+        registered);
+    seed(fresh, 32);
+    writer.update(
+        "INSERT INTO app.admin_audit(id,review_id,before_status,after_status,after_note,changed_at) VALUES(?,?,'PENDING','PENDING','reviewed',now())",
+        UUID.randomUUID(),
+        REVIEW);
+    String body = mapper.writeValueAsString(new ReviewDtos.Complete(batch.items()));
+    for (int deleted : List.of(1, 0))
+      mvc.perform(
+              auth(post(ROOT + "/completion"), admin).contentType("application/json").content(body))
+          .andExpect(status().isOk())
+          .andExpect(header().string("Cache-Control", "no-store"))
+          .andExpect(jsonPath("$.deletedCount").value(deleted));
+    assertThat(writer.queryForList("SELECT id FROM app.review_item", UUID.class))
+        .containsExactlyInAnyOrder(registered, fresh);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.admin_audit", Integer.class))
+        .isZero();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isEqualTo(1);
+    assertThat(original.items()).extracting(ReviewDtos.Candidate::id).containsExactly(REVIEW);
+  }
+
+  @Test
+  void completionPreviewExcludesDeferredIgnoredExcludedAndExpiredCandidates() throws Exception {
+    for (int n = 10; n < 14; n++) seed(new UUID(0, n), n);
+    writer.execute(
+        "UPDATE app.review_item SET disposition='DEFERRED' WHERE id='00000000-0000-0000-0000-00000000000a'");
+    writer.execute(
+        "UPDATE app.review_item SET disposition='EXCLUDED' WHERE id='00000000-0000-0000-0000-00000000000b'");
+    writer.execute(
+        "UPDATE app.review_item SET review_status='IGNORED' WHERE id='00000000-0000-0000-0000-00000000000c'");
+    writer.execute(
+        "UPDATE app.review_item SET source_observed_at=now()-interval '31 days' WHERE id='00000000-0000-0000-0000-00000000000d'");
+    mvc.perform(auth(get(ROOT + "/completion"), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.hasMore").value(false));
+    assertThat(
+            service
+                .complete(ADMIN, new ReviewDtos.Complete(service.completionPreview().items()))
+                .deletedCount())
+        .isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.review_item", Integer.class))
+        .isEqualTo(4);
+  }
+
+  @Test
+  void changedCandidateRejectsWholeCompletionWithoutDeletingOtherCandidates() throws Exception {
+    seed(new UUID(0, 5), 5);
+    var batch = service.completionPreview();
+    writer.update("UPDATE app.review_item SET version=version+1 WHERE id=?", REVIEW);
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(new ReviewDtos.Complete(batch.items()))))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("REVIEW_VERSION_CONFLICT"));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.review_item", Integer.class))
+        .isEqualTo(2);
+  }
+
+  @Test
+  void completionRequiresAdminCsrfValidUniqueSnapshotAndRetainsRestrictedDeletePrivileges()
+      throws Exception {
+    String body =
+        mapper.writeValueAsString(new ReviewDtos.Complete(service.completionPreview().items()));
+    mvc.perform(get(ROOT + "/completion")).andExpect(status().isUnauthorized());
+    mvc.perform(auth(get(ROOT + "/completion"), user)).andExpect(status().isForbidden());
+    mvc.perform(
+            post(ROOT + "/completion")
+                .cookie(admin.cookie())
+                .contentType("application/json")
+                .content(body))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            auth(post(ROOT + "/completion"), user).contentType("application/json").content(body))
+        .andExpect(status().isForbidden());
+    for (String invalid :
+        List.of(
+            "{}",
+            "{\"items\":[null]}",
+            "{\"items\":[{\"id\":\"bad\",\"version\":0}]}",
+            mapper.writeValueAsString(
+                new ReviewDtos.Complete(
+                    List.of(
+                        new ReviewDtos.Candidate(REVIEW, 0L),
+                        new ReviewDtos.Candidate(REVIEW, 0L))))))
+      mvc.perform(
+              auth(post(ROOT + "/completion"), admin)
+                  .contentType("application/json")
+                  .content(invalid))
+          .andExpect(status().isBadRequest());
+    assertThatThrownBy(() -> runtime.execute("DELETE FROM app.review_item"))
+        .hasRootCauseMessage("ERROR: permission denied for table review_item");
+    assertThatThrownBy(() -> runtime.execute("SELECT app.cleanup_discovery_reviews(NULL,NULL)"))
+        .hasRootCauseMessage("ERROR: permission denied for function cleanup_discovery_reviews");
+    writer.update("UPDATE app.app_user SET role='USER' WHERE id=?", ADMIN);
+    assertThat(
+            runtime.queryForObject(
+                "SELECT app.complete_review_candidates('[]'::jsonb,?::uuid)", Integer.class, ADMIN))
+        .isEqualTo(-2);
+  }
+
+  @Test
   void adminCanPageAndReadDetailsWithoutCaching() throws Exception {
     seed(new UUID(0, 5), 2);
     mvc.perform(auth(get(ROOT).param("size", "1"), admin))

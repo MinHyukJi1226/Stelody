@@ -454,6 +454,18 @@ public class ApiDocumentationConfiguration {
           "SESSION_EXPIRED");
     if (operation.getResponses().containsKey("403"))
       errorCodes(operation, "403", "ADMIN 권한 또는 CSRF 토큰을 확인합니다.", "ACCESS_DENIED");
+    if (path.equals("/api/v1/admin/reviews/completion") && verb.equals("POST")) {
+      errorCodes(
+          operation,
+          "400",
+          "items의 UUID·0 이상 버전·중복 ID·최대 10000건을 확인합니다.",
+          "INVALID_REVIEW_REQUEST");
+      errorCodes(
+          operation,
+          "409",
+          "후보가 변경되어 전체 삭제를 취소했습니다. 관리자가 대상을 다시 확인합니다.",
+          "REVIEW_VERSION_CONFLICT");
+    }
     boolean songPage = path.equals("/api/v1/songs") || path.equals("/api/v1/members/{id}/songs");
     if (songPage) {
       errorCodes(

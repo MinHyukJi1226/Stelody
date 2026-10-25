@@ -140,6 +140,28 @@ export function getReviews(page: number, signal: AbortSignal) {
   query.set('disposition', 'REVIEW')
   return read<Reviews>(`reviews?${query}`, signal, reviewsSchema)
 }
+const completionSchema = z.object({
+  items: z.array(z.object({ id: z.uuid(), version: count })).max(10000),
+  hasMore: z.boolean(),
+}) satisfies z.ZodType<
+  ApiSchemas['com.stelody.review.dto.ReviewDtos.CompletionPreview']
+>
+export type ReviewCompletion = z.infer<typeof completionSchema>
+export function getReviewCompletion(signal: AbortSignal) {
+  return read<ReviewCompletion>('reviews/completion', signal, completionSchema)
+}
+export async function completeReviews(snapshot: ReviewCompletion) {
+  const body = {
+    items: snapshot.items,
+  } satisfies ApiSchemas['com.stelody.review.dto.ReviewDtos.Complete']
+  const data = await apiClient.request<unknown>('/admin/reviews/completion', {
+    method: 'POST',
+    body,
+  })
+  const parsed = z.object({ deletedCount: count }).safeParse(data)
+  if (!parsed.success) throw new ApiResponseError()
+  return parsed.data
+}
 export function getRegistrations(page: number, signal: AbortSignal) {
   const query = pageQuery(page)
   query.set('incompleteOnly', 'true')

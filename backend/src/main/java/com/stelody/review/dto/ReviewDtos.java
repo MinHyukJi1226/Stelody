@@ -1,6 +1,7 @@
 package com.stelody.review.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -17,6 +18,17 @@ public final class ReviewDtos {
       @NotNull @Min(0) Long version,
       @Pattern(regexp = "PENDING|IGNORED") @NotBlank String status,
       @NotBlank @Size(max = 500) String reason) {}
+
+  @Schema(requiredProperties = {"id", "version"})
+  public record Candidate(@NotNull UUID id, @NotNull @Min(0) Long version) {}
+
+  @Schema(requiredProperties = {"items", "hasMore"})
+  public record CompletionPreview(List<Candidate> items, boolean hasMore) {}
+
+  public record Complete(@NotNull @Size(max = 10000) List<@NotNull @Valid Candidate> items) {}
+
+  @Schema(requiredProperties = {"deletedCount"})
+  public record CompletionResult(int deletedCount) {}
 
   @Schema(
       requiredProperties = {

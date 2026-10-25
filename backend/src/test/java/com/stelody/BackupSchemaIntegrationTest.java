@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -99,6 +99,9 @@ class BackupSchemaIntegrationTest {
     if (version >= 26)
       owner.execute(
           "INSERT INTO app.withdrawal_result(id,user_id,token_hash,status) VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000001',repeat('b',64),'PREPARED')");
+    if (version >= 27)
+      owner.execute(
+          "INSERT INTO app.discovery_channel_state(channel_id,uploads_id,head_video_id,in_progress,page_token,scan_started_at) SELECT id,'fixture-uploads','YT000000001',true,'fixture-page',now() FROM app.channel ORDER BY id LIMIT 1");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
     String directory = "/tmp/backups-v" + version;
@@ -212,6 +215,23 @@ class BackupSchemaIntegrationTest {
                   Integer.class))
           .isEqualTo(9);
 
+    if (version >= 27) {
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM app.discovery_channel_state WHERE head_video_id='YT000000001' AND NOT in_progress AND page_token IS NULL AND scan_started_at IS NULL",
+                  Integer.class))
+          .isEqualTo(1);
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_function_privilege(current_user,'app.complete_review_candidates(jsonb,uuid)','EXECUTE')",
+                  Boolean.class))
+          .isTrue();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege(current_user,'app.review_item','DELETE')",
+                  Boolean.class))
+          .isFalse();
+    }
     assertThat(runtime.queryForList("SELECT * FROM app.member ORDER BY id")).isEqualTo(profiles);
     assertThat(runtime.queryForList("SELECT * FROM app.channel ORDER BY id")).isEqualTo(channels);
     for (String table :

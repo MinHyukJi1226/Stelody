@@ -256,7 +256,10 @@ test('관리자 정상 화면은 양쪽 테마에서 가로 넘침이 없다', a
   ]) {
     await page.goto(path)
     await expect(
-      page.getByText('관리자 · 조회 전용', { exact: true }),
+      page.getByText(
+        path === '/admin/reviews' ? '관리자 · 검토 관리' : '관리자 · 조회 전용',
+        { exact: true },
+      ),
     ).toBeVisible()
     await expect(page.getByText('불러오는 중…', { exact: true })).toHaveCount(0)
     for (const theme of ['light', 'dark']) {

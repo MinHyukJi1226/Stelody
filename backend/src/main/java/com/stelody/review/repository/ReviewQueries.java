@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.ObjectMapper;
 
 @Repository
 public class ReviewQueries {
@@ -18,9 +19,31 @@ public class ReviewQueries {
       SELECT r.*,c.name AS channel_name FROM app.review_item r JOIN app.channel c ON c.id=r.channel_id
       """;
   private final JdbcClient jdbc;
+  private final ObjectMapper mapper;
 
-  public ReviewQueries(JdbcClient jdbc) {
+  public ReviewQueries(JdbcClient jdbc, ObjectMapper mapper) {
     this.jdbc = jdbc;
+    this.mapper = mapper;
+  }
+
+  public ReviewDtos.CompletionPreview completionPreview() {
+    var rows =
+        jdbc.sql(
+                "SELECT r.id,r.version FROM app.review_item r WHERE r.review_status='PENDING' AND ("
+                    + EFFECTIVE_DISPOSITION
+                    + ")='REVIEW' ORDER BY r.first_seen_at,r.id LIMIT 10001")
+            .query((r, n) -> new ReviewDtos.Candidate(r.getObject(1, UUID.class), r.getLong(2)))
+            .list();
+    return new ReviewDtos.CompletionPreview(
+        rows.subList(0, Math.min(10000, rows.size())), rows.size() > 10000);
+  }
+
+  public int complete(List<ReviewDtos.Candidate> candidates, UUID actor) {
+    return jdbc.sql("SELECT app.complete_review_candidates(CAST(:items AS jsonb),:actor)")
+        .param("items", mapper.writeValueAsString(candidates))
+        .param("actor", actor)
+        .query(Integer.class)
+        .single();
   }
 
   public ReviewDtos.Item detail(UUID id) {
