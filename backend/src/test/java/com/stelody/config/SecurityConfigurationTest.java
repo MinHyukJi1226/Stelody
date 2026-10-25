@@ -51,6 +51,9 @@ class SecurityConfigurationTest {
   com.stelody.review.service.ReviewService reviews;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.review.service.ReviewBatchService reviewBatches;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.admin.service.CatalogManagementService catalogManagement;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean

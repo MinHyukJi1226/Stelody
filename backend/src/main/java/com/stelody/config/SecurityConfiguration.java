@@ -133,6 +133,8 @@ public class SecurityConfiguration {
                     .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/admin/reviews/{id}")
                     .hasRole("ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/api/v1/admin/reviews/completion")
+                    .hasRole("ADMIN")
                     .requestMatchers(
                         HttpMethod.GET,
                         "/api/v1/admin/collection-rules",

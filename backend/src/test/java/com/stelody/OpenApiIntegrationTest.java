@@ -52,6 +52,38 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsReviewCompletionSnapshotAndPermanentDeletion() throws Exception {
+    var api = contract();
+    var preview = api.at("/paths/~1api~1v1~1admin~1reviews~1completion/get");
+    var complete = api.at("/paths/~1api~1v1~1admin~1reviews~1completion/post");
+    assertThat(preview.path("description").asText()).contains("10000", "hasMore");
+    assertThat(complete.path("description").asText())
+        .contains("영구 삭제", "수집 지점", "재전송", "한 트랜잭션", "requestId", "selected", "replayed");
+    assertThat(complete.path("security").toString()).contains("session", "csrf");
+    assertErrorCodes(
+        api,
+        "/api/v1/admin/reviews/completion",
+        "post",
+        "409",
+        "REVIEW_VERSION_CONFLICT",
+        "CATALOG_VERSION_CONFLICT",
+        "CATALOG_DATA_CONFLICT",
+        "REVIEW_NOT_PENDING",
+        "CANDIDATE_REQUIRES_REFRESH",
+        "VIDEO_ALREADY_REGISTERED");
+    assertErrorCodes(
+        api,
+        "/api/v1/admin/reviews/completion",
+        "post",
+        "400",
+        "INVALID_REVIEW_REQUEST",
+        "INVALID_CATALOG_REQUEST",
+        "INVALID_CATALOG_REFERENCE",
+        "SONG_NOT_PUBLISHABLE",
+        "INVALID_REPRESENTATIVE_VIDEO");
+  }
+
+  @Test
   void documentsPreissuedWithdrawalResultAuthorityAndUnknownOutcomes() throws Exception {
     var api = contract();
     var prepare = api.at("/paths/~1api~1v1~1me~1withdrawal-requests/post");

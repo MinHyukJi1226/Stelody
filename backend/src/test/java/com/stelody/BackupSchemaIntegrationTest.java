@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -99,6 +99,12 @@ class BackupSchemaIntegrationTest {
     if (version >= 26)
       owner.execute(
           "INSERT INTO app.withdrawal_result(id,user_id,token_hash,status) VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000001',repeat('b',64),'PREPARED')");
+    if (version >= 27) {
+      owner.execute(
+          "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,source_observed_at,status_observed_at) SELECT '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000003','YT000000007',id,'OFFICIAL_COVER','PUBLIC','fixture',now(),now() FROM app.channel ORDER BY id LIMIT 1");
+      owner.execute(
+          "INSERT INTO app.review_item(id,youtube_id,channel_id,source_observed_at,availability,disposition,suggested_type,rule_version,decision_reason,review_status,registered_video_id,first_seen_at,registered_batch_id,registered_batch_hash) SELECT '00000000-0000-0000-0000-000000000008','YT000000007',channel_id,now(),'PUBLIC','REVIEW','COVER','fixture','fixture','REGISTERED',id,now(),'00000000-0000-0000-0000-000000000009',repeat('c',64) FROM app.video WHERE id='00000000-0000-0000-0000-000000000007'");
+    }
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
     String directory = "/tmp/backups-v" + version;
@@ -212,6 +218,28 @@ class BackupSchemaIntegrationTest {
                   Integer.class))
           .isEqualTo(9);
 
+    if (version >= 27) {
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT registered_batch_hash FROM app.review_item WHERE registered_batch_id='00000000-0000-0000-0000-000000000009'",
+                  String.class))
+          .isEqualTo("c".repeat(64));
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM information_schema.columns WHERE table_schema='app' AND table_name='review_item' AND column_name IN ('registered_batch_id','registered_batch_hash')",
+                  Integer.class))
+          .isEqualTo(2);
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_function_privilege(current_user,'app.complete_review_candidates(jsonb,jsonb,uuid,text,uuid)','EXECUTE')",
+                  Boolean.class))
+          .isTrue();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege(current_user,'app.review_item','DELETE')",
+                  Boolean.class))
+          .isFalse();
+    }
     assertThat(runtime.queryForList("SELECT * FROM app.member ORDER BY id")).isEqualTo(profiles);
     assertThat(runtime.queryForList("SELECT * FROM app.channel ORDER BY id")).isEqualTo(channels);
     for (String table :

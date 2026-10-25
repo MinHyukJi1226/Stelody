@@ -41,6 +41,11 @@ public class ReviewService {
     return queries.detail(id);
   }
 
+  @Transactional(readOnly = true)
+  public ReviewDtos.CompletionPreview completionPreview() {
+    return queries.completionPreview();
+  }
+
   @Transactional
   public ReviewDtos.Item change(UUID id, UUID actor, ReviewDtos.Change change) {
     if (change.version() == null

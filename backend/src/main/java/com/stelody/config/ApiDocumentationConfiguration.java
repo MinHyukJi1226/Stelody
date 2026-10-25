@@ -454,6 +454,27 @@ public class ApiDocumentationConfiguration {
           "SESSION_EXPIRED");
     if (operation.getResponses().containsKey("403"))
       errorCodes(operation, "403", "ADMIN 권한 또는 CSRF 토큰을 확인합니다.", "ACCESS_DENIED");
+    if (path.equals("/api/v1/admin/reviews/completion") && verb.equals("POST")) {
+      errorCodes(
+          operation,
+          "400",
+          "items의 UUID·0 이상 버전·중복 ID·최대 10000건, requestId, selected 1~100건과 곡 정보를 확인합니다. 기존 곡 등록 검증을 적용하며 fieldErrors는 selected[i].song.<필드> 경로를 반환합니다. 하나라도 오류면 등록·삭제를 모두 취소합니다.",
+          "INVALID_REVIEW_REQUEST",
+          "INVALID_CATALOG_REQUEST",
+          "INVALID_CATALOG_REFERENCE",
+          "SONG_NOT_PUBLISHABLE",
+          "INVALID_REPRESENTATIVE_VIDEO");
+      errorCodes(
+          operation,
+          "409",
+          "후보·곡 정보가 변경되거나 기존 등록 영상과 충돌하면 등록·삭제를 모두 취소합니다. 대상을 다시 확인합니다. 응답 유실 재전송은 동일 requestId·본문을 유지합니다.",
+          "REVIEW_VERSION_CONFLICT",
+          "CATALOG_VERSION_CONFLICT",
+          "CATALOG_DATA_CONFLICT",
+          "REVIEW_NOT_PENDING",
+          "CANDIDATE_REQUIRES_REFRESH",
+          "VIDEO_ALREADY_REGISTERED");
+    }
     boolean songPage = path.equals("/api/v1/songs") || path.equals("/api/v1/members/{id}/songs");
     if (songPage) {
       errorCodes(

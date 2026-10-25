@@ -1,13 +1,26 @@
 package com.stelody.review.web;
 
+import com.stelody.auth.web.ApiFieldError;
+import java.util.List;
+
 public class ReviewException extends RuntimeException {
   private final int status;
   private final String code;
+  private final List<ApiFieldError> fieldErrors;
 
   public ReviewException(int status, String code, String message) {
+    this(status, code, message, List.of());
+  }
+
+  public ReviewException(int status, String code, String message, List<ApiFieldError> fields) {
     super(message);
     this.status = status;
     this.code = code;
+    this.fieldErrors = List.copyOf(fields);
+  }
+
+  public List<ApiFieldError> fieldErrors() {
+    return fieldErrors;
   }
 
   public int status() {

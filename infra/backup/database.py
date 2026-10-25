@@ -16,7 +16,7 @@ import tempfile
 import uuid
 
 MAX_AGE = timedelta(days=7)
-SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25, 26)
+SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25, 26, 27)
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
