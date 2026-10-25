@@ -14,6 +14,7 @@ const registrationsSchema = z.object({
   items: z.array(
     z.object({
       reviewId: z.uuid(),
+      songId: z.uuid(),
       title: z.string(),
       visibility: z.string(),
       processedAt: z.iso.datetime({ offset: true }),
@@ -170,6 +171,7 @@ export function getFailures(
 
 export const adminPaths = {
   inbox: '/admin',
+  songs: '/admin/songs',
   collection: '/admin/collection',
   reviews: '/admin/reviews',
   registrations: '/admin/registrations',

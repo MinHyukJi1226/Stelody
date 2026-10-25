@@ -1,7 +1,9 @@
+import { Button } from '@/shared/ui/button'
+import { songEditPath } from '@/features/admin/songs'
 import { adminLabel } from '@/features/admin/format'
 import { useAdminUser } from '@/features/admin/admin-context'
 import { useQuery } from '@tanstack/react-query'
-import { Navigate, useSearchParams } from 'react-router'
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router'
 import { adminPaths, type FailureWindow } from '@/features/admin/api'
 import {
   adminFailureOptions,
@@ -68,6 +70,7 @@ export function AdminReviewsPage() {
   )
 }
 export function AdminRegistrationsPage() {
+  const location = useLocation()
   const { page, onPage } = useAdminPage()
   const query = useQuery(adminRegistrationOptions(useAdminUser(), page))
   return (
@@ -79,8 +82,14 @@ export function AdminRegistrationsPage() {
         공개 상태와 정보 완성도는 별개입니다.
       </p>
       <AdminTable
-        widths={[28, 18, 24, 30]}
-        headers={['곡명', '공개 상태', '자동 등록 시각 (KST)', '누락 항목']}
+        widths={[24, 14, 22, 28, 12]}
+        headers={[
+          '곡명',
+          '공개 상태',
+          '자동 등록 시각 (KST)',
+          '누락 항목',
+          '작업',
+        ]}
         rows={(query.data?.items ?? []).map((item) => ({
           key: item.reviewId,
           cells: [
@@ -88,6 +97,16 @@ export function AdminRegistrationsPage() {
             adminLabel(item.visibility),
             <AdminTime value={item.processedAt} />,
             item.missingFields?.map(adminLabel).join(' · ') || '누락 항목 없음',
+            <Button asChild>
+              <Link
+                to={songEditPath(
+                  item.songId,
+                  location.pathname + location.search,
+                )}
+              >
+                수정
+              </Link>
+            </Button>,
           ],
         }))}
         empty="정보 보완이 필요한 자동 등록 곡이 없습니다."
@@ -100,7 +119,10 @@ export function AdminRegistrationsPage() {
           onPage={onPage}
         />
       )}
-      <ReadOnlyNote />
+      <p className="text-xs text-muted">
+        수정 화면에서 곡 정보를 보완할 수 있습니다. 저장 후 이 목록을 다시
+        조회합니다.
+      </p>
     </AdminScreen>
   )
 }

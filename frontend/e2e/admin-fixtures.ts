@@ -153,6 +153,7 @@ export async function mockAdmin(page: Page) {
       paged.items = [
         {
           reviewId: makeSong(993 + number).id,
+          songId: makeSong(993 + number).id,
           title: `정보 보완 곡 ${number + 1}`,
           visibility: 'HIDDEN',
           processedAt: '2026-10-23T15:08:00Z',

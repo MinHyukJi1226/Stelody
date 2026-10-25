@@ -47,3 +47,36 @@ export const adminLabel = (value: string) =>
       DEBUT_DATE_MATCH: '데뷔 날짜 일치',
     }) as Record<string, string>
   )[value] ?? value
+
+export const songLabel = (value: string) =>
+  (
+    ({
+      ORIGINAL: '오리지널',
+      COVER: '커버',
+      UNCHECKED: '미확인',
+      NORMAL: '정상 검색',
+      DIFFICULT: '검색 어려움',
+      UNKNOWN: '미확인',
+      NOT_LISTED: '미등록 확인',
+      REGISTERED: '등록 확인',
+      OFFICIAL_COVER: '공식 커버',
+      OFFICIAL_MV: '공식 MV',
+      AUDIO: '음원',
+      REUPLOAD: '재업로드',
+      OTHER: '기타',
+      UNAVAILABLE: '이용 불가',
+    }) as Record<string, string>
+  )[value] ?? adminLabel(value)
+
+export function listPage(
+  value: string | null,
+  fallback = 0,
+  max = Number.MAX_SAFE_INTEGER,
+) {
+  return value !== null &&
+    /^\d+$/.test(value) &&
+    Number.isSafeInteger(+value) &&
+    +value <= max
+    ? +value
+    : fallback
+}

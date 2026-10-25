@@ -333,3 +333,60 @@
     }
   }
 }
+
+/* AD02–AD03 reuse administrator surfaces and theme tokens. */
+.song-editor-fields {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.song-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.song-edit-card {
+  min-width: 0;
+}
+.song-edit-card > button {
+  justify-self: start;
+}
+.song-editor-fields:disabled .song-edit-card {
+  opacity: 0.65;
+}
+.song-read-value {
+  border-radius: 12px;
+  background: var(--color-bg);
+  padding: 16px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.song-selector {
+  max-width: 640px;
+  display: grid;
+  gap: 24px;
+}
+.song-select-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  min-width: 0;
+  font-size: 14px;
+}
+.song-select-row input {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+@media (max-width: 767px) {
+  .song-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .song-edit-card {
+    padding: 20px;
+  }
+  .song-selector {
+    padding: 20px;
+  }
+}
