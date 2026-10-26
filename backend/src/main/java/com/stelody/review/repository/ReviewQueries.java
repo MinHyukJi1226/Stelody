@@ -1,5 +1,6 @@
 package com.stelody.review.repository;
 
+import com.stelody.collector.domain.CoverPublicationRules;
 import com.stelody.review.dto.ReviewDtos;
 import com.stelody.review.web.ReviewException;
 import java.sql.Timestamp;
@@ -86,6 +87,23 @@ public class ReviewQueries {
                     r.getObject(5, UUID.class),
                     r.getString(6),
                     r.getObject(7, UUID.class)))
+        .list();
+  }
+
+  public List<CoverPublicationRules.Member> registrationMembers() {
+    return jdbc.sql("SELECT id,name,version FROM app.member ORDER BY id FOR SHARE")
+        .query(
+            (r, n) -> {
+              UUID id = r.getObject("id", UUID.class);
+              var names = new java.util.ArrayList<String>();
+              names.add(r.getString("name"));
+              names.addAll(
+                  jdbc.sql("SELECT alias FROM app.member_alias WHERE member_id=:id ORDER BY alias")
+                      .param("id", id)
+                      .query(String.class)
+                      .list());
+              return new CoverPublicationRules.Member(id, r.getLong("version"), List.copyOf(names));
+            })
         .list();
   }
 

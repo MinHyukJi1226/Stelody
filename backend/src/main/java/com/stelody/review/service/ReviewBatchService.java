@@ -5,6 +5,8 @@ import com.stelody.admin.repository.CatalogAdminQueries;
 import com.stelody.admin.service.CatalogManagementService;
 import com.stelody.admin.web.AdminCatalogException;
 import com.stelody.auth.web.ApiFieldError;
+import com.stelody.collector.repository.CollectionRuleStore;
+import com.stelody.review.domain.ReviewRegistrationRules;
 import com.stelody.review.dto.ReviewDtos;
 import com.stelody.review.repository.ReviewQueries;
 import com.stelody.review.web.ReviewException;
@@ -22,16 +24,20 @@ public class ReviewBatchService {
   private final CatalogManagementService catalog;
   private final CatalogAdminQueries queries;
   private final ObjectMapper mapper;
+  private final CollectionRuleStore classification;
+  private final ReviewRegistrationRules registration = new ReviewRegistrationRules();
 
   public ReviewBatchService(
       ReviewQueries reviews,
       CatalogManagementService catalog,
       CatalogAdminQueries queries,
-      ObjectMapper mapper) {
+      ObjectMapper mapper,
+      CollectionRuleStore classification) {
     this.reviews = reviews;
     this.catalog = catalog;
     this.queries = queries;
     this.mapper = mapper;
+    this.classification = classification;
   }
 
   @Transactional
@@ -91,14 +97,24 @@ public class ReviewBatchService {
           || !"PENDING".equals(row.status())
           || !"REVIEW".equals(row.disposition())) throw ReviewException.conflict();
     }
+    var sources = body.selected().stream().map(s -> reviews.detail(s.id())).toList();
+    // Candidate locks precede channel locks; stable ordering avoids crossed batch lock orders.
+    sources.stream()
+        .map(ReviewDtos.Item::channelId)
+        .distinct()
+        .sorted()
+        .forEach(queries::lockChannel);
+    var members = reviews.registrationMembers();
+    var configuration = classification.current();
     var registered = new ArrayList<ReviewDtos.RegisteredSong>();
     for (int i = 0; i < body.selected().size(); i++) {
       var selection = body.selected().get(i);
-      var input = selection.song();
-      if (input.version() != 0 || input.representativeVideoId() != null)
-        throw ReviewException.invalid();
       try {
-        var draft = catalog.song(null, copy(input, 0, Visibility.DRAFT, null), actor).item();
+        var source = sources.get(i);
+        var plan =
+            registration.plan(source, queries.channel(source.channelId()), members, configuration);
+        var input = plan.song();
+        var draft = catalog.song(null, input, actor).item();
         var video =
             catalog.register(
                 selection.id(),
@@ -106,31 +122,51 @@ public class ReviewBatchService {
                     snapshot.get(selection.id()).version(),
                     draft.id(),
                     draft.version(),
-                    selection.kind(),
-                    input.reason()),
+                    plan.kind(),
+                    ReviewRegistrationRules.REASON),
                 actor);
         var attached = queries.song(draft.id());
         catalog.song(
-            draft.id(), copy(input, attached.version(), input.visibility(), video.id()), actor);
+            draft.id(), copy(input, attached.version(), Visibility.DRAFT, video.id()), actor);
         reviews.rememberBatch(selection.id(), body.requestId(), hash);
         registered.add(new ReviewDtos.RegisteredSong(selection.id(), draft.id()));
+      } catch (ReviewRegistrationRules.Unresolved error) {
+        throw new ReviewException(
+            409,
+            "CANDIDATE_CLASSIFICATION_REQUIRED",
+            "선택한 " + (i + 1) + "번째 후보의 등록 정보를 확정할 수 없습니다",
+            List.of(
+                new ApiFieldError(
+                    "selected[" + i + "].id", error.reason(), "후보의 곡명·곡 유형을 확인해 주세요")));
       } catch (AdminCatalogException error) {
-        int index = i;
         throw new ReviewException(
             error.status(),
             error.code(),
-            "선택한 " + (i + 1) + "번째 곡: " + error.getMessage(),
-            error.fieldErrors().stream()
-                .map(
-                    e ->
-                        new ApiFieldError(
-                            "selected[" + index + "].song." + e.field(), e.code(), e.message()))
-                .toList());
+            "선택한 " + (i + 1) + "번째 후보: " + error.getMessage(),
+            List.of(
+                new ApiFieldError(
+                    "selected[" + i + "].id", error.code(), "후보의 수집 정보와 등록 상태를 확인해 주세요")));
       }
     }
     int deleted = reviews.complete(body, hash, actor);
     if (deleted == -1) throw ReviewException.conflict();
     if (deleted == -2) throw new ReviewException(403, "ACCESS_DENIED", "관리자 권한을 확인해 주세요");
+    queries.audit(
+        "REVIEWS",
+        body.requestId(),
+        actor,
+        "BATCH_REGISTER",
+        Map.of("candidateCount", body.items().size(), "selected", selected),
+        Map.of(
+            "registeredSongs",
+            registered,
+            "deletedCount",
+            deleted,
+            "classificationRuleVersion",
+            configuration.version(),
+            "visibility",
+            "DRAFT"),
+        ReviewRegistrationRules.REASON);
     return new ReviewDtos.CompletionResult(registered, deleted, false);
   }
 

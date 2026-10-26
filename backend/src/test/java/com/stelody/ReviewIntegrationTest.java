@@ -141,26 +141,6 @@ class ReviewIntegrationTest {
             mapper.writeValueAsString(Map.of("version", version, "status", state, "reason", note)));
   }
 
-  com.stelody.admin.dto.CatalogAdminDtos.SongInput song(String title, UUID member) {
-    return new com.stelody.admin.dto.CatalogAdminDtos.SongInput(
-        0L,
-        title,
-        com.stelody.admin.dto.CatalogAdminDtos.SongType.COVER,
-        null,
-        com.stelody.admin.dto.CatalogAdminDtos.Visibility.PUBLISHED,
-        null,
-        List.of(),
-        List.of(member),
-        List.of(),
-        false,
-        null,
-        com.stelody.admin.dto.CatalogAdminDtos.SearchVisibility.UNCHECKED,
-        null,
-        List.of(),
-        List.of(),
-        "일괄 검토 테스트");
-  }
-
   UUID singer() {
     UUID member = new UUID(0, 77);
     writer.update(
@@ -170,20 +150,12 @@ class ReviewIntegrationTest {
   }
 
   ReviewDtos.Complete batch(List<UUID> ids) {
-    var member = singer();
     return new ReviewDtos.Complete(
         UUID.randomUUID(),
         service.completionPreview().items().stream()
             .map(i -> new ReviewDtos.Candidate(i.id(), i.version()))
             .toList(),
-        ids.stream()
-            .map(
-                id ->
-                    new ReviewDtos.Selection(
-                        id,
-                        song("일괄 등록 " + id, member),
-                        com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER))
-            .toList());
+        ids.stream().map(ReviewDtos.Selection::new).toList());
   }
 
   @Test
@@ -221,16 +193,12 @@ class ReviewIntegrationTest {
         .isZero();
     mvc.perform(get("/api/v1/songs"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(2));
+        .andExpect(jsonPath("$.items.length()").value(0));
+    assertThat(writer.queryForList("SELECT visibility FROM app.song_entry", String.class))
+        .containsOnly("DRAFT");
     var changed =
         new ReviewDtos.Complete(
-            body.requestId(),
-            body.items(),
-            List.of(
-                new ReviewDtos.Selection(
-                    REVIEW,
-                    song("다른 내용", singer()),
-                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+            body.requestId(), body.items(), List.of(new ReviewDtos.Selection(REVIEW)));
     mvc.perform(
             auth(post(ROOT + "/completion"), admin)
                 .contentType("application/json")
@@ -241,11 +209,7 @@ class ReviewIntegrationTest {
         new ReviewDtos.Complete(
             body.requestId(),
             List.of(new ReviewDtos.Candidate(fresh, 0L)),
-            List.of(
-                new ReviewDtos.Selection(
-                    fresh,
-                    song("새 요청", singer()),
-                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+            List.of(new ReviewDtos.Selection(fresh)));
     mvc.perform(
             auth(post(ROOT + "/completion"), admin)
                 .contentType("application/json")
@@ -290,23 +254,17 @@ class ReviewIntegrationTest {
   }
 
   @Test
-  void nestedInputErrorsIdentifySelectedSongWithoutChangingAnything() throws Exception {
+  void nestedInputErrorsIdentifySelectedCandidateWithoutChangingAnything() throws Exception {
     var valid = batch(List.of(REVIEW));
     var invalid =
         new ReviewDtos.Complete(
-            valid.requestId(),
-            valid.items(),
-            List.of(
-                new ReviewDtos.Selection(
-                    REVIEW,
-                    song(" ", singer()),
-                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+            valid.requestId(), valid.items(), List.of(new ReviewDtos.Selection(null)));
     mvc.perform(
             auth(post(ROOT + "/completion"), admin)
                 .contentType("application/json")
                 .content(mapper.writeValueAsString(invalid)))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.fieldErrors[0].field").value("selected[0].song.title"));
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("selected[0].id"));
     assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
         .isZero();
     assertThat(writer.queryForObject("SELECT review_status FROM app.review_item", String.class))
@@ -318,23 +276,14 @@ class ReviewIntegrationTest {
     UUID second = new UUID(0, 5);
     seed(second, 5);
     seed(new UUID(0, 6), 6);
-    var valid = batch(List.of(REVIEW, second));
-    var body =
-        new ReviewDtos.Complete(
-            valid.requestId(),
-            valid.items(),
-            List.of(
-                valid.selected().getFirst(),
-                new ReviewDtos.Selection(
-                    second,
-                    song("두번째 실패", UUID.randomUUID()),
-                    com.stelody.admin.dto.CatalogAdminDtos.VideoKind.OFFICIAL_COVER)));
+    writer.update("UPDATE app.review_item SET source_published_at=NULL WHERE id=?", second);
+    var body = batch(List.of(REVIEW, second));
     mvc.perform(
             auth(post(ROOT + "/completion"), admin)
                 .contentType("application/json")
                 .content(mapper.writeValueAsString(body)))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.code").value("INVALID_CATALOG_REFERENCE"));
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CANDIDATE_REQUIRES_REFRESH"));
     assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
         .isZero();
     assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class)).isZero();
@@ -344,6 +293,148 @@ class ReviewIntegrationTest {
                 Integer.class))
         .isEqualTo(3);
     assertThat(writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void selectedIdAloneBuildsConfirmedSoloDraftAndServerAuditWithoutChangingPublicationControl()
+      throws Exception {
+    UUID member = singer();
+    writer.update(
+        "UPDATE app.channel SET channel_type='MEMBER',member_id=? WHERE id=?", member, CHANNEL);
+    writer.update(
+        "UPDATE app.review_item SET source_title='Milky Way / 검토 가수 Cover' WHERE id=?", REVIEW);
+    writer.execute("UPDATE app.cover_publication_control SET enabled=true");
+    long controlVersion =
+        writer.queryForObject("SELECT version FROM app.cover_publication_control", Long.class);
+    var body = batch(List.of(REVIEW));
+    var response =
+        mapper.readTree(
+            mvc.perform(
+                    auth(post(ROOT + "/completion"), admin)
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    UUID song = UUID.fromString(response.at("/registeredSongs/0/songId").asText());
+    mvc.perform(auth(get("/api/v1/admin/songs/" + song), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.title").value("Milky Way"))
+        .andExpect(jsonPath("$.type").value("COVER"))
+        .andExpect(jsonPath("$.visibility").value("DRAFT"))
+        .andExpect(jsonPath("$.memberIds[0]").value(member.toString()))
+        .andExpect(jsonPath("$.representativeVideoId").isNotEmpty());
+    assertThat(writer.queryForObject("SELECT source_title FROM app.video", String.class))
+        .isEqualTo("Milky Way / 검토 가수 Cover");
+    assertThat(writer.queryForObject("SELECT confirmed FROM app.song_member", Boolean.class))
+        .isTrue();
+    assertThat(
+            writer.queryForObject(
+                "SELECT enabled FROM app.cover_publication_control", Boolean.class))
+        .isTrue();
+    assertThat(
+            writer.queryForObject("SELECT version FROM app.cover_publication_control", Long.class))
+        .isEqualTo(controlVersion);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.cover_auto_registration", Integer.class))
+        .isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.catalog_audit WHERE action='BATCH_REGISTER' AND target_id=? AND actor_id=? AND reason=?",
+                Integer.class,
+                body.requestId(),
+                ADMIN,
+                com.stelody.review.domain.ReviewRegistrationRules.REASON))
+        .isEqualTo(1);
+    int auditCount = writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class);
+    writer.update("UPDATE app.song_entry SET title='관리자 수정 곡명' WHERE id=?", song);
+    writer.update(
+        "UPDATE app.review_item SET suggested_type='UNKNOWN',source_title='변경된 영상' WHERE id=?",
+        REVIEW);
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(body)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.replayed").value(true))
+        .andExpect(jsonPath("$.deletedCount").value(0));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class))
+        .isEqualTo(auditCount);
+    assertThat(writer.queryForObject("SELECT title FROM app.song_entry", String.class))
+        .isEqualTo("관리자 수정 곡명");
+    writer.execute("UPDATE app.cover_publication_control SET enabled=false");
+  }
+
+  @Test
+  void groupDuetAndExternalCreditsStayUnresolvedAndVisibleToAdminAsMissingMembers()
+      throws Exception {
+    UUID member = singer();
+    writer.update(
+        "UPDATE app.channel SET channel_type='MEMBER',member_id=? WHERE id=?", member, CHANNEL);
+    writer.update(
+        "UPDATE app.review_item SET source_title='곡 / 검토 가수 & Guest Cover' WHERE id=?", REVIEW);
+    var result = batches.complete(ADMIN, batch(List.of(REVIEW)));
+    UUID song = result.registeredSongs().getFirst().songId();
+    mvc.perform(auth(get("/api/v1/admin/songs/" + song), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.memberIds").isEmpty())
+        .andExpect(jsonPath("$.externalArtistIds").isEmpty())
+        .andExpect(jsonPath("$.visibility").value("DRAFT"))
+        .andExpect(jsonPath("$.missingFields").value(org.hamcrest.Matchers.hasItem("members")));
+    mvc.perform(auth(get("/api/v1/admin/songs"), admin))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.items[0].missingFields").value(org.hamcrest.Matchers.hasItem("members")));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_member", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void unclassifiableSecondCandidateRollsBackFirstRegistrationAndAllDeletion() throws Exception {
+    UUID second = new UUID(0, 5);
+    seed(second, 5);
+    seed(new UUID(0, 6), 6);
+    writer.update(
+        "UPDATE app.review_item SET suggested_type='UNKNOWN',source_title='분류할 수 없는 영상' WHERE id=?",
+        second);
+    var body = batch(List.of(REVIEW, second));
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(body)))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CANDIDATE_CLASSIFICATION_REQUIRED"))
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("selected[1].id"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("TYPE_UNCONFIRMED"));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isZero();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class)).isZero();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class))
+        .isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE review_status='PENDING'",
+                Integer.class))
+        .isEqualTo(3);
+  }
+
+  @Test
+  void originalWithUnconfirmedVideoKindRegistersOtherDraftWithoutInventingParticipants()
+      throws Exception {
+    writer.update(
+        "UPDATE app.review_item SET suggested_type='ORIGINAL',source_title='새 노래 오리지널' WHERE id=?",
+        REVIEW);
+    var result = batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForObject("SELECT song_type FROM app.song_entry", String.class))
+        .isEqualTo("ORIGINAL");
+    assertThat(writer.queryForObject("SELECT visibility FROM app.song_entry", String.class))
+        .isEqualTo("DRAFT");
+    assertThat(writer.queryForObject("SELECT video_kind FROM app.video", String.class))
+        .isEqualTo("OTHER");
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_member", Integer.class))
         .isZero();
   }
 
