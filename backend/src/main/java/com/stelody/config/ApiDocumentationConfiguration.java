@@ -458,7 +458,7 @@ public class ApiDocumentationConfiguration {
       errorCodes(
           operation,
           "400",
-          "items의 UUID·0 이상 버전·중복 ID·최대 10000건, requestId, selected 1~100건과 곡 정보를 확인합니다. 기존 곡 등록 검증을 적용하며 fieldErrors는 selected[i].song.<필드> 경로를 반환합니다. 하나라도 오류면 등록·삭제를 모두 취소합니다.",
+          "items의 UUID·0 이상 버전·중복 ID·최대 10000건, requestId, selected 1~100건의 id만 확인합니다. song·kind·곡별 사유 입력은 제거되었습니다. fieldErrors는 selected[i].id 등 요청 필드 경로입니다. 오류면 등록·삭제·감사 기록을 모두 취소합니다.",
           "INVALID_REVIEW_REQUEST",
           "INVALID_CATALOG_REQUEST",
           "INVALID_CATALOG_REFERENCE",
@@ -467,8 +467,9 @@ public class ApiDocumentationConfiguration {
       errorCodes(
           operation,
           "409",
-          "후보·곡 정보가 변경되거나 기존 등록 영상과 충돌하면 등록·삭제를 모두 취소합니다. 대상을 다시 확인합니다. 응답 유실 재전송은 동일 requestId·본문을 유지합니다.",
+          "후보·곡 정보 변경, 기존 등록 영상 충돌, CANDIDATE_CLASSIFICATION_REQUIRED(유형 미확정·분류 충돌·등록 불가 제목/콘텐츠)이면 등록·삭제·감사 기록을 모두 취소합니다. fieldErrors의 selected[i].id와 사유 코드를 확인하고 대상을 재조회합니다. 필수 유형은 UNKNOWN으로 저장하거나 COVER로 추정하지 않습니다. 응답 유실 재전송은 동일 requestId·본문을 유지합니다.",
           "REVIEW_VERSION_CONFLICT",
+          "CANDIDATE_CLASSIFICATION_REQUIRED",
           "CATALOG_VERSION_CONFLICT",
           "CATALOG_DATA_CONFLICT",
           "REVIEW_NOT_PENDING",

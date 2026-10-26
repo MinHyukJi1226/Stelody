@@ -1,7 +1,5 @@
 package com.stelody.review.dto;
 
-import com.stelody.admin.dto.CatalogAdminDtos.SongInput;
-import com.stelody.admin.dto.CatalogAdminDtos.VideoKind;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -29,8 +27,7 @@ public final class ReviewDtos {
   public record CompletionPreview(
       List<Item> items, boolean hasMore, Map<UUID, UUID> channelMembers) {}
 
-  public record Selection(
-      @NotNull UUID id, @NotNull @Valid SongInput song, @NotNull VideoKind kind) {}
+  public record Selection(@NotNull UUID id) {}
 
   public record Complete(
       @NotNull UUID requestId,

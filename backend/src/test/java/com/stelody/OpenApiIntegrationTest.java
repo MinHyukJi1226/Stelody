@@ -60,12 +60,32 @@ class OpenApiIntegrationTest {
     assertThat(complete.path("description").asText())
         .contains("영구 삭제", "수집 지점", "재전송", "한 트랜잭션", "requestId", "selected", "replayed");
     assertThat(complete.path("security").toString()).contains("session", "csrf");
+    assertThat(complete.path("description").asText())
+        .contains(
+            "DRAFT",
+            "UNKNOWN",
+            "OTHER",
+            "missingFields",
+            "BATCH_REGISTER",
+            "TYPE_UNCONFIRMED",
+            "TITLE_REQUIRES_EDIT");
+    var selection =
+        api.path("components").path("schemas").path("com.stelody.review.dto.ReviewDtos.Selection");
+    assertThat(selection.path("properties").properties())
+        .extracting(java.util.Map.Entry::getKey)
+        .containsExactly("id");
+    var completeSchema =
+        api.path("components").path("schemas").path("com.stelody.review.dto.ReviewDtos.Complete");
+    assertThat(completeSchema.at("/properties/selected/minItems").asInt()).isEqualTo(1);
+    assertThat(completeSchema.at("/properties/selected/maxItems").asInt()).isEqualTo(100);
+
     assertErrorCodes(
         api,
         "/api/v1/admin/reviews/completion",
         "post",
         "409",
         "REVIEW_VERSION_CONFLICT",
+        "CANDIDATE_CLASSIFICATION_REQUIRED",
         "CATALOG_VERSION_CONFLICT",
         "CATALOG_DATA_CONFLICT",
         "REVIEW_NOT_PENDING",

@@ -41,7 +41,12 @@ public final class CoverPublicationRules {
       return no("FULL_LENGTH_UNCONFIRMED");
     if (video.title().length() > 300 || SearchText.normalize(video.title()).length() > 400)
       return no("DISPLAY_TITLE_TOO_LONG");
-    String title = SearchText.normalize(video.title());
+    return participants(video.title(), members);
+  }
+
+  /** Credit evidence only; this does not authorize publication or bypass video checks. */
+  public Result participants(String sourceTitle, List<Member> members) {
+    String title = SearchText.normalize(sourceTitle);
     if (AMBIGUOUS.matcher(title).find()) return no("PARTICIPATION_OR_CONTENT_AMBIGUOUS");
     if (RuleConfiguration.matches(
         List.of(
