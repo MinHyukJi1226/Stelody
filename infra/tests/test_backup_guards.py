@@ -49,10 +49,19 @@ class BackupGuardsTest(unittest.TestCase):
 
     def test_unvalidated_database_schema_rejected_before_dump(self):
         with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner'}), \
-             patch.object(backup, 'sql', return_value='28'), patch.object(backup, 'run') as command:
+             patch.object(backup, 'sql', return_value='28') as statements, patch.object(backup, 'run') as command:
             with self.assertRaisesRegex(backup.OperationError, 'Unsupported database schema'):
                 backup.backup(self.root)
             command.assert_not_called()
+            statements.assert_called_once()
+
+    def test_wrong_owner_cannot_run_preparation_or_dump(self):
+        with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'reader'}), \
+             patch.object(backup, 'sql') as statements, patch.object(backup, 'run') as dump:
+            with self.assertRaisesRegex(backup.OperationError, 'schema owner'):
+                backup.backup(self.root)
+            statements.assert_not_called()
+            dump.assert_not_called()
 
     def test_latest_repository_migration_requires_backup_validation(self):
         migrations = Path(__file__).resolve().parents[2] / 'backend/src/main/resources/db/migration'
@@ -252,7 +261,7 @@ class BackupGuardsTest(unittest.TestCase):
             return ''
 
         with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner', 'database': 'test'}), \
-             patch.object(backup, 'sql', side_effect=['20', expiry]), \
+             patch.object(backup, 'sql', side_effect=['20', '0', expiry]), \
              patch.object(backup, 'run', side_effect=dump), patch('builtins.print'):
             backup.backup(self.root)
         completed = [path for path in self.root.glob('stelody-*') if path != self.bundle]
@@ -282,7 +291,7 @@ b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
 timestamp = b.now() - timedelta(days=8)
 b.now = lambda: timestamp
 b.database_info = lambda: {'owners': ['owner'], 'user': 'owner', 'database': 'test'}
-b.sql = lambda statement: '19' if 'flyway' in statement else ''
+b.sql = lambda statement: '19' if 'flyway' in statement else '0' if 'WITH cleared' in statement else ''
 original_run = b.run
 child = """import sys, time
 from pathlib import Path

@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 
@@ -110,6 +111,40 @@ class OffsiteBackupTest(unittest.TestCase):
         with self.assertRaises(database.OperationError):
             offsite.upload(self.encrypted)
         self.assertEqual(self.store.requests, 0)
+
+    def test_incident_times_report_safe_expiry_code_before_any_remote_request(self):
+        self.value.update(createdAt='2026-10-26T14:35:20.992398+00:00',
+                          expiresAt='2026-10-31T14:00:04.087984+00:00')
+        self.save()
+        for timestamp in ('2026-10-26T14:36:00.080946+00:00',
+                          '2026-10-26T20:10:59.738402+00:00'):
+            with patch.object(database, 'now', return_value=database.instant(timestamp)), \
+                 self.assertRaises(offsite.SourceExpiryTooSoon) as error:
+                offsite.upload(self.encrypted)
+            self.assertEqual(error.exception.code, 'BACKUP_SOURCE_EXPIRY_TOO_SOON')
+            self.assertIn('five days', str(error.exception))
+        self.assertEqual(self.store.requests, 0)
+
+    def test_workflow_exposes_only_controlled_expiry_diagnostic(self):
+        workflow = (Path(__file__).resolve().parents[2]
+                    / '.github/workflows/database-backup.yml').read_text()
+        program = textwrap.dedent(workflow.split("python - <<'PY'\n", 1)[1]
+                                  .split('\n          PY', 1)[0])
+        original_path = list(sys.path)
+        self.addCleanup(lambda: sys.path.__setitem__(slice(None), original_path))
+        for error, expected in (
+            (offsite.SourceExpiryTooSoon('need at least five days until expiry'),
+             'BACKUP_SOURCE_EXPIRY_TOO_SOON: need at least five days until expiry'),
+            (RuntimeError('secret-connection-details'),
+             'Encrypted upload/read-back failed; no credentials displayed'),
+        ):
+            with patch.object(Path, 'glob', return_value=[Path('synthetic-bundle')]), \
+                 patch.object(offsite, 'seal', return_value=self.encrypted), \
+                 patch.object(offsite, 'upload', side_effect=error), \
+                 self.assertRaises(SystemExit) as result:
+                exec(compile(program, 'database-backup.yml', 'exec'), {})
+            self.assertEqual(str(result.exception), expected)
+            self.assertNotIn('secret-connection-details', str(result.exception))
 
     def test_upload_refuses_public_bucket_or_missing_permanent_expiry(self):
         self.store.public = True

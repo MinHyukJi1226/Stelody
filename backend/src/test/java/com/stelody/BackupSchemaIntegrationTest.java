@@ -103,8 +103,12 @@ class BackupSchemaIntegrationTest {
       owner.execute(
           "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,source_observed_at,status_observed_at) SELECT '00000000-0000-0000-0000-000000000007','00000000-0000-0000-0000-000000000003','YT000000007',id,'OFFICIAL_COVER','PUBLIC','fixture',now(),now() FROM app.channel ORDER BY id LIMIT 1");
       owner.execute(
-          "INSERT INTO app.review_item(id,youtube_id,channel_id,source_observed_at,availability,disposition,suggested_type,rule_version,decision_reason,review_status,registered_video_id,first_seen_at,registered_batch_id,registered_batch_hash) SELECT '00000000-0000-0000-0000-000000000008','YT000000007',channel_id,now(),'PUBLIC','REVIEW','COVER','fixture','fixture','REGISTERED',id,now(),'00000000-0000-0000-0000-000000000009',repeat('c',64) FROM app.video WHERE id='00000000-0000-0000-0000-000000000007'");
+          "INSERT INTO app.review_item(id,youtube_id,channel_id,source_observed_at,availability,disposition,suggested_type,rule_version,decision_reason,review_status,registered_video_id,first_seen_at,registered_batch_id,registered_batch_hash) SELECT '00000000-0000-0000-0000-000000000008','YT000000007',channel_id,now()-interval '26 days','PUBLIC','REVIEW','COVER','fixture','fixture','REGISTERED',id,now(),'00000000-0000-0000-0000-000000000009',repeat('c',64) FROM app.video WHERE id='00000000-0000-0000-0000-000000000007'");
     }
+    if (version >= 27)
+      owner.execute(
+          "UPDATE app.review_item SET source_title='archived source',source_published_at=now()-interval '27 days',source_thumbnail_url='https://example.invalid/old.jpg',source_duration_seconds=240,review_note='keep registration',version=3 WHERE id='00000000-0000-0000-0000-000000000008'");
+    var videos = owner.queryForList("SELECT * FROM app.video ORDER BY id");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
     String directory = "/tmp/backups-v" + version;
@@ -123,10 +127,19 @@ class BackupSchemaIntegrationTest {
             directory);
     assertThat(backup.getExitCode()).as(backup.getStdout() + backup.getStderr()).isZero();
     var mapper = new ObjectMapper();
-    String bundle = mapper.readTree(backup.getStdout()).path("backup").asText();
+    var backupResult = mapper.readTree(backup.getStdout());
+    assertThat(backupResult.path("registeredReviewSourcesCleared").asInt())
+        .isEqualTo(version >= 27 ? 1 : 0);
+    assertThat(owner.queryForList("SELECT * FROM app.video ORDER BY id")).isEqualTo(videos);
+    String bundle = backupResult.path("backup").asText();
     var manifest = postgres.execInContainer("cat", bundle + "/manifest.json");
     assertThat(mapper.readTree(manifest.getStdout()).path("schemaVersion").asInt())
         .isEqualTo(version);
+    var metadata = mapper.readTree(manifest.getStdout());
+    var created = java.time.Instant.parse(metadata.path("createdAt").asText());
+    var expires = java.time.Instant.parse(metadata.path("expiresAt").asText());
+    assertThat(java.time.Duration.between(created, expires))
+        .isEqualTo(java.time.Duration.ofDays(7));
     String ledger = "/tmp/withdrawals-v" + version + ".json";
     var reconcile =
         postgres.execInContainer(
@@ -224,6 +237,11 @@ class BackupSchemaIntegrationTest {
                   "SELECT registered_batch_hash FROM app.review_item WHERE registered_batch_id='00000000-0000-0000-0000-000000000009'",
                   String.class))
           .isEqualTo("c".repeat(64));
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM app.review_item WHERE id='00000000-0000-0000-0000-000000000008' AND source_title IS NULL AND source_published_at IS NULL AND source_thumbnail_url IS NULL AND source_duration_seconds IS NULL AND review_status='REGISTERED' AND registered_video_id='00000000-0000-0000-0000-000000000007' AND review_note='keep registration' AND version=4",
+                  Integer.class))
+          .isEqualTo(1);
       assertThat(
               runtime.queryForObject(
                   "SELECT count(*) FROM information_schema.columns WHERE table_schema='app' AND table_name='review_item' AND column_name IN ('registered_batch_id','registered_batch_hash')",

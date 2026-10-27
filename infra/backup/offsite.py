@@ -22,6 +22,11 @@ MAX_BYTES = 128 * 1024 * 1024
 BACKUP_INTERVAL = timedelta(hours=24)
 
 
+class SourceExpiryTooSoon(database.OperationError):
+    """Controlled diagnostic safe to expose without storage/connection details."""
+    code = 'BACKUP_SOURCE_EXPIRY_TOO_SOON'
+
+
 def private_file(path):
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077:
@@ -171,7 +176,7 @@ def upload(encrypted):
     # B2 lifecycle hides after one day and deletes after one further day, with
     # each stage processed daily. Leave five days before the original data expiry.
     if database.instant(value['expiresAt']) < database.now() + timedelta(days=5):
-        raise database.OperationError('Refresh source data before offsite backup (need at least five days until expiry)')
+        raise SourceExpiryTooSoon('Refresh source data before offsite backup (need at least five days until expiry)')
     client, bucket = remote()
     validate_storage(client, bucket)
     with encrypted.open('rb') as stream:

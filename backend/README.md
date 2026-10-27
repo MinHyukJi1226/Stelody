@@ -270,7 +270,9 @@ java -jar backend/build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover
 <details>
 <summary>암호화 백업 · 독립 탈퇴 기록 · 복구</summary>
 
-백업·복구는 V19~V26을 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
+백업·복구는 V19~V27을 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
+
+백업 준비 시 스키마 소유자·지원 버전을 검증한 뒤, 연결된 동일 YouTube 영상에 같거나 더 최신인 수집 정보가 있는 `REGISTERED` 후보의 중복 `source_*` 4개 필드만 비웁니다. 등록 상태·영상 연결·관측 시각·감사·요청 재전송 이력은 보존하고 버전만 증가시킵니다. 대기·제외·보류 후보와 연결 영상의 정보는 유지합니다. 이 정리는 운영 DB에서 실행되며 백업 실패 시에도 이미 정리된 중복 정보는 되돌리지 않습니다. 남아 있는 실제 수집 정보는 계속 백업 만료 계산에 포함합니다.
 
 백업은 카탈로그·회원·즐겨찾기·개인 목록을 보존합니다. 세션·30일 로그인 유지 자격·재인증·탈퇴 결과 조회 권한/기록·YouTube 토큰/동의/내보내기·조회수 표본·수집 작업은 제외합니다. 최대 유효 기간은 7일이며 원본 자료 기한이 먼저 오면 더 짧아집니다. 복구 키와 별도 탈퇴 기록이 필요합니다.
 
@@ -284,7 +286,7 @@ GitHub environment `production-backup`의 배포 브랜치를 main으로 제한�
 | Environment Variables | `BACKUP_B2_ENDPOINT`, `BACKUP_B2_BUCKET`, `BACKUP_AGE_RECIPIENT` |
 | Repository Variable | `BACKUP_ENABLED=true` |
 
-[백업 workflow](../.github/workflows/database-backup.yml)는 만료 정리 후 최근 백업을 검사합니다. 수동 기본값은 정리만 하며 `backup=true`로 새 백업을 만듭니다. 업로드 후 같은 VersionId의 암호문·checksum·metadata를 다시 읽어 검증합니다. 실패 알림은 GitHub Actions 이메일 설정을 사용합니다. 개인키는 GitHub·Render에 주지 않고 서버 밖에도 보관합니다.
+[백업 workflow](../.github/workflows/database-backup.yml)는 만료 정리 후 최근 백업을 검사합니다. 수동 기본값은 정리만 하며 `backup=true`로 새 백업을 만듭니다. 업로드 후 같은 VersionId의 암호문·checksum·metadata를 다시 읽어 검증합니다. 원본 자료 기한이 5일 미만 남으면 업로드 전에 차단하고 `BACKUP_SOURCE_EXPIRY_TOO_SOON`으로 안내합니다. 저장소·연결의 알 수 없는 오류 원문은 로그에 출력하지 않습니다. 실패 알림은 GitHub Actions 이메일 설정을 사용합니다. 개인키는 GitHub·Render에 주지 않고 서버 밖에도 보관합니다.
 
 **탈퇴 기록:** 백업과 다른 Private 버킷·전용 키를 사용합니다. `stelody/withdrawals/records/`만 8일 후 숨김·숨김 1일 후 삭제를 설정하며 `coverage.json`에는 삭제 규칙을 적용하지 않습니다. 겹치는 규칙을 만들지 않습니다.
 
