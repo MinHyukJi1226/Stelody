@@ -181,6 +181,33 @@ public class CatalogManagementService {
     return new Saved<>(after, queries.duplicates(Resource.WORKS, id, item.searchTitle()));
   }
 
+  /** Append verified missing original metadata without rechecking unrelated curated fields. */
+  @Transactional
+  public Work supplementOriginal(
+      UUID id, long version, List<UUID> artists, Link link, UUID actor, String reason) {
+    rules.ids(artists, "artistIds");
+    queries.requireReferences(Resource.ARTISTS, artists);
+    rules.text(reason, "reason");
+    rules.extras(link == null ? List.of() : List.of(link), List.of());
+    var before = queries.work(id);
+    var item = existing(ManagedWork.class, id, version);
+    boolean fillArtists = before.artistIds().isEmpty() && !artists.isEmpty();
+    boolean fillLink =
+        link != null
+            && before.links().size() < 20
+            && before.links().stream()
+                .noneMatch(
+                    l -> com.stelody.review.domain.OriginalCredits.youtubeId(l.url()).isPresent());
+    if (!fillArtists && !fillLink) return before;
+    item.touch();
+    entities.flush();
+    if (fillArtists) queries.relation("work_artist", "work_id", "artist_id", id, artists);
+    if (fillLink) queries.appendWorkLink(id, link);
+    var after = queries.work(id);
+    queries.audit("WORKS", id, actor, "SUPPLEMENT_ORIGINAL", before, after, reason);
+    return after;
+  }
+
   @Transactional
   public Channel channel(UUID id, ChannelInput input, UUID actor) {
     rules.validate(input);

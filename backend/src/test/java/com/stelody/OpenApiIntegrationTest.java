@@ -68,6 +68,11 @@ class OpenApiIntegrationTest {
             "missingFields",
             "BATCH_REGISTER",
             "기본 COVER",
+            "snippet.description",
+            "원곡자",
+            "20초",
+            "검색 결과 최대 5건",
+            "sourceUrl",
             "TITLE_REQUIRES_EDIT");
     assertThat(complete.path("description").asText()).doesNotContain("TYPE_UNCONFIRMED");
     assertThat(complete.at("/responses/409/description").asText())

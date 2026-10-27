@@ -381,6 +381,20 @@ public class CatalogAdminQueries {
       throw new AdminCatalogException(400, "INVALID_CATALOG_REFERENCE", "연결할 항목을 확인해 주세요");
   }
 
+  public void appendWorkLink(UUID workId, Link link) {
+    jdbc.sql(
+            """
+        INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at)
+        VALUES(:id,:work,:platform,:url,:source,CURRENT_TIMESTAMP)
+        """)
+        .param("id", UUID.randomUUID())
+        .param("work", workId)
+        .param("platform", link.platform())
+        .param("url", link.url())
+        .param("source", link.sourceUrl())
+        .update();
+  }
+
   public void extras(boolean song, UUID id, List<Link> links, List<Karaoke> karaoke) {
     String fk = song ? "song_id" : "work_id";
     jdbc.sql("DELETE FROM app.external_link WHERE " + fk + "=:id").param("id", id).update();

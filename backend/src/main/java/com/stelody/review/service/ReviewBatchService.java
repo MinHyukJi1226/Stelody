@@ -25,6 +25,7 @@ public class ReviewBatchService {
   private final CatalogAdminQueries queries;
   private final ObjectMapper mapper;
   private final CollectionRuleStore classification;
+  private final ReviewOriginalService originals;
   private final ReviewRegistrationRules registration = new ReviewRegistrationRules();
 
   public ReviewBatchService(
@@ -32,12 +33,14 @@ public class ReviewBatchService {
       CatalogManagementService catalog,
       CatalogAdminQueries queries,
       ObjectMapper mapper,
-      CollectionRuleStore classification) {
+      CollectionRuleStore classification,
+      ReviewOriginalService originals) {
     this.reviews = reviews;
     this.catalog = catalog;
     this.queries = queries;
     this.mapper = mapper;
     this.classification = classification;
+    this.originals = originals;
   }
 
   @Transactional
@@ -106,14 +109,34 @@ public class ReviewBatchService {
         .forEach(queries::lockChannel);
     var members = reviews.registrationMembers();
     var configuration = classification.current();
+    var plans = new ArrayList<ReviewRegistrationRules.Plan>();
+    for (int i = 0; i < sources.size(); i++) {
+      var source = sources.get(i);
+      try {
+        plans.add(
+            registration.plan(source, queries.channel(source.channelId()), members, configuration));
+      } catch (ReviewRegistrationRules.Unresolved error) {
+        throw unresolved(i, error);
+      }
+    }
+    var covers = new ArrayList<ReviewOriginalService.Candidate>();
+    for (int i = 0; i < plans.size(); i++) {
+      var source = sources.get(i);
+      if (plans.get(i).song().type() == SongType.COVER)
+        covers.add(
+            new ReviewOriginalService.Candidate(
+                source.id(),
+                source.youtubeId(),
+                queries.channel(source.channelId()).youtubeId(),
+                plans.get(i).song().title()));
+    }
+    var workIds = originals.resolve(covers, actor);
     var registered = new ArrayList<ReviewDtos.RegisteredSong>();
     for (int i = 0; i < body.selected().size(); i++) {
       var selection = body.selected().get(i);
       try {
-        var source = sources.get(i);
-        var plan =
-            registration.plan(source, queries.channel(source.channelId()), members, configuration);
-        var input = plan.song();
+        var plan = plans.get(i);
+        var input = copy(plan.song(), 0, Visibility.DRAFT, null, workIds.get(selection.id()));
         var draft = catalog.song(null, input, actor).item();
         var video =
             catalog.register(
@@ -127,17 +150,11 @@ public class ReviewBatchService {
                 actor);
         var attached = queries.song(draft.id());
         catalog.song(
-            draft.id(), copy(input, attached.version(), Visibility.DRAFT, video.id()), actor);
+            draft.id(),
+            copy(input, attached.version(), Visibility.DRAFT, video.id(), input.workId()),
+            actor);
         reviews.rememberBatch(selection.id(), body.requestId(), hash);
         registered.add(new ReviewDtos.RegisteredSong(selection.id(), draft.id()));
-      } catch (ReviewRegistrationRules.Unresolved error) {
-        throw new ReviewException(
-            409,
-            "CANDIDATE_CLASSIFICATION_REQUIRED",
-            "선택한 " + (i + 1) + "번째 후보의 등록 정보를 확정할 수 없습니다",
-            List.of(
-                new ApiFieldError(
-                    "selected[" + i + "].id", error.reason(), "후보의 곡명·곡 유형을 확인해 주세요")));
       } catch (AdminCatalogException error) {
         throw new ReviewException(
             error.status(),
@@ -170,12 +187,23 @@ public class ReviewBatchService {
     return new ReviewDtos.CompletionResult(registered, deleted, false);
   }
 
-  private SongInput copy(SongInput s, long version, Visibility visibility, UUID representative) {
+  private ReviewException unresolved(int index, ReviewRegistrationRules.Unresolved error) {
+    return new ReviewException(
+        409,
+        "CANDIDATE_CLASSIFICATION_REQUIRED",
+        "선택한 " + (index + 1) + "번째 후보의 등록 정보를 확정할 수 없습니다",
+        List.of(
+            new ApiFieldError(
+                "selected[" + index + "].id", error.reason(), "후보의 곡명·곡 유형을 확인해 주세요")));
+  }
+
+  private SongInput copy(
+      SongInput s, long version, Visibility visibility, UUID representative, UUID workId) {
     return new SongInput(
         version,
         s.title(),
         s.type(),
-        s.workId(),
+        workId,
         visibility,
         representative,
         s.aliases(),
