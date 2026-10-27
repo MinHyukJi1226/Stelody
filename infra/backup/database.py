@@ -125,6 +125,9 @@ def create_backup(root, descriptor):
     if version not in tuple(str(value) for value in SUPPORTED_SCHEMA_VERSIONS):
         raise OperationError('Unsupported database schema; validated versions: ' +
                              ', '.join(f'V{value}' for value in SUPPORTED_SCHEMA_VERSIONS))
+    # Remove only redundant source copies, never exclude retained source data
+    # from the expiry calculation or advance its original observation timestamp.
+    cleared = int(sql((BASE / 'prepare-backup.sql').read_text()))
     created = now()
     expires = created + MAX_AGE
     source_expiry = sql("""SELECT min(expires_at)::text FROM (
@@ -171,7 +174,8 @@ def create_backup(root, descriptor):
     except BaseException:
         shutil.rmtree(staging)
         raise
-    print(json.dumps({'backup': str(destination), 'expiresAt': expires.isoformat()}))
+    print(json.dumps({'backup': str(destination), 'expiresAt': expires.isoformat(),
+                      'registeredReviewSourcesCleared': cleared}))
 
 
 def validate_archive(directory):

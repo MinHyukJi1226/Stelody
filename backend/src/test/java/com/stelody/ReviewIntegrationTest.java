@@ -439,6 +439,85 @@ class ReviewIntegrationTest {
   }
 
   @Test
+  void backupPreparationClearsOnlyDuplicateSourcesAndPreservesRequestReplay() throws Exception {
+    var body = batch(List.of(REVIEW));
+    var result = batches.complete(ADMIN, body);
+    UUID video =
+        writer.queryForObject(
+            "SELECT registered_video_id FROM app.review_item WHERE id=?", UUID.class, REVIEW);
+    writer.update(
+        "UPDATE app.review_item SET source_observed_at=now()-interval '26 days' WHERE id=?",
+        REVIEW);
+    for (int i = 5; i <= 11; i++) seed(new UUID(0, i), i);
+    writer.update("UPDATE app.review_item SET review_status='IGNORED' WHERE id=?", new UUID(0, 6));
+    writer.update("UPDATE app.review_item SET disposition='DEFERRED' WHERE id=?", new UUID(0, 7));
+    writer.update("UPDATE app.review_item SET disposition='EXCLUDED' WHERE id=?", new UUID(0, 8));
+    // Even an incorrect registration pointer must not make a different video's copy disposable.
+    writer.update(
+        "UPDATE app.review_item SET review_status='REGISTERED',registered_video_id=? WHERE id=?",
+        video,
+        new UUID(0, 9));
+    // A linked video without a source copy cannot justify clearing the candidate's only copy.
+    UUID emptyVideo = new UUID(0, 10);
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,source_observed_at) VALUES(?,?,?,?,'OFFICIAL_COVER','PUBLIC','',now())",
+        emptyVideo,
+        result.registeredSongs().getFirst().songId(),
+        "YT000000010",
+        CHANNEL);
+    writer.update(
+        "UPDATE app.review_item SET review_status='REGISTERED',registered_video_id=? WHERE id=?",
+        emptyVideo,
+        new UUID(0, 10));
+    // An older video source is not a valid replacement for the candidate's copy.
+    UUID olderVideo = new UUID(0, 11);
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,source_observed_at) VALUES(?,?,?,?,'OFFICIAL_COVER','PUBLIC','older source',now()-interval '1 day')",
+        olderVideo,
+        result.registeredSongs().getFirst().songId(),
+        "YT000000011",
+        CHANNEL);
+    writer.update(
+        "UPDATE app.review_item SET review_status='REGISTERED',registered_video_id=? WHERE id=?",
+        olderVideo,
+        new UUID(0, 11));
+    writer.update(
+        "INSERT INTO app.admin_audit(id,review_id,actor_id,before_status,after_status,after_note,changed_at) VALUES(?,?,?,'PENDING','REGISTERED','keep review audit',now())",
+        UUID.randomUUID(),
+        REVIEW,
+        ADMIN);
+    var reviewAudits = writer.queryForList("SELECT * FROM app.admin_audit ORDER BY id");
+    var protectedRows =
+        writer.queryForList("SELECT * FROM app.review_item WHERE id<>? ORDER BY id", REVIEW);
+    var videos = writer.queryForList("SELECT * FROM app.video ORDER BY id");
+    var audits = writer.queryForList("SELECT * FROM app.catalog_audit ORDER BY id");
+    var expected =
+        new HashMap<>(writer.queryForMap("SELECT * FROM app.review_item WHERE id=?", REVIEW));
+    for (String field :
+        List.of(
+            "source_title",
+            "source_published_at",
+            "source_thumbnail_url",
+            "source_duration_seconds")) expected.put(field, null);
+    expected.put("version", ((Number) expected.get("version")).longValue() + 1);
+    String sql =
+        java.nio.file.Files.readString(java.nio.file.Path.of("../infra/backup/prepare-backup.sql"));
+    assertThat(writer.queryForObject(sql, Integer.class)).isEqualTo(1);
+    assertThat(writer.queryForObject(sql, Integer.class)).isZero();
+    assertThat(writer.queryForMap("SELECT * FROM app.review_item WHERE id=?", REVIEW))
+        .isEqualTo(expected);
+    assertThat(writer.queryForList("SELECT * FROM app.review_item WHERE id<>? ORDER BY id", REVIEW))
+        .isEqualTo(protectedRows);
+    assertThat(writer.queryForList("SELECT * FROM app.video ORDER BY id")).isEqualTo(videos);
+    var replay = batches.complete(ADMIN, body);
+    assertThat(replay.replayed()).isTrue();
+    assertThat(replay.deletedCount()).isZero();
+    assertThat(replay.registeredSongs()).isEqualTo(result.registeredSongs());
+    assertThat(writer.queryForList("SELECT * FROM app.catalog_audit ORDER BY id"))
+        .isEqualTo(audits);
+  }
+
+  @Test
   void deletionFailureAlsoRollsBackRegisteredSongs() throws Exception {
     seed(new UUID(0, 5), 5);
     var body = batch(List.of(REVIEW));

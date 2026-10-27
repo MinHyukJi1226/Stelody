@@ -82,6 +82,8 @@ jobs:
           encrypted = offsite.seal(bundles[0], Path('/tmp/stelody-backup/encrypted'))
           try:
               key = offsite.upload(encrypted)
+          except offsite.SourceExpiryTooSoon as error:
+              raise SystemExit(f'{error.code}: {error}') from None
           except Exception:
               raise SystemExit('Encrypted upload/read-back failed; no credentials displayed') from None
           print('Encrypted backup uploaded and verified by read-back')
