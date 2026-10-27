@@ -1,6 +1,8 @@
 package com.stelody;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -64,6 +66,10 @@ class ReviewIntegrationTest {
   @Autowired ReviewService service;
   @Autowired com.stelody.review.service.ReviewBatchService batches;
   @Autowired ReviewRepository repository;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.review.youtube.YouTubeOriginalLookup originalLookup;
+
   @Autowired PlatformTransactionManager transactions;
   @Autowired JdbcTemplate runtime;
   JdbcTemplate writer;
@@ -78,7 +84,7 @@ class ReviewIntegrationTest {
             new DriverManagerDataSource(
                 postgres.getJdbcUrl(), "stelody_migrator", "test-migrator"));
     writer.execute(
-        "TRUNCATE app.app_user,app.channel,app.song_entry,session.spring_session CASCADE");
+        "TRUNCATE app.app_user,app.channel,app.song_entry,app.musical_work,app.artist,session.spring_session CASCADE");
     writer.update(
         "INSERT INTO app.app_user(id,google_subject,email,role) VALUES(?,'admin','admin@example.invalid','ADMIN'),(?,'user','user@example.invalid','USER')",
         ADMIN,
@@ -393,12 +399,449 @@ class ReviewIntegrationTest {
   }
 
   @Test
-  void unclassifiableSecondCandidateRollsBackFirstRegistrationAndAllDeletion() throws Exception {
+  void unclassifiedSelectionRegistersEditableCoverAndKeepsBatchDeletionAndReplay()
+      throws Exception {
+    UUID second = new UUID(0, 5), unselected = new UUID(0, 6);
+    seed(second, 5);
+    seed(unselected, 6);
+    UUID member = singer();
+    writer.update(
+        "UPDATE app.channel SET channel_type='MEMBER',member_id=? WHERE id=?", member, CHANNEL);
+    String title = "IA - オツキミリサイタル 달맞이 리사이틀 / 네네코 마시로 (4K)";
+    writer.update(
+        "UPDATE app.review_item SET suggested_type='UNKNOWN',source_title=? WHERE id=?",
+        title,
+        second);
+    var body = batch(List.of(REVIEW, second));
+    var result =
+        mapper.readTree(
+            mvc.perform(
+                    auth(post(ROOT + "/completion"), admin)
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registeredSongs.length()").value(2))
+                .andExpect(jsonPath("$.deletedCount").value(1))
+                .andExpect(jsonPath("$.replayed").value(false))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    UUID song = UUID.fromString(result.at("/registeredSongs/1/songId").asText());
+    var detail =
+        mapper.readTree(
+            mvc.perform(auth(get("/api/v1/admin/songs/" + song), admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value(title))
+                .andExpect(jsonPath("$.type").value("COVER"))
+                .andExpect(jsonPath("$.visibility").value("DRAFT"))
+                .andExpect(jsonPath("$.workId").isEmpty())
+                .andExpect(jsonPath("$.memberIds").isEmpty())
+                .andExpect(jsonPath("$.externalArtistIds").isEmpty())
+                .andExpect(jsonPath("$.aliases").isEmpty())
+                .andExpect(jsonPath("$.links").isEmpty())
+                .andExpect(jsonPath("$.karaoke").isEmpty())
+                .andExpect(
+                    jsonPath("$.missingFields").value(org.hamcrest.Matchers.hasItem("members")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(
+            writer.queryForObject(
+                "SELECT video_kind FROM app.video WHERE song_id=?", String.class, song))
+        .isEqualTo("OFFICIAL_COVER");
+    assertThat(
+            writer.queryForObject(
+                "SELECT suggested_type FROM app.review_item WHERE id=?", String.class, second))
+        .isEqualTo("UNKNOWN");
+    var edit = mapper.createObjectNode();
+    for (String field :
+        List.of(
+            "version",
+            "title",
+            "type",
+            "workId",
+            "visibility",
+            "representativeVideoId",
+            "aliases",
+            "memberIds",
+            "externalArtistIds",
+            "isSpecialEvent",
+            "specialEventLabel",
+            "searchVisibility",
+            "recommendedSearchQuery")) edit.set(field, detail.path(field));
+    edit.put("title", "달맞이 리사이틀");
+    edit.putArray("memberIds").add(member.toString());
+    edit.putArray("links");
+    edit.putArray("karaoke");
+    edit.put("reason", "등록 후 곡명과 참여자 보완");
+    mvc.perform(
+            auth(put("/api/v1/admin/songs/" + song), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(edit)))
+        .andExpect(status().isOk());
+    int audits = writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class);
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(body)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.replayed").value(true))
+        .andExpect(jsonPath("$.deletedCount").value(0))
+        .andExpect(jsonPath("$.registeredSongs[1].songId").value(song.toString()));
+    assertThat(
+            writer.queryForObject(
+                "SELECT title FROM app.song_entry WHERE id=?", String.class, song))
+        .isEqualTo("달맞이 리사이틀");
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class))
+        .isEqualTo(audits);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isEqualTo(2);
+  }
+
+  com.stelody.review.youtube.YouTubeOriginalLookup.Outcome original(String title, String artist) {
+    return com.stelody.review.youtube.YouTubeOriginalLookup.Outcome.found(
+        new com.stelody.review.domain.OriginalCredits.Evidence(
+            title,
+            List.of(artist),
+            "original001",
+            "https://www.youtube.com/watch?v=YT000000001",
+            "DESCRIPTION"));
+  }
+
+  @Test
+  void originalMetadataIsSharedBySelectedCoversAndReplayDoesNotLookUpAgain() throws Exception {
+    UUID second = new UUID(0, 5);
+    seed(second, 5);
+    seed(new UUID(0, 6), 6);
+    when(originalLookup.find(anyList()))
+        .thenReturn(
+            Map.of(
+                REVIEW, original("Milky Way", "Artist"), second, original("Milky Way", "Artist")));
+    var body = batch(List.of(REVIEW, second));
+    var result = batches.complete(ADMIN, body);
+    assertThat(result.deletedCount()).isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.musical_work", Integer.class))
+        .isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.artist", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(DISTINCT work_id) FROM app.song_entry", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.song_entry WHERE visibility='DRAFT'", Integer.class))
+        .isEqualTo(2);
+    assertThat(
+            writer.queryForObject(
+                "SELECT url FROM app.external_link WHERE work_id IS NOT NULL", String.class))
+        .isEqualTo("https://www.youtube.com/watch?v=original001");
+    assertThat(
+            writer.queryForObject(
+                "SELECT source_url FROM app.external_link WHERE work_id IS NOT NULL", String.class))
+        .isEqualTo("https://www.youtube.com/watch?v=YT000000001");
+    mvc.perform(
+            auth(get("/api/v1/admin/songs/" + result.registeredSongs().getFirst().songId()), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.workId").isNotEmpty())
+        .andExpect(
+            jsonPath("$.missingFields")
+                .value(
+                    org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.hasItems("work", "originalArtists"))));
+    int audits = writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class);
+    var replay = batches.complete(ADMIN, body);
+    assertThat(replay.replayed()).isTrue();
+    assertThat(replay.registeredSongs()).isEqualTo(result.registeredSongs());
+    assertThat(replay.deletedCount()).isZero();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class))
+        .isEqualTo(audits);
+    verify(originalLookup, times(1)).find(anyList());
+  }
+
+  @Test
+  void existingWorkAndArtistAliasesAreReusedAndOnlyMissingInformationIsAdded() {
+    UUID work = new UUID(1, 1), artist = new UUID(1, 2);
+    writer.update("INSERT INTO app.artist(id,name,search_name) VALUES(?,'아티스트','아티스트')", artist);
+    writer.update(
+        "INSERT INTO app.artist_alias(artist_id,alias,search_alias) VALUES(?,'Artist','artist')",
+        artist);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'은하수','은하수')", work);
+    writer.update(
+        "INSERT INTO app.work_alias(work_id,alias,search_alias) VALUES(?,'Milky Way','milky way')",
+        work);
+    writer.update(
+        "INSERT INTO app.work_artist(work_id,artist_id,position) VALUES(?,?,0)", work, artist);
+    writer.update(
+        "INSERT INTO app.karaoke_entry(id,work_id,provider,status,number,source_url,checked_at) VALUES(?,?,'TJ','REGISTERED','12345','https://example.invalid/karaoke','2026-10-01T00:00:00Z')",
+        new UUID(2, 2),
+        work);
+    writer.update(
+        "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'NICONICO','https://www.nicovideo.jp/watch/sm1234','https://example.invalid/credit','2026-10-01T00:00:00Z')",
+        new UUID(2, 1),
+        work);
+    var karaokeBefore = writer.queryForMap("SELECT * FROM app.karaoke_entry");
+    var linkBefore = writer.queryForMap("SELECT * FROM app.external_link");
+    when(originalLookup.find(anyList()))
+        .thenReturn(Map.of(REVIEW, original("Milky Way", "Artist")));
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForMap("SELECT * FROM app.karaoke_entry")).isEqualTo(karaokeBefore);
+    assertThat(writer.queryForMap("SELECT * FROM app.external_link WHERE platform='NICONICO'"))
+        .isEqualTo(linkBefore);
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class))
+        .isEqualTo(work);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.musical_work", Integer.class))
+        .isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.artist", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT artist_id FROM app.work_artist WHERE work_id=?", UUID.class, work))
+        .isEqualTo(artist);
+    assertThat(
+            writer.queryForObject(
+                "SELECT title FROM app.musical_work WHERE id=?", String.class, work))
+        .isEqualTo("은하수");
+    assertThat(
+            writer.queryForObject(
+                "SELECT alias FROM app.work_alias WHERE work_id=?", String.class, work))
+        .isEqualTo("Milky Way");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void unidentifiedOriginalNeverReusesAnotherArtistsSameTitleWork(boolean existingLink) {
+    UUID oldWork = new UUID(1, 1), oldArtist = new UUID(1, 2);
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,'Other artist','other artist')",
+        oldArtist);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'Milky Way','milky way')",
+        oldWork);
+    writer.update(
+        "INSERT INTO app.work_artist(work_id,artist_id,position) VALUES(?,?,0)",
+        oldWork,
+        oldArtist);
+    if (existingLink)
+      writer.update(
+          "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'YOUTUBE','https://youtu.be/original002','https://example.invalid/credit',now())",
+          new UUID(2, 1),
+          oldWork);
+    var oldRow = writer.queryForMap("SELECT * FROM app.musical_work WHERE id=?", oldWork);
+    var oldCredits = writer.queryForList("SELECT * FROM app.work_artist WHERE work_id=?", oldWork);
+    var oldLinks = writer.queryForList("SELECT * FROM app.external_link WHERE work_id=?", oldWork);
+    var hint =
+        com.stelody.review.domain.OriginalCredits.hint("Original: https://youtu.be/original001");
+    var evidence =
+        com.stelody.review.domain.OriginalCredits.direct(
+                new com.stelody.review.domain.OriginalCredits.Video(
+                    "original001", "UC" + "o".repeat(22), "Unknown uploader", "Milky Way", ""),
+                hint,
+                "YT000000001")
+            .orElseThrow();
+    assertThat(evidence.artists()).isEmpty();
+    when(originalLookup.find(anyList()))
+        .thenReturn(
+            Map.of(
+                REVIEW, com.stelody.review.youtube.YouTubeOriginalLookup.Outcome.found(evidence)));
+    var result = batches.complete(ADMIN, batch(List.of(REVIEW)));
+    UUID created =
+        writer.queryForObject(
+            "SELECT work_id FROM app.song_entry WHERE id=?",
+            UUID.class,
+            result.registeredSongs().getFirst().songId());
+    assertThat(created).isNotNull().isNotEqualTo(oldWork);
+    assertThat(
+            writer.queryForObject(
+                "SELECT url FROM app.external_link WHERE work_id=?", String.class, created))
+        .isEqualTo("https://www.youtube.com/watch?v=original001");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.work_artist WHERE work_id=?", Integer.class, created))
+        .isZero();
+    assertThat(writer.queryForMap("SELECT * FROM app.musical_work WHERE id=?", oldWork))
+        .isEqualTo(oldRow);
+    assertThat(writer.queryForList("SELECT * FROM app.work_artist WHERE work_id=?", oldWork))
+        .isEqualTo(oldCredits);
+    assertThat(writer.queryForList("SELECT * FROM app.external_link WHERE work_id=?", oldWork))
+        .isEqualTo(oldLinks);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.catalog_audit WHERE target_id=?", Integer.class, oldWork))
+        .isZero();
+  }
+
+  @Test
+  void knownArtistCannotOverwriteUncreditedSameTitleWorkWithAnotherOriginalLink() {
+    UUID oldWork = new UUID(1, 1);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'Milky Way','milky way')",
+        oldWork);
+    writer.update(
+        "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'YOUTUBE','https://youtu.be/original002','https://example.invalid/credit',now())",
+        new UUID(2, 1),
+        oldWork);
+    when(originalLookup.find(anyList()))
+        .thenReturn(Map.of(REVIEW, original("Milky Way", "Artist")));
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class))
+        .isNotEqualTo(oldWork);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.work_artist WHERE work_id=?", Integer.class, oldWork))
+        .isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT url FROM app.external_link WHERE work_id=?", String.class, oldWork))
+        .isEqualTo("https://youtu.be/original002");
+  }
+
+  @Test
+  void matchingOriginalVideoCanFillMissingArtistWithoutReplacingExistingMetadata() {
+    UUID work = new UUID(1, 1);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'은하수','은하수')", work);
+    writer.update(
+        "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'YOUTUBE','https://youtu.be/original001','https://example.invalid/credit','2026-10-01T00:00:00Z')",
+        new UUID(2, 1),
+        work);
+    var before = writer.queryForMap("SELECT * FROM app.external_link WHERE work_id=?", work);
+    when(originalLookup.find(anyList()))
+        .thenReturn(Map.of(REVIEW, original("Milky Way", "Artist")));
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class))
+        .isEqualTo(work);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.musical_work", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT a.name FROM app.artist a JOIN app.work_artist wa ON wa.artist_id=a.id WHERE wa.work_id=?",
+                String.class,
+                work))
+        .isEqualTo("Artist");
+    assertThat(
+            writer.queryForObject(
+                "SELECT title FROM app.musical_work WHERE id=?", String.class, work))
+        .isEqualTo("은하수");
+    assertThat(writer.queryForMap("SELECT * FROM app.external_link WHERE work_id=?", work))
+        .isEqualTo(before);
+  }
+
+  @Test
+  void canonicalVideoLinkReusesTranslatedWorkAndPreservesExistingKaraokeAndCredits() {
+    UUID work = new UUID(1, 1), artist = new UUID(1, 2);
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,'기존 원곡자','기존 원곡자')", artist);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'은하수','은하수')", work);
+    writer.update(
+        "INSERT INTO app.work_artist(work_id,artist_id,position) VALUES(?,?,0)", work, artist);
+    writer.update(
+        "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'YouTube','https://youtu.be/original001?si=reference','https://example.invalid/credit',now())",
+        new UUID(2, 1),
+        work);
+    writer.update(
+        "INSERT INTO app.karaoke_entry(id,work_id,provider,status,number,source_url,checked_at) VALUES(?,?,'TJ','REGISTERED','12345','https://example.invalid/karaoke',now())",
+        new UUID(2, 2),
+        work);
+    when(originalLookup.find(anyList()))
+        .thenReturn(Map.of(REVIEW, original("Milky Way", "Different label")));
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class))
+        .isEqualTo(work);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.artist", Integer.class))
+        .isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT artist_id FROM app.work_artist", UUID.class))
+        .isEqualTo(artist);
+    assertThat(writer.queryForObject("SELECT url FROM app.external_link", String.class))
+        .isEqualTo("https://youtu.be/original001?si=reference");
+    assertThat(writer.queryForObject("SELECT number FROM app.karaoke_entry", String.class))
+        .isEqualTo("12345");
+  }
+
+  @Test
+  void ambiguousExistingArtistsCannotCreatePartialOriginalData() {
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,'Second','second'),(?,'Third','third')",
+        new UUID(1, 1),
+        new UUID(1, 2));
+    writer.update(
+        "INSERT INTO app.artist_alias(artist_id,alias,search_alias) VALUES(?,'Duplicate','duplicate'),(?,'Duplicate','duplicate')",
+        new UUID(1, 1),
+        new UUID(1, 2));
+    var evidence =
+        new com.stelody.review.domain.OriginalCredits.Evidence(
+            "Milky Way",
+            List.of("New artist", "Duplicate"),
+            "original001",
+            "https://www.youtube.com/watch?v=YT000000001",
+            "DESCRIPTION");
+    when(originalLookup.find(anyList()))
+        .thenReturn(
+            Map.of(
+                REVIEW, com.stelody.review.youtube.YouTubeOriginalLookup.Outcome.found(evidence)));
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.artist", Integer.class))
+        .isEqualTo(2);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.musical_work", Integer.class))
+        .isZero();
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class)).isNull();
+  }
+
+  @Test
+  void titleAloneOrAmbiguousCreditsCannotConfirmAnOriginalWithoutEvidence() {
+    UUID work = new UUID(1, 1);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'Test cover','test cover')",
+        work);
+    var body = batch(List.of(REVIEW));
+    when(originalLookup.find(anyList()))
+        .thenReturn(
+            Map.of(REVIEW, com.stelody.review.youtube.YouTubeOriginalLookup.Outcome.conflict()));
+    batches.complete(ADMIN, body);
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class)).isNull();
+    UUID second = new UUID(0, 5);
+    seed(second, 5);
+    when(originalLookup.find(anyList())).thenReturn(Map.of());
+    batches.complete(ADMIN, batch(List.of(second)));
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.song_entry WHERE work_id=?", Integer.class, work))
+        .isZero();
+  }
+
+  @Test
+  void laterRegistrationFailureRollsBackNewOriginalArtistLinkAndTheirAudits() throws Exception {
+    UUID second = new UUID(0, 5);
+    seed(second, 5);
+    seed(new UUID(0, 6), 6);
+    writer.update("UPDATE app.review_item SET source_published_at=NULL WHERE id=?", second);
+    when(originalLookup.find(anyList()))
+        .thenReturn(Map.of(REVIEW, original("Milky Way", "Artist")));
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(batch(List.of(REVIEW, second)))))
+        .andExpect(status().isConflict());
+    for (String table :
+        List.of("song_entry", "musical_work", "artist", "external_link", "catalog_audit"))
+      assertThat(writer.queryForObject("SELECT count(*) FROM app." + table, Integer.class))
+          .isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE review_status='PENDING'",
+                Integer.class))
+        .isEqualTo(3);
+  }
+
+  @Test
+  void conflictingSecondCandidateRollsBackFirstRegistrationAndAllDeletion() throws Exception {
     UUID second = new UUID(0, 5);
     seed(second, 5);
     seed(new UUID(0, 6), 6);
     writer.update(
-        "UPDATE app.review_item SET suggested_type='UNKNOWN',source_title='분류할 수 없는 영상' WHERE id=?",
+        "UPDATE app.review_item SET suggested_type='COVER',source_title='새 노래 Original' WHERE id=?",
         second);
     var body = batch(List.of(REVIEW, second));
     mvc.perform(
@@ -408,7 +851,7 @@ class ReviewIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CANDIDATE_CLASSIFICATION_REQUIRED"))
         .andExpect(jsonPath("$.fieldErrors[0].field").value("selected[1].id"))
-        .andExpect(jsonPath("$.fieldErrors[0].code").value("TYPE_UNCONFIRMED"));
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("CONTENT_TYPE_CONFLICT"));
     assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
         .isZero();
     assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class)).isZero();

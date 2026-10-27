@@ -123,7 +123,7 @@ class ReviewRegistrationRulesTest {
   }
 
   @Test
-  void classifiesUnknownWithConfiguredRulesAndRejectsUnrepresentableType() {
+  void classifiesUnknownWithConfiguredRulesAndStillRejectsTypeConflicts() {
     assertThat(
             rules
                 .plan(source("곡 Cover", "UNKNOWN"), channel, List.of(), configuration)
@@ -131,11 +131,56 @@ class ReviewRegistrationRulesTest {
                 .type())
         .isEqualTo(SongType.COVER);
     assertThatThrownBy(
-            () -> rules.plan(source("분류할 수 없는 영상", "UNKNOWN"), channel, List.of(), configuration))
-        .isInstanceOf(ReviewRegistrationRules.Unresolved.class);
-    assertThatThrownBy(
             () -> rules.plan(source("곡 original", "COVER"), channel, List.of(), configuration))
         .isInstanceOf(ReviewRegistrationRules.Unresolved.class);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "IA - オツキミリサイタル 달맞이 리사이틀 / 네네코 마시로 (4K)",
+        "곡 / 아오쿠모 린 & 유즈하 리코",
+        "ABYSS 노래",
+        "곡 feat. Guest"
+      })
+  void unknownTitleDefaultsToCoverDraftWithMissingInformationLeftEmpty(String title) {
+    var source = source(title, "UNKNOWN");
+    var plan = rules.plan(source, channel, List.of(member, another), configuration);
+    assertThat(plan.song().type()).isEqualTo(SongType.COVER);
+    assertThat(plan.kind()).isEqualTo(VideoKind.OFFICIAL_COVER);
+    assertThat(plan.song().title()).isEqualTo(title);
+    assertThat(plan.song().visibility()).isEqualTo(Visibility.DRAFT);
+    assertThat(plan.song().workId()).isNull();
+    assertThat(plan.song().memberIds()).isEmpty();
+    assertThat(plan.song().externalArtistIds()).isEmpty();
+    assertThat(plan.song().aliases()).isEmpty();
+    assertThat(plan.song().links()).isEmpty();
+    assertThat(plan.song().karaoke()).isEmpty();
+    assertThat(plan.song().searchVisibility()).isEqualTo(SearchVisibility.UNCHECKED);
+    assertThat(plan.song().isSpecialEvent()).isFalse();
+    assertThat(plan.song().specialEventLabel()).isNull();
+    assertThat(source.suggestedType()).isEqualTo("UNKNOWN");
+    var observation =
+        new VideoObservation(
+            source.youtubeId(),
+            channel.youtubeId(),
+            source.availability(),
+            title,
+            source.publishedAt(),
+            source.thumbnailUrl(),
+            source.durationSeconds(),
+            false,
+            null);
+    assertThat(configuration.rules().decide(observation, true).suggestedType())
+        .isEqualTo("UNKNOWN");
+  }
+
+  @Test
+  void explicitAndStoredOriginalTypesArePreservedBeforeApplyingCoverDefault() {
+    for (var source : List.of(source("곡 Original", "UNKNOWN"), source("새 노래", "ORIGINAL"))) {
+      assertThat(rules.plan(source, channel, List.of(), configuration).song().type())
+          .isEqualTo(SongType.ORIGINAL);
+    }
   }
 
   @Test

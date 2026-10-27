@@ -67,8 +67,19 @@ class OpenApiIntegrationTest {
             "OTHER",
             "missingFields",
             "BATCH_REGISTER",
-            "TYPE_UNCONFIRMED",
+            "기본 COVER",
+            "snippet.description",
+            "원곡자",
+            "20초",
+            "검색 결과 최대 5건",
+            "sourceUrl",
+            "제목·별칭만으로 재사용하지",
+            "명시적 원곡자만 가수 조건",
             "TITLE_REQUIRES_EDIT");
+    assertThat(complete.path("description").asText()).doesNotContain("TYPE_UNCONFIRMED");
+    assertThat(complete.at("/responses/409/description").asText())
+        .contains("기본 COVER", "null·빈 배열")
+        .doesNotContain("COVER로 추정하지 않습니다");
     var selection =
         api.path("components").path("schemas").path("com.stelody.review.dto.ReviewDtos.Selection");
     assertThat(selection.path("properties").properties())
