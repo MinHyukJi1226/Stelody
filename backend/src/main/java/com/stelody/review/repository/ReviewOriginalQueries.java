@@ -61,7 +61,6 @@ public class ReviewOriginalQueries {
         .filter(
             w ->
                 artists.isEmpty()
-                    || w.artistIds().isEmpty()
                     || artists.stream()
                         .allMatch(a -> artistKeys(w).contains(SearchText.searchKey(a))))
         .toList();

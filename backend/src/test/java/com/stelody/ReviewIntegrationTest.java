@@ -572,6 +572,8 @@ class ReviewIntegrationTest {
         "INSERT INTO app.work_alias(work_id,alias,search_alias) VALUES(?,'Milky Way','milky way')",
         work);
     writer.update(
+        "INSERT INTO app.work_artist(work_id,artist_id,position) VALUES(?,?,0)", work, artist);
+    writer.update(
         "INSERT INTO app.karaoke_entry(id,work_id,provider,status,number,source_url,checked_at) VALUES(?,?,'TJ','REGISTERED','12345','https://example.invalid/karaoke','2026-10-01T00:00:00Z')",
         new UUID(2, 2),
         work);
@@ -605,6 +607,125 @@ class ReviewIntegrationTest {
             writer.queryForObject(
                 "SELECT alias FROM app.work_alias WHERE work_id=?", String.class, work))
         .isEqualTo("Milky Way");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void unidentifiedOriginalNeverReusesAnotherArtistsSameTitleWork(boolean existingLink) {
+    UUID oldWork = new UUID(1, 1), oldArtist = new UUID(1, 2);
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,'Other artist','other artist')",
+        oldArtist);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'Milky Way','milky way')",
+        oldWork);
+    writer.update(
+        "INSERT INTO app.work_artist(work_id,artist_id,position) VALUES(?,?,0)",
+        oldWork,
+        oldArtist);
+    if (existingLink)
+      writer.update(
+          "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'YOUTUBE','https://youtu.be/original002','https://example.invalid/credit',now())",
+          new UUID(2, 1),
+          oldWork);
+    var oldRow = writer.queryForMap("SELECT * FROM app.musical_work WHERE id=?", oldWork);
+    var oldCredits = writer.queryForList("SELECT * FROM app.work_artist WHERE work_id=?", oldWork);
+    var oldLinks = writer.queryForList("SELECT * FROM app.external_link WHERE work_id=?", oldWork);
+    var hint =
+        com.stelody.review.domain.OriginalCredits.hint("Original: https://youtu.be/original001");
+    var evidence =
+        com.stelody.review.domain.OriginalCredits.direct(
+                new com.stelody.review.domain.OriginalCredits.Video(
+                    "original001", "UC" + "o".repeat(22), "Unknown uploader", "Milky Way", ""),
+                hint,
+                "YT000000001")
+            .orElseThrow();
+    assertThat(evidence.artists()).isEmpty();
+    when(originalLookup.find(anyList()))
+        .thenReturn(
+            Map.of(
+                REVIEW, com.stelody.review.youtube.YouTubeOriginalLookup.Outcome.found(evidence)));
+    var result = batches.complete(ADMIN, batch(List.of(REVIEW)));
+    UUID created =
+        writer.queryForObject(
+            "SELECT work_id FROM app.song_entry WHERE id=?",
+            UUID.class,
+            result.registeredSongs().getFirst().songId());
+    assertThat(created).isNotNull().isNotEqualTo(oldWork);
+    assertThat(
+            writer.queryForObject(
+                "SELECT url FROM app.external_link WHERE work_id=?", String.class, created))
+        .isEqualTo("https://www.youtube.com/watch?v=original001");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.work_artist WHERE work_id=?", Integer.class, created))
+        .isZero();
+    assertThat(writer.queryForMap("SELECT * FROM app.musical_work WHERE id=?", oldWork))
+        .isEqualTo(oldRow);
+    assertThat(writer.queryForList("SELECT * FROM app.work_artist WHERE work_id=?", oldWork))
+        .isEqualTo(oldCredits);
+    assertThat(writer.queryForList("SELECT * FROM app.external_link WHERE work_id=?", oldWork))
+        .isEqualTo(oldLinks);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.catalog_audit WHERE target_id=?", Integer.class, oldWork))
+        .isZero();
+  }
+
+  @Test
+  void knownArtistCannotOverwriteUncreditedSameTitleWorkWithAnotherOriginalLink() {
+    UUID oldWork = new UUID(1, 1);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'Milky Way','milky way')",
+        oldWork);
+    writer.update(
+        "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'YOUTUBE','https://youtu.be/original002','https://example.invalid/credit',now())",
+        new UUID(2, 1),
+        oldWork);
+    when(originalLookup.find(anyList()))
+        .thenReturn(Map.of(REVIEW, original("Milky Way", "Artist")));
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class))
+        .isNotEqualTo(oldWork);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.work_artist WHERE work_id=?", Integer.class, oldWork))
+        .isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT url FROM app.external_link WHERE work_id=?", String.class, oldWork))
+        .isEqualTo("https://youtu.be/original002");
+  }
+
+  @Test
+  void matchingOriginalVideoCanFillMissingArtistWithoutReplacingExistingMetadata() {
+    UUID work = new UUID(1, 1);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'은하수','은하수')", work);
+    writer.update(
+        "INSERT INTO app.external_link(id,work_id,platform,url,source_url,checked_at) VALUES(?,?,'YOUTUBE','https://youtu.be/original001','https://example.invalid/credit','2026-10-01T00:00:00Z')",
+        new UUID(2, 1),
+        work);
+    var before = writer.queryForMap("SELECT * FROM app.external_link WHERE work_id=?", work);
+    when(originalLookup.find(anyList()))
+        .thenReturn(Map.of(REVIEW, original("Milky Way", "Artist")));
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    assertThat(writer.queryForObject("SELECT work_id FROM app.song_entry", UUID.class))
+        .isEqualTo(work);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.musical_work", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT a.name FROM app.artist a JOIN app.work_artist wa ON wa.artist_id=a.id WHERE wa.work_id=?",
+                String.class,
+                work))
+        .isEqualTo("Artist");
+    assertThat(
+            writer.queryForObject(
+                "SELECT title FROM app.musical_work WHERE id=?", String.class, work))
+        .isEqualTo("은하수");
+    assertThat(writer.queryForMap("SELECT * FROM app.external_link WHERE work_id=?", work))
+        .isEqualTo(before);
   }
 
   @Test

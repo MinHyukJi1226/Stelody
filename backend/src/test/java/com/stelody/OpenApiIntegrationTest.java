@@ -73,6 +73,8 @@ class OpenApiIntegrationTest {
             "20초",
             "검색 결과 최대 5건",
             "sourceUrl",
+            "제목·별칭만으로 재사용하지",
+            "명시적 원곡자만 가수 조건",
             "TITLE_REQUIRES_EDIT");
     assertThat(complete.path("description").asText()).doesNotContain("TYPE_UNCONFIRMED");
     assertThat(complete.at("/responses/409/description").asText())

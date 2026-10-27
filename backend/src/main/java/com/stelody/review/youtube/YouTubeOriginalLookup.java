@@ -96,7 +96,7 @@ public class YouTubeOriginalLookup {
       }
       if (target.knownOriginalId() != null
           && !target.titles().isEmpty()
-          && !hint.artists().isEmpty()
+          && hint.explicitArtists()
           && hint.artists().stream()
               .allMatch(
                   a ->
@@ -114,7 +114,7 @@ public class YouTubeOriginalLookup {
                     "DESCRIPTION")));
         continue;
       }
-      var expectedArtists = hint.artists();
+      var expectedArtists = hint.explicitArtists() ? hint.artists() : List.<String>of();
       var titles = target.titles();
       if (titles.isEmpty()) continue;
       String queryTitle =

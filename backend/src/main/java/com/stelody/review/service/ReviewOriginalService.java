@@ -69,7 +69,9 @@ public class ReviewOriginalService {
     var matches =
         !linked.isEmpty()
             ? linked
-            : queries.byTitles(List.of(evidence.title()), evidence.artists());
+            : evidence.artists().isEmpty()
+                ? List.<Work>of()
+                : queries.byTitles(List.of(evidence.title()), evidence.artists());
     if (matches.size() > 1) return null;
     var work = matches.isEmpty() ? null : matches.getFirst();
     var artists = work == null ? new ArrayList<UUID>() : new ArrayList<>(work.artistIds());

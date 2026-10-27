@@ -136,6 +136,54 @@ class YouTubeOriginalLookupTest {
   }
 
   @Test
+  void genericOriginalSongTextDoesNotBecomeAMandatoryArtistDuringSearch() {
+    videos(SOURCE, List.of(video(SOURCE, MEMBER, "Member", "Milky Way", "Original: Milky Way")));
+    search(ORIGINAL);
+    videos(
+        ORIGINAL,
+        List.of(video(ORIGINAL, ARTIST, "Artist", "Artist - Milky Way [Official MV]", "")));
+    var results = client("key").find(List.of(target(first, SOURCE)));
+    assertThat(results).containsKey(first);
+    var found = results.get(first);
+    assertThat(found.evidence().artists()).containsExactly("Artist");
+    assertThat(found.evidence().videoId()).isEqualTo(ORIGINAL);
+    server.verify(
+        getRequestedFor(urlPathEqualTo("/search"))
+            .withQueryParam("q", equalTo("Milky Way original")));
+  }
+
+  @Test
+  void explicitArtistRemainsAMandatoryCreditDuringSearch() {
+    videos(SOURCE, List.of(video(SOURCE, MEMBER, "Member", "Milky Way", "원곡자: Artist")));
+    search("original001", "original002");
+    videos(
+        "original001,original002",
+        List.of(
+            video("original001", ARTIST, "Other", "Other - Milky Way", ""),
+            video("original002", ARTIST, "Artist", "Artist - Milky Way", "")));
+    var found = client("key").find(List.of(target(first, SOURCE))).get(first).evidence();
+    assertThat(found.artists()).containsExactly("Artist");
+    assertThat(found.videoId()).isEqualTo("original002");
+    server.verify(
+        getRequestedFor(urlPathEqualTo("/search"))
+            .withQueryParam("q", equalTo("Milky Way Artist original")));
+  }
+
+  @Test
+  void genericSongTextCannotReuseKnownWorkByCoincidingWithItsArtistName() {
+    videos(SOURCE, List.of(video(SOURCE, MEMBER, "Member", "Milky Way", "Original: Milky Way")));
+    search(ORIGINAL);
+    videos(ORIGINAL, List.of(video(ORIGINAL, ARTIST, "Artist", "Artist - Milky Way", "")));
+    var target =
+        new Target(
+            first, SOURCE, MEMBER, List.of("Milky Way"), List.of("Milky Way"), "original002");
+    var found = client("key").find(List.of(target)).get(first).evidence();
+    assertThat(found.videoId()).isEqualTo(ORIGINAL);
+    assertThat(found.artists()).containsExactly("Artist");
+    server.verify(1, getRequestedFor(urlPathEqualTo("/search")));
+  }
+
+  @Test
   void differentArtistsWithSameSongTitleAreNotResolvedBySearchRanking() {
     videos(SOURCE, List.of(video(SOURCE, MEMBER, "Member", "Milky Way", "")));
     search("original001", "original002");
