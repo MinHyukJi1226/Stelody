@@ -50,7 +50,8 @@ public final class ReviewRegistrationRules {
     if ("UNKNOWN".equals(type)) type = classified.suggestedType();
     else if (!"UNKNOWN".equals(classified.suggestedType())
         && !type.equals(classified.suggestedType())) throw new Unresolved("CONTENT_TYPE_CONFLICT");
-    if (!Set.of("COVER", "ORIGINAL").contains(type)) throw new Unresolved("TYPE_UNCONFIRMED");
+    // Selection approves registration; an unclassified title starts as an editable cover draft.
+    if ("UNKNOWN".equals(type)) type = "COVER";
 
     String title = display(source.title());
     List<UUID> memberIds = List.of();

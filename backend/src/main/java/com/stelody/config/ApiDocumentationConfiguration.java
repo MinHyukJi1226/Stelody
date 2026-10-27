@@ -467,7 +467,7 @@ public class ApiDocumentationConfiguration {
       errorCodes(
           operation,
           "409",
-          "후보·곡 정보 변경, 기존 등록 영상 충돌, CANDIDATE_CLASSIFICATION_REQUIRED(유형 미확정·분류 충돌·등록 불가 제목/콘텐츠)이면 등록·삭제·감사 기록을 모두 취소합니다. fieldErrors의 selected[i].id와 사유 코드를 확인하고 대상을 재조회합니다. 필수 유형은 UNKNOWN으로 저장하거나 COVER로 추정하지 않습니다. 응답 유실 재전송은 동일 requestId·본문을 유지합니다.",
+          "후보·곡 정보 변경, 기존 등록 영상 충돌, CANDIDATE_CLASSIFICATION_REQUIRED(분류 충돌·등록 불가 제목/콘텐츠)이면 등록·삭제·감사 기록을 모두 취소합니다. fieldErrors의 selected[i].id와 사유 코드를 확인하고 대상을 재조회합니다. 유형 미확정은 기본 COVER 초안으로 등록하며 오류가 아닙니다. 미확정 원곡·참여자 등은 null·빈 배열로 남겨 관리자 수정으로 보완합니다. 응답 유실 재전송은 동일 requestId·본문을 유지합니다.",
           "REVIEW_VERSION_CONFLICT",
           "CANDIDATE_CLASSIFICATION_REQUIRED",
           "CATALOG_VERSION_CONFLICT",

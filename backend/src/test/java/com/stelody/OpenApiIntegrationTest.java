@@ -67,8 +67,12 @@ class OpenApiIntegrationTest {
             "OTHER",
             "missingFields",
             "BATCH_REGISTER",
-            "TYPE_UNCONFIRMED",
+            "기본 COVER",
             "TITLE_REQUIRES_EDIT");
+    assertThat(complete.path("description").asText()).doesNotContain("TYPE_UNCONFIRMED");
+    assertThat(complete.at("/responses/409/description").asText())
+        .contains("기본 COVER", "null·빈 배열")
+        .doesNotContain("COVER로 추정하지 않습니다");
     var selection =
         api.path("components").path("schemas").path("com.stelody.review.dto.ReviewDtos.Selection");
     assertThat(selection.path("properties").properties())

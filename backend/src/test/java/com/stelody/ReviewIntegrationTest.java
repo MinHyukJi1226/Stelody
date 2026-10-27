@@ -393,12 +393,112 @@ class ReviewIntegrationTest {
   }
 
   @Test
-  void unclassifiableSecondCandidateRollsBackFirstRegistrationAndAllDeletion() throws Exception {
+  void unclassifiedSelectionRegistersEditableCoverAndKeepsBatchDeletionAndReplay()
+      throws Exception {
+    UUID second = new UUID(0, 5), unselected = new UUID(0, 6);
+    seed(second, 5);
+    seed(unselected, 6);
+    UUID member = singer();
+    writer.update(
+        "UPDATE app.channel SET channel_type='MEMBER',member_id=? WHERE id=?", member, CHANNEL);
+    String title = "IA - オツキミリサイタル 달맞이 리사이틀 / 네네코 마시로 (4K)";
+    writer.update(
+        "UPDATE app.review_item SET suggested_type='UNKNOWN',source_title=? WHERE id=?",
+        title,
+        second);
+    var body = batch(List.of(REVIEW, second));
+    var result =
+        mapper.readTree(
+            mvc.perform(
+                    auth(post(ROOT + "/completion"), admin)
+                        .contentType("application/json")
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registeredSongs.length()").value(2))
+                .andExpect(jsonPath("$.deletedCount").value(1))
+                .andExpect(jsonPath("$.replayed").value(false))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    UUID song = UUID.fromString(result.at("/registeredSongs/1/songId").asText());
+    var detail =
+        mapper.readTree(
+            mvc.perform(auth(get("/api/v1/admin/songs/" + song), admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value(title))
+                .andExpect(jsonPath("$.type").value("COVER"))
+                .andExpect(jsonPath("$.visibility").value("DRAFT"))
+                .andExpect(jsonPath("$.workId").isEmpty())
+                .andExpect(jsonPath("$.memberIds").isEmpty())
+                .andExpect(jsonPath("$.externalArtistIds").isEmpty())
+                .andExpect(jsonPath("$.aliases").isEmpty())
+                .andExpect(jsonPath("$.links").isEmpty())
+                .andExpect(jsonPath("$.karaoke").isEmpty())
+                .andExpect(
+                    jsonPath("$.missingFields").value(org.hamcrest.Matchers.hasItem("members")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(
+            writer.queryForObject(
+                "SELECT video_kind FROM app.video WHERE song_id=?", String.class, song))
+        .isEqualTo("OFFICIAL_COVER");
+    assertThat(
+            writer.queryForObject(
+                "SELECT suggested_type FROM app.review_item WHERE id=?", String.class, second))
+        .isEqualTo("UNKNOWN");
+    var edit = mapper.createObjectNode();
+    for (String field :
+        List.of(
+            "version",
+            "title",
+            "type",
+            "workId",
+            "visibility",
+            "representativeVideoId",
+            "aliases",
+            "memberIds",
+            "externalArtistIds",
+            "isSpecialEvent",
+            "specialEventLabel",
+            "searchVisibility",
+            "recommendedSearchQuery")) edit.set(field, detail.path(field));
+    edit.put("title", "달맞이 리사이틀");
+    edit.putArray("memberIds").add(member.toString());
+    edit.putArray("links");
+    edit.putArray("karaoke");
+    edit.put("reason", "등록 후 곡명과 참여자 보완");
+    mvc.perform(
+            auth(put("/api/v1/admin/songs/" + song), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(edit)))
+        .andExpect(status().isOk());
+    int audits = writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class);
+    mvc.perform(
+            auth(post(ROOT + "/completion"), admin)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(body)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.replayed").value(true))
+        .andExpect(jsonPath("$.deletedCount").value(0))
+        .andExpect(jsonPath("$.registeredSongs[1].songId").value(song.toString()));
+    assertThat(
+            writer.queryForObject(
+                "SELECT title FROM app.song_entry WHERE id=?", String.class, song))
+        .isEqualTo("달맞이 리사이틀");
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.catalog_audit", Integer.class))
+        .isEqualTo(audits);
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
+        .isEqualTo(2);
+  }
+
+  @Test
+  void conflictingSecondCandidateRollsBackFirstRegistrationAndAllDeletion() throws Exception {
     UUID second = new UUID(0, 5);
     seed(second, 5);
     seed(new UUID(0, 6), 6);
     writer.update(
-        "UPDATE app.review_item SET suggested_type='UNKNOWN',source_title='분류할 수 없는 영상' WHERE id=?",
+        "UPDATE app.review_item SET suggested_type='COVER',source_title='새 노래 Original' WHERE id=?",
         second);
     var body = batch(List.of(REVIEW, second));
     mvc.perform(
@@ -408,7 +508,7 @@ class ReviewIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("CANDIDATE_CLASSIFICATION_REQUIRED"))
         .andExpect(jsonPath("$.fieldErrors[0].field").value("selected[1].id"))
-        .andExpect(jsonPath("$.fieldErrors[0].code").value("TYPE_UNCONFIRMED"));
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("CONTENT_TYPE_CONFLICT"));
     assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
         .isZero();
     assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class)).isZero();
