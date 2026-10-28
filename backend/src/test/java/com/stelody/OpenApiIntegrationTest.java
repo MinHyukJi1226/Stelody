@@ -52,6 +52,75 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsArtistRequestIdentityResultsOwnershipAndExpiry() throws Exception {
+    var api = contract();
+    var create = api.at("/paths/~1api~1v1~1admin~1artists/post");
+    var result = api.at("/paths/~1api~1v1~1admin~1artist-registrations~1{requestId}/get");
+    JsonNode key = null;
+    for (var parameter : create.path("parameters"))
+      if (parameter.path("name").asText().equals("Idempotency-Key")) key = parameter;
+    assertThat(key).isNotNull();
+    assertThat(key.path("in").asText()).isEqualTo("header");
+    assertThat(key.path("required").asBoolean()).isFalse();
+    assertThat(key.at("/schema/format").asText()).isEqualTo("uuid");
+    assertThat(create.at("/responses/201/content/application~1json/schema"))
+        .isEqualTo(create.at("/responses/200/content/application~1json/schema"));
+    assertThat(create.at("/responses/201/headers/Idempotency-Replayed/schema/type").asText())
+        .isEqualTo("boolean");
+    assertThat(result.path("security").toString()).contains("session").doesNotContain("csrf");
+    assertThat(create.path("security").toString()).contains("session", "csrf");
+    assertThat(create.path("description").asText()).contains("같은 아티스트 ID", "접수 전", "트랜잭션", "헤더 생략");
+    assertThat(result.path("description").asText())
+        .contains(
+            "본인",
+            "읽기 전용",
+            "24시간",
+            "3초",
+            "최소 기록",
+            "NOT_PROCESSED",
+            "PROCESSING",
+            "COMPLETED",
+            "FAILED");
+    String ref = result.at("/responses/200/content/application~1json/schema/$ref").asText();
+    var shape = api.at(ref.substring(1));
+    assertThat(shape.path("properties").has("artistId")).isTrue();
+    assertThat(shape.path("required").toString())
+        .contains("artistId", "expiresAt", "pollAfterSeconds");
+    var statusRef = shape.at("/properties/status/$ref").asText();
+    var states =
+        statusRef.isEmpty()
+            ? shape.at("/properties/status/enum")
+            : api.at(statusRef.substring(1)).path("enum");
+    assertThat(states.toString())
+        .contains("NOT_PROCESSED", "PROCESSING", "COMPLETED", "FAILED")
+        .doesNotContain("EXPIRED");
+    assertErrorCodes(
+        api,
+        "/api/v1/admin/artists",
+        "post",
+        "409",
+        "CATALOG_VERSION_CONFLICT",
+        "CATALOG_DATA_CONFLICT",
+        "ARTIST_REGISTRATION_PROCESSING",
+        "ARTIST_REGISTRATION_REQUEST_CONFLICT");
+    for (String path :
+        java.util.List.of(
+            "/api/v1/admin/artists", "/api/v1/admin/artist-registrations/{requestId}")) {
+      String verb = path.endsWith("artists") ? "post" : "get";
+      assertErrorCodes(api, path, verb, "410", "ARTIST_REGISTRATION_RESULT_EXPIRED");
+      if (verb.equals("post"))
+        assertErrorCodes(
+            api,
+            path,
+            verb,
+            "503",
+            "ARTIST_REGISTRATION_STORAGE_UNAVAILABLE",
+            "ARTIST_REGISTRATION_INTERRUPTED");
+      else assertErrorCodes(api, path, verb, "503", "ARTIST_REGISTRATION_STORAGE_UNAVAILABLE");
+    }
+  }
+
+  @Test
   void documentsReviewCompletionSnapshotAndPermanentDeletion() throws Exception {
     var api = contract();
     var preview = api.at("/paths/~1api~1v1~1admin~1reviews~1completion/get");

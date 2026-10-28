@@ -180,6 +180,7 @@ public class SecurityConfiguration {
                         "/api/v1/admin/members",
                         "/api/v1/admin/members/{id}",
                         "/api/v1/admin/members/{id}/audit",
+                        "/api/v1/admin/artist-registrations/{requestId}",
                         "/api/v1/admin/artists",
                         "/api/v1/admin/artists/{id}",
                         "/api/v1/admin/artists/{id}/audit",
