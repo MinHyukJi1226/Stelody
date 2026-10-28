@@ -57,6 +57,9 @@ class SecurityConfigurationTest {
   com.stelody.admin.service.CatalogManagementService catalogManagement;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.admin.service.ArtistRegistrationService artistRegistrations;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.admin.service.InboxService inbox;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean

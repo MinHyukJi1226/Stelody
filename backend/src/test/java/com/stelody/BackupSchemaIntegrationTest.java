@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -108,6 +108,21 @@ class BackupSchemaIntegrationTest {
     if (version >= 27)
       owner.execute(
           "UPDATE app.review_item SET source_title='archived source',source_published_at=now()-interval '27 days',source_thumbnail_url='https://example.invalid/old.jpg',source_duration_seconds=240,review_note='keep registration',version=3 WHERE id='00000000-0000-0000-0000-000000000008'");
+    if (version >= 28) {
+      owner.execute(
+          "INSERT INTO app.artist(id,name,search_name) VALUES('00000000-0000-0000-0000-000000000010','kept artist','kept artist')");
+      owner.execute(
+          """
+          INSERT INTO app.artist_registration_request(id,actor_id,body_hash,status,artist_id,finished_at)
+          VALUES('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000001',repeat('a',64),'COMPLETED','00000000-0000-0000-0000-000000000010',now());
+          INSERT INTO app.artist_registration_request(id,actor_id,body_hash)
+          VALUES('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000001',repeat('b',64));
+          INSERT INTO app.artist_registration_request(id,actor_id,body_hash,status,artist_id,finished_at,created_at,expires_at)
+          VALUES('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000001',repeat('c',64),'COMPLETED','00000000-0000-0000-0000-000000000010',now()-interval '2 days',now()-interval '2 days',now()-interval '1 day');
+          INSERT INTO app.artist_registration_request(id,actor_id,body_hash,status,error_code,error_status,finished_at)
+          VALUES('00000000-0000-0000-0000-000000000014','00000000-0000-0000-0000-000000000002',repeat('d',64),'FAILED','INVALID_CATALOG_REQUEST',400,now());
+          """);
+    }
     var videos = owner.queryForList("SELECT * FROM app.video ORDER BY id");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
@@ -172,6 +187,57 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 28) {
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT artist_id FROM app.artist_registration_request WHERE id='00000000-0000-0000-0000-000000000011'",
+                  java.util.UUID.class))
+          .isEqualTo(java.util.UUID.fromString("00000000-0000-0000-0000-000000000010"));
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT name FROM app.artist WHERE id='00000000-0000-0000-0000-000000000010'",
+                  String.class))
+          .isEqualTo("kept artist");
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT error_code FROM app.artist_registration_request WHERE id='00000000-0000-0000-0000-000000000012'",
+                  String.class))
+          .isEqualTo("ARTIST_REGISTRATION_INTERRUPTED");
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT status FROM app.artist_registration_request WHERE id='00000000-0000-0000-0000-000000000013' AND artist_id IS NULL AND finished_at IS NULL",
+                  String.class))
+          .isEqualTo("EXPIRED");
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM app.artist_registration_request WHERE id='00000000-0000-0000-0000-000000000014' AND actor_id IS NULL",
+                  Integer.class))
+          .isEqualTo(1);
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_column_privilege(current_user,'app.artist_registration_request','status','UPDATE')",
+                  Boolean.class))
+          .isTrue();
+      for (String column : new String[] {"id", "actor_id", "body_hash", "created_at", "expires_at"})
+        assertThat(
+                runtime.queryForObject(
+                    "SELECT has_column_privilege(current_user,'app.artist_registration_request',?,'UPDATE')",
+                    Boolean.class,
+                    column))
+            .isFalse();
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT has_table_privilege(current_user,'app.artist_registration_request','DELETE')",
+                  Boolean.class))
+          .isFalse();
+      for (String role : new String[] {"stelody_operator", "stelody_collector"})
+        assertThat(
+                runtime.queryForObject(
+                    "SELECT has_table_privilege(?,'app.artist_registration_request','SELECT')",
+                    Boolean.class,
+                    role))
+            .isFalse();
+    }
     if (version >= 26) {
       assertThat(
               runtime.queryForObject("SELECT count(*) FROM app.withdrawal_result", Integer.class))

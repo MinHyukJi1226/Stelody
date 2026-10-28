@@ -180,6 +180,7 @@ public class ApiDocumentationConfiguration {
                             youtubeReturn(path, operation);
                             reauthenticationContract(path, verb, operation);
                             withdrawalResultContract(path, verb, operation);
+                            artistRegistrationContract(path, verb, operation);
                             if (List.of("/api/v1/me", "/api/v1/auth/csrf", "/api/v1/auth/logout")
                                 .contains(path))
                               errorCodes(
@@ -595,6 +596,61 @@ public class ApiDocumentationConfiguration {
       errorCodes(operation, "409", "권한 철회 완료 후 추가 동의를 다시 시작합니다.", "YOUTUBE_REVOCATION_PENDING");
       errorCodes(operation, "503", "YouTube OAuth 설정이 없습니다.", "YOUTUBE_OAUTH_UNAVAILABLE");
     }
+  }
+
+  private static void artistRegistrationContract(String path, String verb, Operation operation) {
+    boolean create = path.equals("/api/v1/admin/artists") && verb.equals("POST");
+    boolean result = path.equals("/api/v1/admin/artist-registrations/{requestId}");
+    if (!create && !result) return;
+    if (create) {
+      var created = operation.getResponses().get("201");
+      var replayHeader =
+          Map.of(
+              "Idempotency-Replayed",
+              new Header()
+                  .schema(new BooleanSchema())
+                  .description("요청 ID를 사용한 최초 성공은 false, 동일 요청 재전송은 true"));
+      created.setHeaders(replayHeader);
+      operation
+          .getResponses()
+          .addApiResponse(
+              "200",
+              new ApiResponse()
+                  .description("동일한 요청 재전송. 추가 생성 없이 기존 아티스트 ID의 현재 정보와 duplicates를 반환합니다.")
+                  .content(created.getContent())
+                  .headers(replayHeader));
+      errorCodes(
+          operation,
+          "409",
+          "동일 요청 처리 중이면 결과를 조회합니다. 같은 ID·다른 본문은 거절합니다.",
+          "ARTIST_REGISTRATION_PROCESSING",
+          "ARTIST_REGISTRATION_REQUEST_CONFLICT",
+          "CATALOG_DATA_CONFLICT");
+      errorCodes(
+          operation,
+          "404",
+          "다른 소유자의 요청 ID는 사용할 수 없습니다. 이미 생성된 아티스트가 삭제된 경우 재전송으로 새로 생성하지 않습니다.",
+          "ARTIST_REGISTRATION_NOT_FOUND",
+          "CATALOG_RESOURCE_NOT_FOUND");
+    }
+    errorCodes(
+        operation, "400", "요청 UUID·본문 검증. 접수 전 거절은 결과 기록이 없을 수 있습니다.", "INVALID_CATALOG_REQUEST");
+    errorCodes(
+        operation,
+        "410",
+        "본인 요청의 최초 접수 후 24시간이 지났습니다. 같은 요청 ID를 다시 사용할 수 없습니다.",
+        "ARTIST_REGISTRATION_RESULT_EXPIRED");
+    errorCodes(
+        operation,
+        "503",
+        "저장소·연결 장애. 결과 없음으로 처리하지 말고 같은 요청 ID를 보관합니다. 실패한 요청 재전송은 원래 정규화 오류 상태·코드로 거절됩니다.",
+        "ARTIST_REGISTRATION_STORAGE_UNAVAILABLE");
+    if (create)
+      errorCodes(
+          operation,
+          "503",
+          "중단된 실패 요청의 재전송은 다시 실행하지 않고 실패 코드를 반환합니다.",
+          "ARTIST_REGISTRATION_INTERRUPTED");
   }
 
   private static void withdrawalResultContract(String path, String verb, Operation operation) {

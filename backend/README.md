@@ -91,6 +91,9 @@ cd backend
 - V21은 ABYSS 4명과 수집용 공식 채널을 등록하고 기존 11명의 데뷔일·생일을 보완합니다. 새 멤버 프로필 이미지는 null이며, 동일 이름·채널이 이미 등록돼 있으면 중복 생성 대신 마이그레이션이 실패하므로 먼저 등록 상태를 확인합니다.
 - GET `/api/v1/admin/songs`는 기존 `id/name/version/status`에 `participants`, `discoveredAt`, `missingFields`, `informationComplete`를 제공합니다. 참여자는 멤버·외부 아티스트 순서이며 미확정 항목도 `confirmed=false`로 표시합니다. 발견일은 연결된 영상 후보의 최초 발견 시각이고 기록이 없으면 `null`입니다. 자동 등록 목록의 누락 코드 6개에 `members/representativeVideo`를 더하며, 선택 별칭(`aliases`)만 없으면 완성입니다. 공개 설정(`status`)과 완성도는 독립적이며 전체 곡에 같은 기준을 적용합니다.
 - GET `/api/v1/admin/inbox`는 신규 검토(`PENDING+REVIEW`), 자동 등록 곡의 정보 보완, 기념일 `PENDING` 후보, 최근 24시간 미해결 수집 실패 작업 수를 반환합니다. 보완 완료·검토 처리·해당 원본 작업 재시도 성공 시 집계에서 제외합니다. 기념일 후보는 만료·비활성 근거도 재검토 대상으로 포함합니다. 실패 목록은 `/api/v1/admin/collection-failures`에 응답의 `failureWindowStart/checkedAt`을 `from/to`로 전달하면 같은 기간으로 조회합니다. 집계 단위·누락 조건은 OpenAPI에 명시하며 기존 설정·수집 현황 API를 함께 사용합니다.
+- 아티스트 등록 응답 유실 복구: 프론트가 POST 전에 UUID와 원래 본문(`version: 0`, `name`, `aliases`, `reason`)을 보관하고 `POST /api/v1/admin/artists`의 선택 `Idempotency-Key` 헤더로 UUID를 보냅니다. 최초 성공은 기존 응답 형태로 201, 같은 ID·본문 재전송은 동일 아티스트 ID의 현재 정보와 중복 후보를 200으로 반환하며 `Idempotency-Replayed: true`입니다. 같은 ID·다른 본문은 409 `ARTIST_REGISTRATION_REQUEST_CONFLICT`, 처리 중 재전송은 409 `ARTIST_REGISTRATION_PROCESSING`입니다. 헤더 생략은 기존 등록 방식이며 결과 복구·중복 방지를 제공하지 않습니다.
+- GET `/api/v1/admin/artist-registrations/{requestId}`는 등록한 관리자 본인만 로그인 후 조회합니다. `NOT_PROCESSED/PROCESSING/COMPLETED/FAILED`와 완료 시 `artistId`, 실패 시 `errorCode`를 반환하며 처리 중 재조회 간격은 3초입니다. 인증·CSRF·본문 검증 등 접수 전 거절은 본인 기록이 없을 수 있고, 조회 장애·401·403·503을 미처리로 취급하면 안 됩니다. 실패한 요청은 같은 ID로 다시 실행하지 않습니다. 새로고침 후에도 보관한 ID·본문으로 확인·재전송하며 새 ID로 반복 접수하지 않습니다.
+- 결과 조회 기간은 최초 접수 후 24시간이며 연장되지 않습니다. 만료 조회·재전송은 410 `ARTIST_REGISTRATION_RESULT_EXPIRED`; 만료 결과 상세는 정리하고 중복 방지용 UUID·본문 해시·소유자·접수/만료 시각은 유지합니다. 2분 지난 비활성 처리 중 요청은 1분 간격 정리에서 `FAILED/ARTIST_REGISTRATION_INTERRUPTED`가 되며 실행 중 잠긴 요청은 보존합니다. 아티스트·감사·완료 기록은 같은 트랜잭션입니다. V28은 요청 기록과 최소 런타임 권한을 추가하므로 운영 자동 마이그레이션이 꺼져 있으면 배포 전에 적용합니다. 백업에는 중복 방지 기록을 보존하고 복원 시 만료 결과를 정리·중단된 진행 상태를 실패로 전환합니다.
 - 신규 검토는 후보 선택 → 등록·삭제 예정 수 확인 → 실행 순서로 처리하며 곡별 입력 단계는 없습니다. GET `/api/v1/admin/reviews/completion`의 `items`(ID·버전, 최대 10000건)와 `requestId`, `selected`(1~100건)를 POST 같은 경로로 보내면 선택 곡 생성·대표 영상 연결·미선택 후보/종속 이력 삭제를 한 트랜잭션으로 처리합니다. 하나라도 실패하면 모두 취소하고, 확인 후 들어온 새 후보·등록 곡·보류/제외 후보·수집 지점은 유지합니다. 선택 없는 삭제는 허용하지 않고 수집 직후 자동 삭제도 하지 않습니다.
 - 등록 요청은 `requestId`, 최초 검토 대상 전체의 `items: [{id,version}]`, `selected: [{id}]`(1~100건)만 전달합니다. 곡별 `SongInput`·`kind`·사유 입력은 없습니다. 서버가 수집 제안과 현재 분류 규칙으로 COVER/ORIGINAL을 결정하고 후보 영상을 대표 영상으로 연결합니다. 재판정 후에도 유형 미확정이면 기본 COVER 초안으로 등록하고 추후 수정합니다. 이 기본값은 선택 등록에만 적용하며 수집 분류·자동 공개 정책은 유지합니다. 분류 충돌·빈/초과 길이 제목은 `409 CANDIDATE_CLASSIFICATION_REQUIRED` 및 `selected[i].id`의 사유 코드로 전체 취소합니다.
 - 제목은 NFKC·공백 정리 후 확인된 솔로 커버 크레딧만 제거하고 나머지는 영상 제목 초안을 유지합니다. 기존 솔로 크레딧과 채널 연결이 일치할 때만 멤버를 확정하며 단체·듀엣·외부 참여 등은 빈 참여자 배열로 남깁니다. COVER 영상은 OFFICIAL_COVER, ORIGINAL은 명시된 MV/음원 표식에 따라 OFFICIAL_MV/AUDIO, 불명확하면 OTHER입니다. 후보에 자동 공개에 필요한 방송 메타데이터가 없으므로 **DRAFT**로 등록하고 기존 자동 공개 설정은 유지합니다. 확정하지 못한 원곡·별칭·곡별 링크·노래방·기념/협업 정보는 비워 둡니다. 기존 관리자 곡 목록·상세의 `missingFields`로 보완하고 수정 API로 공개합니다. 솔로 자동 등록 전용 목록에는 추가하지 않습니다.
@@ -272,7 +275,7 @@ java -jar backend/build/libs/stelody-0.0.1-SNAPSHOT.jar --collector --discover
 <details>
 <summary>암호화 백업 · 독립 탈퇴 기록 · 복구</summary>
 
-백업·복구는 V19~V27을 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
+백업·복구는 V19~V28을 지원하며 멤버 날짜·유닛·링크·표시 순서도 보존합니다. 새 마이그레이션은 백업·복구 검증과 지원 버전 갱신을 함께 완료해야 합니다.
 
 백업 준비 시 스키마 소유자·지원 버전을 검증한 뒤, 연결된 동일 YouTube 영상에 같거나 더 최신인 수집 정보가 있는 `REGISTERED` 후보의 중복 `source_*` 4개 필드만 비웁니다. 등록 상태·영상 연결·관측 시각·감사·요청 재전송 이력은 보존하고 버전만 증가시킵니다. 대기·제외·보류 후보와 연결 영상의 정보는 유지합니다. 이 정리는 운영 DB에서 실행되며 백업 실패 시에도 이미 정리된 중복 정보는 되돌리지 않습니다. 남아 있는 실제 수집 정보는 계속 백업 만료 계산에 포함합니다.
 

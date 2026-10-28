@@ -16,7 +16,7 @@ import tempfile
 import uuid
 
 MAX_AGE = timedelta(days=7)
-SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25, 26, 27)
+SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25, 26, 27, 28)
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
@@ -241,6 +241,15 @@ def restore(directory, target, reconciliations):
         run(['pg_restore', '--no-password', '--exit-on-error', '--single-transaction',
              '--no-owner', '--dbname=' + target, str(directory / 'database.dump')], log=log)
         sanitation = (BASE / 'restore-sanitize.sql').read_text()
+        if metadata['schemaVersion'] >= 28:
+            # These receipts are durable deduplication records, not ephemeral sessions.
+            # A snapshot cannot contain an artist without its completed receipt transaction.
+            sanitation = sanitation.replace('COMMIT;', """
+UPDATE app.artist_registration_request SET status='EXPIRED',artist_id=NULL,error_code=NULL,
+    error_status=NULL,finished_at=NULL WHERE expires_at<=clock_timestamp();
+UPDATE app.artist_registration_request SET status='FAILED',error_code='ARTIST_REGISTRATION_INTERRUPTED',
+    error_status=503,finished_at=clock_timestamp() WHERE status='PROCESSING';
+COMMIT;""")
         deletions = '\n'.join(
             "UPDATE app.catalog_audit SET target_id=gen_random_uuid() "
             f"WHERE target_type='ACCOUNT_ROLE' AND target_id='{value}'::uuid;\n"
