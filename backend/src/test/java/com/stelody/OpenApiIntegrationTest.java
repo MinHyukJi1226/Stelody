@@ -52,6 +52,16 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsUnchangedWorkResourcesWithoutChangingThePutContract() throws Exception {
+    var update = contract().at("/paths/~1api~1v1~1admin~1works~1{id}/put");
+    assertThat(update.path("description").asText())
+        .contains("행 ID", "checkedAt", "null", "순서", "version", "감사");
+    assertThat(update.path("security").toString()).contains("session", "csrf");
+    assertThat(update.at("/requestBody/content/application~1json/schema/$ref").asText())
+        .endsWith(".WorkInput");
+  }
+
+  @Test
   void documentsArtistRequestIdentityResultsOwnershipAndExpiry() throws Exception {
     var api = contract();
     var create = api.at("/paths/~1api~1v1~1admin~1artists/post");

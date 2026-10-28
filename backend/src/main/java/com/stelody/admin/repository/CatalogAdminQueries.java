@@ -397,8 +397,13 @@ public class CatalogAdminQueries {
 
   public void extras(boolean song, UUID id, List<Link> links, List<Karaoke> karaoke) {
     String fk = song ? "song_id" : "work_id";
-    jdbc.sql("DELETE FROM app.external_link WHERE " + fk + "=:id").param("id", id).update();
-    jdbc.sql("DELETE FROM app.karaoke_entry WHERE " + fk + "=:id").param("id", id).update();
+    if (song) {
+      jdbc.sql("DELETE FROM app.external_link WHERE song_id=:id").param("id", id).update();
+      jdbc.sql("DELETE FROM app.karaoke_entry WHERE song_id=:id").param("id", id).update();
+    } else {
+      links = changedWorkLinks(id, links);
+      karaoke = changedWorkKaraoke(id, karaoke);
+    }
     for (var link : links)
       jdbc.sql(
               "INSERT INTO app.external_link(id,"
@@ -425,6 +430,57 @@ public class CatalogAdminQueries {
               "checked",
               entry.status() == KaraokeStatus.UNKNOWN ? null : Timestamp.from(Instant.now()))
           .update();
+  }
+
+  private List<Link> changedWorkLinks(UUID id, List<Link> inputs) {
+    var remaining = new ArrayList<>(links(false, id));
+    var changed = new ArrayList<Link>();
+    for (var input : inputs) {
+      var match =
+          remaining.stream()
+              .filter(
+                  row ->
+                      row.platform().equals(input.platform().strip())
+                          && row.url().equals(input.url().strip())
+                          && row.sourceUrl().equals(input.sourceUrl().strip()))
+              .findFirst();
+      if (match.isPresent()) remaining.remove(match.get());
+      else changed.add(input);
+    }
+    for (var row : remaining)
+      jdbc.sql("DELETE FROM app.external_link WHERE work_id=:work AND id=:id")
+          .param("work", id)
+          .param("id", row.id())
+          .update();
+    return changed;
+  }
+
+  private List<Karaoke> changedWorkKaraoke(UUID id, List<Karaoke> inputs) {
+    var remaining = new ArrayList<>(karaoke(false, id));
+    var changed = new ArrayList<Karaoke>();
+    for (var input : inputs) {
+      var match =
+          remaining.stream()
+              .filter(
+                  row ->
+                      row.provider().equals(input.provider().name())
+                          && row.status().equals(input.status().name())
+                          && Objects.equals(row.number(), stripped(input.number()))
+                          && Objects.equals(row.sourceUrl(), stripped(input.sourceUrl())))
+              .findFirst();
+      if (match.isPresent()) remaining.remove(match.get());
+      else changed.add(input);
+    }
+    for (var row : remaining)
+      jdbc.sql("DELETE FROM app.karaoke_entry WHERE work_id=:work AND id=:id")
+          .param("work", id)
+          .param("id", row.id())
+          .update();
+    return changed;
+  }
+
+  private String stripped(String value) {
+    return value == null ? null : value.strip();
   }
 
   public void audit(
