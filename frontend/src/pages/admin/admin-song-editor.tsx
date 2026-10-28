@@ -42,6 +42,8 @@ import { Hint, SongCard, SongNav } from './song-ui'
 import { SongSelector, type Selection } from './song-selector'
 import { SongEditorFields } from './song-editor-fields'
 import { SongComparison, type Comparison } from './song-comparison'
+import { WorkArtistEditor } from './work-artist-editor'
+import { cleanGuard } from './use-catalog-write'
 
 function useEditorSession() {
   return useQuery({
@@ -116,6 +118,8 @@ function SongEditor({
   const [alias, setAlias] = useState(''),
     [aliasError, setAliasError] = useState('')
   const [selector, setSelector] = useState<Selection | null>(null)
+  const [workOpen, setWorkOpen] = useState(false)
+  const [workGuard, setWorkGuard] = useState(cleanGuard)
   const [errors, setErrors] = useState<Record<string, string>>({}),
     [notice, setNotice] = useState('')
   const [accessError, setAccessError] = useState<unknown>(null)
@@ -158,36 +162,43 @@ function SongEditor({
       client.getQueryState(sessionOptions.queryKey)?.status === 'success',
     [client, current],
   )
-  const dirty = !equal(toDraft(base), draft) || !!reason || !!alias || uncertain
+  const dirty =
+    !equal(toDraft(base), draft) ||
+    !!reason ||
+    !!alias ||
+    uncertain ||
+    workGuard.dirty
+  const allBusy = busy || workGuard.busy
+  const anyUncertain = uncertain || workGuard.uncertain
   useEffect(
     () =>
       pageActions?.register((action) => {
-        if (current() && (dirty || busyRef.current)) {
+        if (current() && (dirty || busyRef.current || workGuard.busy)) {
           setPendingAction(() => action)
           return true
         }
         action()
         return false
       }),
-    [pageActions, current, dirty],
+    [pageActions, current, dirty, workGuard.busy],
   )
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       !leaving.current &&
       current() &&
-      (busyRef.current || dirty) &&
+      (busyRef.current || workGuard.busy || dirty) &&
       (currentLocation.pathname !== nextLocation.pathname ||
         currentLocation.search !== nextLocation.search),
   )
   useBeforeUnload(
     useCallback(
       (event: BeforeUnloadEvent) => {
-        if (current() && (dirty || busyRef.current)) {
+        if (current() && (dirty || busyRef.current || workGuard.busy)) {
           event.preventDefault()
           event.returnValue = ''
         }
       },
-      [current, dirty],
+      [current, dirty, workGuard.busy],
     ),
   )
   const labels = useQuery({
@@ -481,6 +492,7 @@ function SongEditor({
                       errors={errors}
                       change={change}
                       select={setSelector}
+                      editWorkArtists={() => setWorkOpen(true)}
                       names={labels.data?.names ?? {}}
                       workArtists={labels.data?.workArtists ?? []}
                       labelState={
@@ -585,10 +597,26 @@ function SongEditor({
           )}
         </>
       )}
+      {workOpen && (
+        <WorkArtistEditor
+          user={user}
+          workId={draft.workId}
+          enabled={!session.isError}
+          onAccessError={deny}
+          onState={setWorkGuard}
+          onSaved={() => {
+            if (accessVerified()) void labels.refetch()
+          }}
+          onDismiss={() => {
+            setWorkOpen(false)
+            setWorkGuard(cleanGuard)
+          }}
+        />
+      )}
       {(blocker.state === 'blocked' || pendingAction) && (
         <Dialog
           labelledBy="song-leave-title"
-          busy={busy}
+          busy={allBusy}
           onDismiss={() => {
             setPendingAction(null)
             if (blocker.state === 'blocked') blocker.reset()
@@ -596,16 +624,16 @@ function SongEditor({
         >
           <div className="grid gap-6">
             <h2 id="song-leave-title" className="text-lg font-bold">
-              {busy
+              {allBusy
                 ? '변경사항을 저장하고 있어요'
-                : uncertain
+                : anyUncertain
                   ? '저장 결과를 확인하지 않고 나갈까요?'
                   : '변경사항을 버리고 이동할까요?'}
             </h2>
             <p className="text-sm text-muted">
-              {busy
+              {allBusy
                 ? '저장이 끝날 때까지 이동할 수 없습니다.'
-                : uncertain
+                : anyUncertain
                   ? '요청이 이미 반영됐을 수 있습니다. 성공 여부를 확인하지 않고 이 화면을 나갑니다.'
                   : '저장하지 않은 입력은 사라집니다. 예정한 화면으로 이동합니다.'}
             </p>
@@ -616,12 +644,12 @@ function SongEditor({
                   setPendingAction(null)
                   if (blocker.state === 'blocked') blocker.reset()
                 }}
-                disabled={busy}
+                disabled={allBusy}
               >
                 계속 수정
               </Button>
               <Button
-                disabled={busy}
+                disabled={allBusy}
                 onClick={() => {
                   leaving.current = true
                   if (pendingAction) {
