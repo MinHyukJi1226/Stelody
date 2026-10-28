@@ -44,7 +44,7 @@ for (const mode of ['anonymous', 'member', 'inactive', 'error'] as const) {
     if (mode === 'error') {
       state.sessionError = 0
       await page.getByRole('button', { name: '다시 조회' }).click()
-      await expect(page.getByText('신규 후보 2', { exact: true })).toBeVisible()
+      await expect(page.getByText('신규 후보 1', { exact: true })).toBeVisible()
     }
   })
 }
@@ -83,7 +83,6 @@ test('ACTIVE ADMIN의 헤더·모바일 메뉴 진입과 작업함 집계를 연
 })
 
 for (const [path, title, text] of [
-  ['reviews', '신규 검토', '신규 후보'],
   ['registrations', '정보 보완', '정보 보완 곡'],
   ['special-event-reviews', '특별 목적 후보', '특별 후보'],
   ['failures', '수집 실패 작업', 'QUOTA_EXHAUSTED'],
@@ -116,10 +115,6 @@ for (const [path, title, text] of [
       .filter((u) => u.searchParams.get('page') === '1')
       .at(-1)!
     expect(call.searchParams.get('size')).toBe('20')
-    if (path === 'reviews') {
-      expect(call.searchParams.get('status')).toBe('PENDING')
-      expect(call.searchParams.get('disposition')).toBe('REVIEW')
-    }
     if (path === 'registrations') {
       expect(call.searchParams.get('incompleteOnly')).toBe('true')
       await expect(
@@ -209,7 +204,7 @@ test('목록 로딩·빈 목록과 실제 집계 0을 구분한다', async ({ pa
   state.empty = true
   release()
   await expect(
-    page.getByText('목록이 비어 있어요', { exact: true }),
+    page.getByText('신규 검토 대상이 없습니다.', { exact: true }),
   ).toBeVisible()
   state.zeroCounts = true
   await page.goto('/admin')
@@ -256,7 +251,10 @@ test('관리자 정상 화면은 양쪽 테마에서 가로 넘침이 없다', a
   ]) {
     await page.goto(path)
     await expect(
-      page.getByText('관리자 · 조회 전용', { exact: true }),
+      page.getByText(
+        path === '/admin/reviews' ? '등록할 후보 선택' : '관리자 · 조회 전용',
+        { exact: true },
+      ),
     ).toBeVisible()
     await expect(page.getByText('불러오는 중…', { exact: true })).toHaveCount(0)
     for (const theme of ['light', 'dark']) {
@@ -313,7 +311,7 @@ test('잘못된 성공 응답을 빈 목록·0건으로 표시하지 않는다',
   for (const [path, apiPath] of [
     ['', 'inbox'],
     ['collection', 'collection-status'],
-    ['reviews', 'reviews'],
+    ['reviews', 'completion'],
     ['registrations', 'registrations'],
     ['special-event-reviews', 'special-event-reviews'],
     ['failures', 'collection-failures'],
@@ -321,7 +319,12 @@ test('잘못된 성공 응답을 빈 목록·0건으로 표시하지 않는다',
     state.malformedPath = apiPath!
     await page.goto(`/admin/${path}`)
     await expect(
-      page.getByRole('heading', { name: '조회하지 못했어요' }),
+      page.getByRole('heading', {
+        name:
+          path === 'reviews'
+            ? '검토 대상을 불러오지 못했어요'
+            : '조회하지 못했어요',
+      }),
     ).toBeVisible()
     await expect(
       page.getByText('목록이 비어 있어요', { exact: true }),

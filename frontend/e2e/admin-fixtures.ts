@@ -133,6 +133,39 @@ export async function mockAdmin(page: Page) {
             }
           : collection,
       })
+    if (path === 'completion')
+      return route.fulfill({
+        json: {
+          items: state.empty
+            ? []
+            : [
+                {
+                  id: makeSong(993).id,
+                  version: 1,
+                  youtubeId: 'candidate',
+                  title: '신규 후보 1',
+                  channelId: null,
+                  channelName: '아야츠노 유니',
+                  publishedAt: null,
+                  thumbnailUrl: null,
+                  durationSeconds: null,
+                  observedAt: null,
+                  availability: 'PUBLIC',
+                  disposition: 'REVIEW',
+                  suggestedType: 'COVER',
+                  ruleVersion: '1',
+                  decisionReason: '검토 필요',
+                  status: 'PENDING',
+                  reviewNote: null,
+                  firstSeenAt: '2026-10-23T15:05:00Z',
+                  sourceExpired: false,
+                  registeredVideoId: null,
+                },
+              ],
+          hasMore: false,
+          channelMembers: {},
+        },
+      })
     const paged = {
       page: number,
       size: 20,

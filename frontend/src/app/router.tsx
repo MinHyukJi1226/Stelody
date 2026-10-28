@@ -50,8 +50,9 @@ export const router = createBrowserRouter([
           },
           {
             path: 'reviews',
+            handle: { preserveAdminDraft: true },
             lazy: async () => ({
-              Component: (await import('@/pages/admin/admin-lists'))
+              Component: (await import('@/pages/admin/admin-review-completion'))
                 .AdminReviewsPage,
             }),
           },

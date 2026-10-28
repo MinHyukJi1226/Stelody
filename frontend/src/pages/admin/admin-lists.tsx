@@ -8,7 +8,6 @@ import { adminPaths, type FailureWindow } from '@/features/admin/api'
 import {
   adminFailureOptions,
   adminRegistrationOptions,
-  adminReviewOptions,
   adminSpecialOptions,
   adminWindowOptions,
 } from '@/features/admin/queries'
@@ -33,42 +32,6 @@ function useAdminPage() {
   return { page, onPage, params }
 }
 
-export function AdminReviewsPage() {
-  const { page, onPage } = useAdminPage()
-  const query = useQuery(adminReviewOptions(useAdminUser(), page))
-  return (
-    <AdminScreen title="신규 검토" query={query}>
-      <p className="text-sm text-muted">검토 대기 · 검토 대상만 표시</p>
-      <p className="text-sm text-muted">
-        신규 검토 대상은 검토 대기 중인 후보입니다. 출처가 만료되어 보류된
-        후보는 이 목록에서 제외됩니다.
-      </p>
-      <AdminTable
-        widths={[40, 21, 23, 16]}
-        headers={['영상 제목', '채널', '최초 발견 시각 (KST)', '영상 상태']}
-        rows={(query.data?.items ?? []).map((item) => ({
-          key: item.id,
-          cells: [
-            item.title ?? '제목 정보 없음',
-            item.channelName ?? '채널 정보 없음',
-            <AdminTime value={item.firstSeenAt} />,
-            adminLabel(item.availability),
-          ],
-        }))}
-        empty="신규 검토 대상이 없습니다."
-      />
-      {query.data && (
-        <AdminPagination
-          page={page}
-          hasNext={query.data.hasNext}
-          pending={query.isFetching}
-          onPage={onPage}
-        />
-      )}
-      <ReadOnlyNote />
-    </AdminScreen>
-  )
-}
 export function AdminRegistrationsPage() {
   const location = useLocation()
   const { page, onPage } = useAdminPage()

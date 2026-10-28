@@ -93,8 +93,8 @@ export function AdminInboxPage() {
           <div className="admin-notice">
             <p>후속 기능 · 준비 중</p>
             <p className="text-muted">
-              신규 등록, 원곡·영상 편집, 검토 처리, 실패 작업 재시도, 자동 공개
-              변경은 후속 범위입니다.
+              신규 등록, 원곡·영상 편집, 개별 검토 처리, 실패 작업 재시도, 자동
+              공개 변경은 후속 범위입니다.
             </p>
           </div>
         </>

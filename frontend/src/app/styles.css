@@ -405,3 +405,32 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* AD06 · fixed candidate selection. */
+.review-candidate {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--color-bg);
+  min-width: 0;
+}
+.review-candidate-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.review-candidate-choice input {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.review-candidate-selected {
+  background: var(--color-brand-fill);
+  color: var(--color-on-accent);
+}
