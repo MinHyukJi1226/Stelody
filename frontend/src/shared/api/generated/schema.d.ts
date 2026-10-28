@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+  '/api/v1/admin/artist-registrations/{requestId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 아티스트 등록 요청 결과 확인
+     * @description 등록 전에 보관한 Idempotency-Key UUID로 본인이 접수한 요청만 조회합니다. 로그인한 현재 ADMIN 역할이 필요하며 다른 관리자·미접수 ID는 모두 NOT_PROCESSED이고 등록 정보는 반환하지 않습니다. 읽기 전용이며 등록·재시도·정리를 실행하지 않습니다. NOT_PROCESSED는 본인 접수 기록 없음, PROCESSING은 처리 중(3초 간격 재조회), COMPLETED는 artistId에 생성된 UUID 반환, FAILED는 errorCode로 실패를 안내합니다. NOT_PROCESSED의 createdAt/expiresAt/finishedAt은 null이며 결과 조회 장애·401·403·503과 구분해야 합니다. 완료·실패의 pollAfterSeconds는 null입니다. 결과는 최초 접수부터 24시간이며 조회·재전송으로 연장되지 않고 이후 410 ARTIST_REGISTRATION_RESULT_EXPIRED입니다. 만료 상세 정보는 정리하지만 요청 UUID·본문 해시·소유자·접수/만료 시각의 최소 기록은 유지하므로 동일 ID 재등록도 410입니다. 세션 만료 후에는 같은 관리자 계정으로 로그인해 조회할 수 있습니다. 프론트는 요청 ID와 원래 본문 전체를 보관해 새로고침 후 조회·재전송에 사용하며 오류를 미처리로 바꾸거나 새 ID로 반복 접수하지 않습니다. 중단된 PROCESSING 중 2분이 지난 비활성 요청은 1분 간격 정리에서 FAILED/ARTIST_REGISTRATION_INTERRUPTED로 전환하고 실행 중 잠긴 요청은 건너뜁니다. FAILED는 생성 트랜잭션이 반영되지 않은 상태이며 오류를 수정한 후 새 ID로 별도 요청할 수 있습니다. 저장소 장애는 503이며 결과를 단정할 수 없습니다.
+     *
+     *     현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_admin_artist_registrations_requestId']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/admin/artists': {
     parameters: {
       query?: never
@@ -19,7 +41,9 @@ export interface paths {
     put?: never
     /**
      * 외부 아티스트 등록
-     * @description 현재 ADMIN 역할이 필요합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     * @description 응답 유실 복구가 필요하면 등록 전에 프론트가 생성·보관한 UUID를 Idempotency-Key 헤더로 전달합니다. 본문(version=0,name,aliases,reason)은 기존 형식입니다. 최초 성공은 201, 동일한 관리자·요청 ID·본문 재전송은 추가 생성·감사 없이 같은 아티스트 ID의 현재 정보와 duplicates를 200으로 반환합니다. Idempotency-Replayed는 최초 false·재전송 true입니다. 같은 ID의 다른 본문은 409 ARTIST_REGISTRATION_REQUEST_CONFLICT입니다. 처리 중 재전송은 409 ARTIST_REGISTRATION_PROCESSING이며 결과 API를 3초 간격으로 조회합니다. 실패한 요청을 같은 ID로 재실행하지 않습니다. 헤더 생략 시 기존 201 등록 계약을 유지하지만 결과 조회·중복 방지는 제공하지 않습니다. 인증·CSRF·JSON/Bean 검증 실패 등 접수 전 거절은 결과 기록이 없을 수 있으므로 NOT_PROCESSED로 조회됩니다. 저장소 장애는 결과 없음으로 판단하지 않습니다. 아티스트와 COMPLETED 결과 기록은 같은 트랜잭션입니다.
+     *
+     *     현재 ADMIN 역할이 필요합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     post: operations['post_admin_artists']
     delete?: never
@@ -500,6 +524,34 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/admin/reviews/completion': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 일괄 등록·정리 대상 확인
+     * @description 신규 검토(PENDING+유효 REVIEW)의 영상 정보·ID·버전을 최대 10000건 반환합니다. channelMembers는 채널 연결 참고 정보이며 참여자 확정 근거가 아닙니다. 이 목록을 검토 단위로 고정해 페이지 간 선택을 유지합니다. hasMore가 true면 나머지는 다음 검토에서 처리합니다. 조회 이후 새로 들어온 후보는 삭제 대상에 포함되지 않습니다.
+     *
+     *     현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_admin_reviews_completion']
+    put?: never
+    /**
+     * 선택 곡 일괄 등록·미선택 후보 영구 삭제
+     * @description 대상 확인 응답 전체에서 id·version만 추린 items(최대 10000건), 새 requestId(UUID), selected(1~100건의 후보 id만)를 전달합니다. song·kind·곡별 사유는 입력하지 않습니다. 서버가 수집 정보와 현재 수집 분류 규칙으로 곡·대표 영상을 생성하고 items 중 미선택 신규 검토 후보와 종속 검토 이력을 영구 삭제합니다. 저장된 COVER/ORIGINAL 제안을 사용하고 UNKNOWN은 현재 제목 분류 규칙으로 재판정합니다. 재판정 후에도 UNKNOWN이면 기본 COVER로 등록하고 관리자가 추후 수정합니다. 이 기본값은 관리자 선택 등록에만 적용하며 수집 분류·자동 공개 정책은 변경하지 않습니다. 현재 분류와 충돌하면 409 CANDIDATE_CLASSIFICATION_REQUIRED로 전체 취소합니다. 곡명은 NFKC·공백 정리 후 명시적인 솔로 커버 크레딧만 제거하며 불명확하면 영상 제목을 초안으로 유지합니다. 빈 곡명·300자 초과·검색 정규화 400자 초과는 임의로 자르지 않고 같은 409로 거절합니다. fieldErrors의 selected[i].id와 CONTENT_TYPE_CONFLICT·CONTENT_REQUIRES_REVIEW·TITLE_REQUIRES_EDIT로 후보와 사유를 식별합니다. COVER는 OFFICIAL_COVER, ORIGINAL은 제목에 MV/music video/뮤직비디오만 있으면 OFFICIAL_MV, audio/음원만 있으면 AUDIO이며 둘 다 있거나 없으면 OTHER로 저장합니다. 기존 솔로 크레딧 규칙으로 한 멤버가 명확하고 MEMBER 채널의 연결과도 일치할 때만 참여자를 확인합니다. 단체·유닛·듀엣·외부 참여·모호한 크레딧은 채널 소유자로 확정하지 않고 멤버·외부 아티스트 배열을 비워 둡니다. 후보에는 자동 공개에 필요한 방송 메타데이터가 없으므로 이 API는 항상 DRAFT로 저장합니다. 기존 자동 공개 기능·설정은 변경하지 않습니다. 원곡 보완 후에도 확정하지 못한 원곡은 null이며 별칭·외부 아티스트·곡별 링크·노래방은 빈 배열, 검색 확인은 UNCHECKED, 특별 목적은 미설정(false/null)이며 추측해 채우지 않습니다. 누락 정보는 기존 관리자 곡 목록·상세의 missingFields로 보완하고 기존 수정 API로 수정·공개합니다. 솔로 자동 등록 전용 목록에는 추가하지 않습니다. 서버 고정 사유로 곡·후보별 감사 기록과 요청 ID별 BATCH_REGISTER 감사 기록을 남깁니다. COVER는 등록 시 YouTube snippet.description의 명시적 원곡자·원곡 링크를 우선 확인하고, 기존 원곡 제목·별칭 및 원곡자·링크 크레딧을 대조한 후 부족한 정보는 YouTube 제목 검색으로 보완합니다. 원곡 링크가 있으면 해당 영상을 확인하며 임의의 설명란 URL에 접속하지 않습니다. 검색 결과 최대 5건에서 곡명 일치와 아티스트/채널 표기 일치 또는 배급사 자동 생성 Topic 크레딧을 확인합니다. 기존 원곡 재사용에는 같은 원곡 영상 ID 또는 일치하는 원곡자 크레딧이 필요하며 제목·별칭만으로 재사용하지 않습니다. 서로 다른 원곡 후보가 남으면 연결하지 않습니다. 일반 Original 표기의 텍스트는 필수 가수 검색 조건으로 사용하지 않으며 명시적 원곡자만 가수 조건으로 사용합니다. 일반 Original 표기의 곡명을 가수로 확정하지 않으며 믹싱·일러스트 크레딧을 원곡자로 사용하지 않습니다. 기존 원곡·아티스트를 재사용하고 비어 있는 원곡자·YouTube 링크만 보완하며 기존 제목·별칭·크레딧·링크·노래방은 덮어쓰지 않습니다. 새 원곡·아티스트·링크에는 근거 URL을 감사 기록 또는 sourceUrl에 남깁니다. 외부 조회는 묶음 전체 최대 20초, 제목별 검색 1회·첫 페이지로 제한하고 동일 묶음의 중복 조회를 재사용합니다. API 키 없음·한도 초과·통신 실패·조회 시간 초과·정보 미확정은 등록 오류가 아니며 확보하지 못한 항목은 비워 둡니다. 한도/통신 실패 후 해당 묶음의 추가 외부 조회는 중단합니다. 설명란 원문은 요청 중에만 사용하고 저장하지 않습니다. 원곡 보완과 감사 기록도 같은 등록 트랜잭션에 포함되며 재전송 때 외부 조회를 다시 하지 않습니다. 등록·삭제·감사 기록은 한 트랜잭션이며 하나라도 실패하거나 대상이 변경되면 전체 취소합니다. 새 후보·기존 등록 곡·등록 완료 후보·보류/제외 후보·수집 지점은 보존합니다. 관리자·CSRF가 필요합니다. 변경 충돌은 409 REVIEW_VERSION_CONFLICT이며 대상을 다시 확인합니다. 응답 유실 시 requestId와 본문 전체를 그대로 재전송합니다. 같은 요청은 등록된 후보에 보관한 요청 ID·본문 해시로 확인해 replayed=true, 기존 registeredSongs와 deletedCount=0(추가 삭제 없음)을 반환하며 정보 재구성·등록·삭제·감사 기록을 다시 하지 않습니다. 같은 요청의 내용을 바꾸면 충돌입니다.
+     *
+     *     현재 ADMIN 역할이 필요합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    post: operations['post_admin_reviews_completion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/admin/reviews/{id}': {
     parameters: {
       query?: never
@@ -846,6 +898,50 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/auth/callback/google-reauthentication': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 회원 탈퇴 Google 재인증 콜백
+     * @description 브라우저 전용 OAuth 콜백. 새 프론트 복귀 흐름은 303 Location으로 복귀합니다. reauthResult=success/cancelled/failed. 취소·실패 시 reauthError는 SESSION_EXPIRED, REAUTHENTICATION_REQUEST_INVALID, REAUTHENTICATION_REQUEST_EXPIRED, REAUTHENTICATION_ACCOUNT_MISMATCH, GOOGLE_REAUTHENTICATION_CANCELLED, GOOGLE_REAUTHENTICATION_FAILED, ACCOUNT_STORAGE_UNAVAILABLE 중 하나입니다. 결과는 안내용이며 GET /api/v1/me/withdrawal-confirmation으로 실제 재인증 여부·expiresAt을 확인하고 CSRF를 다시 조회합니다. 최종 버튼에서만 DELETE /api/v1/me를 호출합니다. 인증 코드·state·토큰·내부 오류 원문을 복귀 URL로 전달하지 않습니다. 저장된 returnTo를 확인할 수 없는 잘못된 state·세션 만료는 기본 /api/v1/me/withdrawal-confirmation으로 복귀합니다. local은 등록된 localhost origin, default는 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN 또는 같은 origin을 사용합니다. 콜백은 세션을 자동 복구하지 않으며 재인증은 30일 로그인 유지 기한을 연장하지 않습니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_auth_callback_google_reauthentication']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/callback/google-reauthentication-local': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 회원 탈퇴 Google 재인증 콜백
+     * @description 브라우저 전용 OAuth 콜백. 새 프론트 복귀 흐름은 303 Location으로 복귀합니다. reauthResult=success/cancelled/failed. 취소·실패 시 reauthError는 SESSION_EXPIRED, REAUTHENTICATION_REQUEST_INVALID, REAUTHENTICATION_REQUEST_EXPIRED, REAUTHENTICATION_ACCOUNT_MISMATCH, GOOGLE_REAUTHENTICATION_CANCELLED, GOOGLE_REAUTHENTICATION_FAILED, ACCOUNT_STORAGE_UNAVAILABLE 중 하나입니다. 결과는 안내용이며 GET /api/v1/me/withdrawal-confirmation으로 실제 재인증 여부·expiresAt을 확인하고 CSRF를 다시 조회합니다. 최종 버튼에서만 DELETE /api/v1/me를 호출합니다. 인증 코드·state·토큰·내부 오류 원문을 복귀 URL로 전달하지 않습니다. 저장된 returnTo를 확인할 수 없는 잘못된 state·세션 만료는 기본 /api/v1/me/withdrawal-confirmation으로 복귀합니다. local은 등록된 localhost origin, default는 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN 또는 같은 origin을 사용합니다. 콜백은 세션을 자동 복구하지 않으며 재인증은 30일 로그인 유지 기한을 연장하지 않습니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_auth_callback_google_reauthentication_local']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/auth/csrf': {
     parameters: {
       query?: never
@@ -1174,6 +1270,49 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/me/withdrawal-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * 탈퇴 전 결과 조회 ID·권한 발급
+     * @description 현재 로그인 계정의 자료만 접근합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     *     탈퇴 전에 빈 본문으로 호출하여 id·queryToken·expiresAt을 먼저 확보합니다. 이 API는 탈퇴·재인증·YouTube 철회를 실행하지 않습니다. 발급 시점부터 24시간이며 재조회·재인증으로 연장하지 않습니다. 프론트는 DELETE 전에 같은 탭 sessionStorage에 세 값을 저장합니다. 발급 응답 유실 시 DELETE하지 않고 새 발급을 받습니다. queryToken은 256비트 조회 전용 권한이며 서버에는 해시만 저장합니다. 다른 요청이나 계정 조회·탈퇴 실행에는 사용할 수 없습니다.
+     */
+    post: operations['post_me_withdrawal_requests']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/me/youtube-exports/active': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 현재 사용자의 기존 활성 내보내기 작업 조회
+     * @description 새 접수를 차단하는 QUEUED·RUNNING·FAILED·UNCERTAIN 작업 한 건을 조회합니다. 200 {job:null}은 대상 작업 없음이며, 작업이 있으면 기존 Job 전체를 반환합니다. SUCCEEDED·CANCELLED는 제외합니다. 작업·연결 상태를 변경하거나 외부 YouTube API를 호출하지 않으며 기능 비활성화·연결 재동의 필요 상태에서도 조회할 수 있습니다. 다른 탭·기기 및 접수 응답 유실·409 EXPORT_ALREADY_ACTIVE 이후 복구에 사용하며 job.playlistId로 원본 목록을 선택합니다. 조회 오류는 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않습니다.
+     *
+     *     현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_me_youtube_exports_active']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/me/youtube-exports/{id}': {
     parameters: {
       query?: never
@@ -1274,6 +1413,26 @@ export interface paths {
      * @description Google의 YouTube 추가 동의 콜백입니다. 프론트가 직접 호출하지 않습니다. 모든 인증 결과를 303 Location으로 안내합니다. 유효한 state는 사용자·시작 세션·callbackClient에 묶여 5분 내 한 번만 소비되고, 저장한 returnTo를 사용합니다. 세션 만료/누락·state 오류이면 사용자 지정 경로 대신 /library/youtube로 복귀합니다. local 경로는 서버에 등록한 로컬 origin으로, 일반 경로는 YOUTUBE_FRONTEND_ORIGIN(미설정이면 같은 origin)으로 이동합니다. local 미설정 시 일반 프론트 기본 경로에 INVALID_YOUTUBE_CLIENT를 안내합니다. Host·Forwarded·콜백의 returnTo는 사용하지 않습니다. 복귀 후 GET /api/v1/me/youtube/connection을 다시 조회하며, 401이면 Google 로그인 후 연결을 다시 시작합니다. 코드·토큰·state·내부 오류 원문은 Location에 포함하지 않고 Referrer-Policy: no-referrer와 Cache-Control: no-store를 사용합니다.
      */
     get: operations['get_me_youtube_callback']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/me/youtube/callback/local': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * YouTube 추가 동의 콜백
+     * @description Google의 YouTube 추가 동의 콜백입니다. 프론트가 직접 호출하지 않습니다. 모든 인증 결과를 303 Location으로 안내합니다. 유효한 state는 사용자·시작 세션·callbackClient에 묶여 5분 내 한 번만 소비되고, 저장한 returnTo를 사용합니다. 세션 만료/누락·state 오류이면 사용자 지정 경로 대신 /library/youtube로 복귀합니다. local 경로는 서버에 등록한 로컬 origin으로, 일반 경로는 YOUTUBE_FRONTEND_ORIGIN(미설정이면 같은 origin)으로 이동합니다. local 미설정 시 일반 프론트 기본 경로에 INVALID_YOUTUBE_CLIENT를 안내합니다. Host·Forwarded·콜백의 returnTo는 사용하지 않습니다. 복귀 후 GET /api/v1/me/youtube/connection을 다시 조회하며, 401이면 Google 로그인 후 연결을 다시 시작합니다. 코드·토큰·state·내부 오류 원문은 Location에 포함하지 않고 Referrer-Policy: no-referrer와 Cache-Control: no-store를 사용합니다.
+     */
+    get: operations['get_me_youtube_callback_local']
     put?: never
     post?: never
     delete?: never
@@ -1492,113 +1651,6 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/api/v1/me/youtube/callback/local': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * YouTube 추가 동의 콜백
-     * @description Google의 YouTube 추가 동의 콜백입니다. 프론트가 직접 호출하지 않습니다. 모든 인증 결과를 303 Location으로 안내합니다. 유효한 state는 사용자·시작 세션·callbackClient에 묶여 5분 내 한 번만 소비되고, 저장한 returnTo를 사용합니다. 세션 만료/누락·state 오류이면 사용자 지정 경로 대신 /library/youtube로 복귀합니다. local 경로는 서버에 등록한 로컬 origin으로, 일반 경로는 YOUTUBE_FRONTEND_ORIGIN(미설정이면 같은 origin)으로 이동합니다. local 미설정 시 일반 프론트 기본 경로에 INVALID_YOUTUBE_CLIENT를 안내합니다. Host·Forwarded·콜백의 returnTo는 사용하지 않습니다. 복귀 후 GET /api/v1/me/youtube/connection을 다시 조회하며, 401이면 Google 로그인 후 연결을 다시 시작합니다. 코드·토큰·state·내부 오류 원문은 Location에 포함하지 않고 Referrer-Policy: no-referrer와 Cache-Control: no-store를 사용합니다.
-     */
-    get: operations['get_me_youtube_callback_local']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/api/v1/me/youtube-exports/active': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * 현재 사용자의 기존 활성 내보내기 작업 조회
-     * @description 새 접수를 차단하는 QUEUED·RUNNING·FAILED·UNCERTAIN 작업 한 건을 조회합니다. 200 {job:null}은 대상 작업 없음이며, 작업이 있으면 기존 Job 전체를 반환합니다. SUCCEEDED·CANCELLED는 제외합니다. 작업·연결 상태를 변경하거나 외부 YouTube API를 호출하지 않으며 기능 비활성화·연결 재동의 필요 상태에서도 조회할 수 있습니다. 다른 탭·기기 및 접수 응답 유실·409 EXPORT_ALREADY_ACTIVE 이후 복구에 사용하며 job.playlistId로 원본 목록을 선택합니다. 조회 오류는 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않습니다.
-     *
-     *     현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     */
-    get: operations['get_me_youtube_exports_active']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/api/v1/auth/callback/google-reauthentication': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * 회원 탈퇴 Google 재인증 콜백
-     * @description 브라우저 전용 OAuth 콜백. 새 프론트 복귀 흐름은 303 Location으로 복귀합니다. reauthResult=success/cancelled/failed. 취소·실패 시 reauthError는 SESSION_EXPIRED, REAUTHENTICATION_REQUEST_INVALID, REAUTHENTICATION_REQUEST_EXPIRED, REAUTHENTICATION_ACCOUNT_MISMATCH, GOOGLE_REAUTHENTICATION_CANCELLED, GOOGLE_REAUTHENTICATION_FAILED, ACCOUNT_STORAGE_UNAVAILABLE 중 하나입니다. 결과는 안내용이며 GET /api/v1/me/withdrawal-confirmation으로 실제 재인증 여부·expiresAt을 확인하고 CSRF를 다시 조회합니다. 최종 버튼에서만 DELETE /api/v1/me를 호출합니다. 인증 코드·state·토큰·내부 오류 원문을 복귀 URL로 전달하지 않습니다. 저장된 returnTo를 확인할 수 없는 잘못된 state·세션 만료는 기본 /api/v1/me/withdrawal-confirmation으로 복귀합니다. local은 등록된 localhost origin, default는 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN 또는 같은 origin을 사용합니다. 콜백은 세션을 자동 복구하지 않으며 재인증은 30일 로그인 유지 기한을 연장하지 않습니다.
-     *
-     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     */
-    get: operations['get_auth_callback_google_reauthentication']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/api/v1/auth/callback/google-reauthentication-local': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * 회원 탈퇴 Google 재인증 콜백
-     * @description 브라우저 전용 OAuth 콜백. 새 프론트 복귀 흐름은 303 Location으로 복귀합니다. reauthResult=success/cancelled/failed. 취소·실패 시 reauthError는 SESSION_EXPIRED, REAUTHENTICATION_REQUEST_INVALID, REAUTHENTICATION_REQUEST_EXPIRED, REAUTHENTICATION_ACCOUNT_MISMATCH, GOOGLE_REAUTHENTICATION_CANCELLED, GOOGLE_REAUTHENTICATION_FAILED, ACCOUNT_STORAGE_UNAVAILABLE 중 하나입니다. 결과는 안내용이며 GET /api/v1/me/withdrawal-confirmation으로 실제 재인증 여부·expiresAt을 확인하고 CSRF를 다시 조회합니다. 최종 버튼에서만 DELETE /api/v1/me를 호출합니다. 인증 코드·state·토큰·내부 오류 원문을 복귀 URL로 전달하지 않습니다. 저장된 returnTo를 확인할 수 없는 잘못된 state·세션 만료는 기본 /api/v1/me/withdrawal-confirmation으로 복귀합니다. local은 등록된 localhost origin, default는 GOOGLE_REAUTHENTICATION_FRONTEND_ORIGIN 또는 같은 origin을 사용합니다. 콜백은 세션을 자동 복구하지 않으며 재인증은 30일 로그인 유지 기한을 연장하지 않습니다.
-     *
-     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     */
-    get: operations['get_auth_callback_google_reauthentication_local']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/api/v1/me/withdrawal-requests': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /**
-     * 탈퇴 전 결과 조회 ID·권한 발급
-     * @description 현재 로그인 계정의 자료만 접근합니다. X-CSRF-TOKEN 헤더가 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     *     탈퇴 전에 빈 본문으로 호출하여 id·queryToken·expiresAt을 먼저 확보합니다. 이 API는 탈퇴·재인증·YouTube 철회를 실행하지 않습니다. 발급 시점부터 24시간이며 재조회·재인증으로 연장하지 않습니다. 프론트는 DELETE 전에 같은 탭 sessionStorage에 세 값을 저장합니다. 발급 응답 유실 시 DELETE하지 않고 새 발급을 받습니다. queryToken은 256비트 조회 전용 권한이며 서버에는 해시만 저장합니다. 다른 요청이나 계정 조회·탈퇴 실행에는 사용할 수 없습니다.
-     */
-    post: operations['post_me_withdrawal_requests']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
   '/api/v1/withdrawal-requests/{id}': {
     parameters: {
       query?: never
@@ -1668,6 +1720,36 @@ export interface components {
       reason?: string
       /** Format: uuid */
       videoId?: string
+    }
+    'com.stelody.admin.dto.ArtistRegistrationDtos.Result': {
+      /**
+       * Format: uuid
+       * @description COMPLETED일 때 생성된 아티스트 UUID. 이름 검색으로 추정하지 않습니다.
+       */
+      artistId: string | null
+      /** Format: date-time */
+      createdAt: string | null
+      /** @description FAILED일 때 정규화한 업무 오류 코드. 내부 오류·입력값은 포함하지 않습니다. */
+      errorCode: string | null
+      /**
+       * Format: date-time
+       * @description 최초 접수 후 24시간. 재조회·재전송으로 연장되지 않습니다.
+       */
+      expiresAt: string | null
+      /** Format: date-time */
+      finishedAt: string | null
+      /**
+       * Format: int32
+       * @description PROCESSING일 때 3초 간격으로 조회. 그 외에는 null.
+       */
+      pollAfterSeconds: number | null
+      /** Format: uuid */
+      requestId: string
+      /**
+       * @description NOT_PROCESSED: 본인의 접수 기록 없음, PROCESSING: 처리 중, COMPLETED: 등록 완료, FAILED: 등록 실패. 조회 오류와 미처리는 별개입니다.
+       * @enum {string}
+       */
+      status: 'NOT_PROCESSED' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
     }
     'com.stelody.admin.dto.CatalogAdminDtos.Artist': {
       aliases: string[]
@@ -2342,10 +2424,27 @@ export interface components {
       /** Format: int64 */
       version?: number
     }
+    'com.stelody.export.dto.ExportDtos.ActiveJob': {
+      /** @description 현재 계정의 QUEUED·RUNNING·FAILED·UNCERTAIN 작업. 대상이 없으면 null이며 조회 실패는 HTTP 오류로 구분합니다. */
+      job: components['schemas']['com.stelody.export.dto.ExportDtos.Job'] | null
+    }
     'com.stelody.export.dto.ExportDtos.Authorization': {
       authorizationUrl: string
       /** Format: date-time */
       expiresAt: string
+    }
+    'com.stelody.export.dto.ExportDtos.AuthorizationRequest': {
+      /**
+       * @description default: 운영 콜백, local: 서버에 설정한 localhost 개발 콜백. 생략/null이면 default. local 미설정·그 외 값은 400 INVALID_YOUTUBE_CLIENT.
+       * @default default
+       * @enum {string|null}
+       */
+      callbackClient: 'default' | 'local' | null
+      /**
+       * @description 내부 프론트 복귀 경로. 생략/null이면 /library/youtube. 최대 2048자. 외부 URL·//·역슬래시·제어문자·경로 우회·/api·/actuator는 허용하지 않습니다.
+       * @default /library/youtube
+       */
+      returnTo: string | null
     }
     'com.stelody.export.dto.ExportDtos.Connection': {
       /**
@@ -2483,15 +2582,15 @@ export interface components {
       collaborations: number
       /** Format: int64 */
       covers: number
-      /** Format: int64 */
-      originals: number
-      /** Format: int64 */
-      total: number
       /**
        * Format: int64
        * @description 이 멤버가 참여한 공개 곡 중 확정 참여자(멤버·외부 아티스트)가 2명 이상인 곡 수입니다. originals·covers와 중복될 수 있으며 게임·IP 협업곡 집계가 아닙니다.
        */
       multipleParticipants: number
+      /** Format: int64 */
+      originals: number
+      /** Format: int64 */
+      total: number
     }
     'com.stelody.member.dto.MemberDtos.Detail': {
       /** @description YouTube 채널 목록. 등록된 채널이 없으면 빈 배열이며 null은 반환하지 않습니다. */
@@ -2589,11 +2688,36 @@ export interface components {
       /** Format: int64 */
       version: number
     }
+    'com.stelody.review.dto.ReviewDtos.Candidate': {
+      /** Format: uuid */
+      id: string
+      /** Format: int64 */
+      version: number
+    }
     'com.stelody.review.dto.ReviewDtos.Change': {
       reason: string
       status: string
       /** Format: int64 */
       version: number
+    }
+    'com.stelody.review.dto.ReviewDtos.Complete': {
+      items: components['schemas']['com.stelody.review.dto.ReviewDtos.Candidate'][]
+      /** Format: uuid */
+      requestId: string
+      selected: components['schemas']['com.stelody.review.dto.ReviewDtos.Selection'][]
+    }
+    'com.stelody.review.dto.ReviewDtos.CompletionPreview': {
+      channelMembers: {
+        [key: string]: string
+      }
+      hasMore: boolean
+      items: components['schemas']['com.stelody.review.dto.ReviewDtos.Item'][]
+    }
+    'com.stelody.review.dto.ReviewDtos.CompletionResult': {
+      /** Format: int32 */
+      deletedCount: number
+      registeredSongs: components['schemas']['com.stelody.review.dto.ReviewDtos.RegisteredSong'][]
+      replayed: boolean
     }
     'com.stelody.review.dto.ReviewDtos.Item': {
       availability: string
@@ -2633,6 +2757,16 @@ export interface components {
       /** Format: int32 */
       size: number
     }
+    'com.stelody.review.dto.ReviewDtos.RegisteredSong': {
+      /** Format: uuid */
+      reviewId: string
+      /** Format: uuid */
+      songId: string
+    }
+    'com.stelody.review.dto.ReviewDtos.Selection': {
+      /** Format: uuid */
+      id: string
+    }
     'com.stelody.song.dto.SongDtos.Artist': {
       /** Format: uuid */
       id: string
@@ -2643,6 +2777,8 @@ export interface components {
       id: string
       /** @description 관리자가 확정한 기념·특별 목적 곡 여부입니다. 생일·데뷔·주년·신의상·게임 협업 등을 모두 포함하므로 true만으로 게임 콜라보를 의미하지 않습니다. 곡별 표시 문구는 specialEventLabel입니다. */
       isSpecialEvent: boolean
+      /** @description 확정된 스텔라이브 멤버와 외부 참여자의 합계가 2명 이상이면 true입니다. 게임·IP·브랜드 협업 여부를 뜻하지 않으며 콜라보 배지의 기준으로 사용하지 않습니다. */
+      multipleParticipants: boolean
       participants: components['schemas']['com.stelody.song.dto.SongDtos.Participant'][]
       /** Format: date-time */
       publishedAt: string
@@ -2660,8 +2796,6 @@ export interface components {
       /** Format: date-time */
       viewsObservedAt: string | null
       work: components['schemas']['com.stelody.song.dto.SongDtos.Work'] | null
-      /** @description 확정된 스텔라이브 멤버와 외부 참여자의 합계가 2명 이상이면 true입니다. 게임·IP·브랜드 협업 여부를 뜻하지 않으며 콜라보 배지의 기준으로 사용하지 않습니다. */
-      multipleParticipants: boolean
     }
     'com.stelody.song.dto.SongDtos.Detail': {
       karaoke: components['schemas']['com.stelody.song.dto.SongDtos.Karaoke'][]
@@ -2822,30 +2956,6 @@ export interface components {
       /** Format: date-time */
       expiresAt: string
     }
-    'com.stelody.user.dto.CurrentUser': {
-      email: string
-      /** Format: uuid */
-      id: string
-      role: string
-      status: string
-    }
-    'com.stelody.export.dto.ExportDtos.AuthorizationRequest': {
-      /**
-       * @description default: 운영 콜백, local: 서버에 설정한 localhost 개발 콜백. 생략/null이면 default. local 미설정·그 외 값은 400 INVALID_YOUTUBE_CLIENT.
-       * @default default
-       * @enum {string|null}
-       */
-      callbackClient: 'default' | 'local' | null
-      /**
-       * @description 내부 프론트 복귀 경로. 생략/null이면 /library/youtube. 최대 2048자. 외부 URL·//·역슬래시·제어문자·경로 우회·/api·/actuator는 허용하지 않습니다.
-       * @default /library/youtube
-       */
-      returnTo: string | null
-    }
-    'com.stelody.export.dto.ExportDtos.ActiveJob': {
-      /** @description 현재 계정의 QUEUED·RUNNING·FAILED·UNCERTAIN 작업. 대상이 없으면 null이며 조회 실패는 HTTP 오류로 구분합니다. */
-      job: components['schemas']['com.stelody.export.dto.ExportDtos.Job'] | null
-    }
     'com.stelody.user.controller.WithdrawalController.ReauthenticationInput': {
       /**
        * @description 서버에 등록된 콜백 선택
@@ -2855,6 +2965,13 @@ export interface components {
       callbackClient: 'default' | 'local' | null
       /** @description 사이트 내부 UI 경로. 생략하면 기존 재인증 확인 API로 복귀 */
       returnTo?: string | null
+    }
+    'com.stelody.user.dto.CurrentUser': {
+      email: string
+      /** Format: uuid */
+      id: string
+      role: string
+      status: string
     }
     'com.stelody.user.service.WithdrawalResults.Prepared': {
       /** Format: date-time */
@@ -2886,6 +3003,88 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  get_admin_artist_registrations_requestId: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        requestId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.admin.dto.ArtistRegistrationDtos.Result']
+        }
+      }
+      /** @description INVALID_CATALOG_REQUEST: 요청 UUID·본문 검증. 접수 전 거절은 결과 기록이 없을 수 있습니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 권한 또는 CSRF 검증에 실패했습니다.
+       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description ARTIST_REGISTRATION_RESULT_EXPIRED: 본인 요청의 최초 접수 후 24시간이 지났습니다. 같은 요청 ID를 다시 사용할 수 없습니다. */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description ARTIST_REGISTRATION_STORAGE_UNAVAILABLE: 저장소·연결 장애. 결과 없음으로 처리하지 말고 같은 요청 ID를 보관합니다. 실패한 요청 재전송은 원래 정규화 오류 상태·코드로 거절됩니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_admin_artists: {
     parameters: {
       query?: {
@@ -2955,7 +3154,10 @@ export interface operations {
   post_admin_artists: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        /** @description 등록 전 생성한 요청 UUID. 응답 유실 시 같은 값과 본문 전체를 유지합니다. 최초 접수 후 24시간이며 만료된 ID는 다시 사용할 수 없습니다. */
+        'Idempotency-Key'?: string
+      }
       path?: never
       cookie?: never
     }
@@ -2965,16 +3167,32 @@ export interface operations {
       }
     }
     responses: {
-      /** @description OK */
-      201: {
+      /** @description 동일한 요청 재전송. 추가 생성 없이 기존 아티스트 ID의 현재 정보와 duplicates를 반환합니다. */
+      200: {
         headers: {
+          /** @description 요청 ID를 사용한 최초 성공은 false, 동일 요청 재전송은 true */
+          'Idempotency-Replayed'?: boolean
           [name: string]: unknown
         }
         content: {
           'application/json': components['schemas']['com.stelody.admin.dto.CatalogAdminDtos.SavedCom.stelody.admin.dto.CatalogAdminDtos.Artist']
         }
       }
-      /** @description INVALID_CATALOG_REQUEST, INVALID_CATALOG_REFERENCE: 관리자 입력이나 참조를 확인합니다. fieldErrors가 있으면 해당 입력칸에 표시합니다. */
+      /** @description OK */
+      201: {
+        headers: {
+          /** @description 요청 ID를 사용한 최초 성공은 false, 동일 요청 재전송은 true */
+          'Idempotency-Replayed'?: boolean
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.admin.dto.CatalogAdminDtos.SavedCom.stelody.admin.dto.CatalogAdminDtos.Artist']
+        }
+      }
+      /**
+       * @description INVALID_CATALOG_REQUEST, INVALID_CATALOG_REFERENCE: 관리자 입력이나 참조를 확인합니다. fieldErrors가 있으면 해당 입력칸에 표시합니다.
+       *     INVALID_CATALOG_REQUEST: 요청 UUID·본문 검증. 접수 전 거절은 결과 기록이 없을 수 있습니다.
+       */
       400: {
         headers: {
           [name: string]: unknown
@@ -3007,8 +3225,41 @@ export interface operations {
           'application/problem+json': components['schemas']['ApiProblem']
         }
       }
-      /** @description CATALOG_VERSION_CONFLICT, CATALOG_DATA_CONFLICT: CATALOG_VERSION_CONFLICT: 최신 내용을 조회해 변경을 확인합니다. CATALOG_DATA_CONFLICT: 중복·연결 조건을 확인합니다. */
+      /** @description ARTIST_REGISTRATION_NOT_FOUND, CATALOG_RESOURCE_NOT_FOUND: 다른 소유자의 요청 ID는 사용할 수 없습니다. 이미 생성된 아티스트가 삭제된 경우 재전송으로 새로 생성하지 않습니다. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description CATALOG_VERSION_CONFLICT, CATALOG_DATA_CONFLICT: CATALOG_VERSION_CONFLICT: 최신 내용을 조회해 변경을 확인합니다. CATALOG_DATA_CONFLICT: 중복·연결 조건을 확인합니다.
+       *     ARTIST_REGISTRATION_PROCESSING, ARTIST_REGISTRATION_REQUEST_CONFLICT, CATALOG_DATA_CONFLICT: 동일 요청 처리 중이면 결과를 조회합니다. 같은 ID·다른 본문은 거절합니다.
+       */
       409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description ARTIST_REGISTRATION_RESULT_EXPIRED: 본인 요청의 최초 접수 후 24시간이 지났습니다. 같은 요청 ID를 다시 사용할 수 없습니다. */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description ARTIST_REGISTRATION_STORAGE_UNAVAILABLE: 저장소·연결 장애. 결과 없음으로 처리하지 말고 같은 요청 ID를 보관합니다. 실패한 요청 재전송은 원래 정규화 오류 상태·코드로 거절됩니다.
+       *     ARTIST_REGISTRATION_INTERRUPTED: 중단된 실패 요청의 재전송은 다시 실행하지 않고 실패 코드를 반환합니다.
+       */
+      503: {
         headers: {
           [name: string]: unknown
         }
@@ -4833,6 +5084,134 @@ export interface operations {
       }
     }
   }
+  get_admin_reviews_completion: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.review.dto.ReviewDtos.CompletionPreview']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 권한 또는 CSRF 검증에 실패했습니다.
+       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  post_admin_reviews_completion: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['com.stelody.review.dto.ReviewDtos.Complete']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.review.dto.ReviewDtos.CompletionResult']
+        }
+      }
+      /** @description INVALID_REVIEW_REQUEST, INVALID_CATALOG_REQUEST, INVALID_CATALOG_REFERENCE, SONG_NOT_PUBLISHABLE, INVALID_REPRESENTATIVE_VIDEO: items의 UUID·0 이상 버전·중복 ID·최대 10000건, requestId, selected 1~100건의 id만 확인합니다. song·kind·곡별 사유 입력은 제거되었습니다. fieldErrors는 selected[i].id 등 요청 필드 경로입니다. 오류면 등록·삭제·감사 기록을 모두 취소합니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 권한 또는 CSRF 검증에 실패했습니다.
+       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description REVIEW_VERSION_CONFLICT, CANDIDATE_CLASSIFICATION_REQUIRED, CATALOG_VERSION_CONFLICT, CATALOG_DATA_CONFLICT, REVIEW_NOT_PENDING, CANDIDATE_REQUIRES_REFRESH, VIDEO_ALREADY_REGISTERED: 후보·곡 정보 변경, 기존 등록 영상 충돌, CANDIDATE_CLASSIFICATION_REQUIRED(분류 충돌·등록 불가 제목/콘텐츠)이면 등록·삭제·감사 기록을 모두 취소합니다. fieldErrors의 selected[i].id와 사유 코드를 확인하고 대상을 재조회합니다. 유형 미확정은 기본 COVER 초안으로 등록하며 오류가 아닙니다. 보완 후에도 확정하지 못한 원곡·참여자 등은 null·빈 배열로 남겨 관리자 수정으로 보완합니다. 응답 유실 재전송은 동일 requestId·본문을 유지합니다. */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_admin_reviews_id: {
     parameters: {
       query?: never
@@ -6261,6 +6640,90 @@ export interface operations {
        *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
        */
       403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_auth_callback_google_reauthentication: {
+    parameters: {
+      query?: {
+        state?: string
+        code?: string
+        error?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description 검증된 프론트 복귀 주소. reauthResult와 허용 reauthError만 추가합니다. */
+      303: {
+        headers: {
+          /** @description 서버에 저장된 내부 경로·등록된 origin으로만 복귀 */
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description GOOGLE_REAUTHENTICATION_UNAVAILABLE: 콜백 설정을 확인할 수 없습니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_auth_callback_google_reauthentication_local: {
+    parameters: {
+      query?: {
+        state?: string
+        code?: string
+        error?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description 검증된 프론트 복귀 주소. reauthResult와 허용 reauthError만 추가합니다. */
+      303: {
+        headers: {
+          /** @description 서버에 저장된 내부 경로·등록된 origin으로만 복귀 */
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description GOOGLE_REAUTHENTICATION_UNAVAILABLE: 콜백 설정을 확인할 수 없습니다. */
+      503: {
         headers: {
           [name: string]: unknown
         }
@@ -7734,6 +8197,118 @@ export interface operations {
       }
     }
   }
+  post_me_withdrawal_requests: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.user.service.WithdrawalResults.Prepared']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 권한 또는 CSRF 검증에 실패했습니다.
+       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description ACCOUNT_STORAGE_UNAVAILABLE, LOGIN_STORAGE_UNAVAILABLE: 발급 저장소 오류. DELETE를 실행하지 않습니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_me_youtube_exports_active: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.export.dto.ExportDtos.ActiveJob']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description EXPORT_LOOKUP_UNAVAILABLE: EXPORT_LOOKUP_UNAVAILABLE: 저장소의 일시적 장애로 조회하지 못했습니다. 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않고 조회를 다시 시도합니다. */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_me_youtube_exports_id: {
     parameters: {
       query?: never
@@ -8020,6 +8595,39 @@ export interface operations {
     }
   }
   get_me_youtube_callback: {
+    parameters: {
+      query?: {
+        state?: string
+        code?: string
+        error?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description youtubeResult=success|cancelled|failed. success에는 youtubeError가 없습니다. cancelled에는 YOUTUBE_CONSENT_DENIED. failed의 youtubeError는 SESSION_EXPIRED, INVALID_YOUTUBE_STATE, INVALID_YOUTUBE_CLIENT, YOUTUBE_ACCOUNT_MISMATCH, YOUTUBE_SCOPE_REQUIRED, YOUTUBE_OFFLINE_ACCESS_REQUIRED, INVALID_YOUTUBE_IDENTITY, YOUTUBE_AUTHORIZATION_CHANGED, YOUTUBE_EXPORT_DISABLED, YOUTUBE_OAUTH_UNAVAILABLE, YOUTUBE_AUTHORIZATION_FAILED 중 하나입니다. 알 수 없는 외부 오류는 YOUTUBE_AUTHORIZATION_FAILED로 정규화합니다. 결과는 안내용이며 실제 연결 성공을 보장하는 상태 API를 대신하지 않습니다. */
+      303: {
+        headers: {
+          /** @description 검증된 내부 returnTo에 youtubeResult·youtubeError를 추가한 프론트 URL. 기본 예: /library/youtube?youtubeResult=success. 로컬 예: http://localhost:5173/library/youtube?youtubeResult=cancelled&youtubeError=YOUTUBE_CONSENT_DENIED. 기존 같은 이름의 결과 파라미터·OAuth 민감 파라미터는 제거합니다. */
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_me_youtube_callback_local: {
     parameters: {
       query?: {
         state?: string
@@ -8492,235 +9100,6 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['com.stelody.statistics.dto.StatisticsDtos.Views']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  get_me_youtube_callback_local: {
-    parameters: {
-      query?: {
-        state?: string
-        code?: string
-        error?: string
-      }
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description youtubeResult=success|cancelled|failed. success에는 youtubeError가 없습니다. cancelled에는 YOUTUBE_CONSENT_DENIED. failed의 youtubeError는 SESSION_EXPIRED, INVALID_YOUTUBE_STATE, INVALID_YOUTUBE_CLIENT, YOUTUBE_ACCOUNT_MISMATCH, YOUTUBE_SCOPE_REQUIRED, YOUTUBE_OFFLINE_ACCESS_REQUIRED, INVALID_YOUTUBE_IDENTITY, YOUTUBE_AUTHORIZATION_CHANGED, YOUTUBE_EXPORT_DISABLED, YOUTUBE_OAUTH_UNAVAILABLE, YOUTUBE_AUTHORIZATION_FAILED 중 하나입니다. 알 수 없는 외부 오류는 YOUTUBE_AUTHORIZATION_FAILED로 정규화합니다. 결과는 안내용이며 실제 연결 성공을 보장하는 상태 API를 대신하지 않습니다. */
-      303: {
-        headers: {
-          /** @description 검증된 내부 returnTo에 youtubeResult·youtubeError를 추가한 프론트 URL. 기본 예: /library/youtube?youtubeResult=success. 로컬 예: http://localhost:5173/library/youtube?youtubeResult=cancelled&youtubeError=YOUTUBE_CONSENT_DENIED. 기존 같은 이름의 결과 파라미터·OAuth 민감 파라미터는 제거합니다. */
-          Location?: string
-          [name: string]: unknown
-        }
-        content?: never
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  get_me_youtube_exports_active: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['com.stelody.export.dto.ExportDtos.ActiveJob']
-        }
-      }
-      /**
-       * @description 로그인 세션이 없거나 유효하지 않습니다.
-       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
-       */
-      401: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description EXPORT_LOOKUP_UNAVAILABLE: EXPORT_LOOKUP_UNAVAILABLE: 저장소의 일시적 장애로 조회하지 못했습니다. 작업 없음으로 처리하거나 새 requestId로 반복 접수하지 않고 조회를 다시 시도합니다. */
-      503: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  get_auth_callback_google_reauthentication: {
-    parameters: {
-      query?: {
-        state?: string
-        code?: string
-        error?: string
-      }
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description 검증된 프론트 복귀 주소. reauthResult와 허용 reauthError만 추가합니다. */
-      303: {
-        headers: {
-          /** @description 서버에 저장된 내부 경로·등록된 origin으로만 복귀 */
-          Location?: string
-          [name: string]: unknown
-        }
-        content?: never
-      }
-      /** @description GOOGLE_REAUTHENTICATION_UNAVAILABLE: 콜백 설정을 확인할 수 없습니다. */
-      503: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  get_auth_callback_google_reauthentication_local: {
-    parameters: {
-      query?: {
-        state?: string
-        code?: string
-        error?: string
-      }
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description 검증된 프론트 복귀 주소. reauthResult와 허용 reauthError만 추가합니다. */
-      303: {
-        headers: {
-          /** @description 서버에 저장된 내부 경로·등록된 origin으로만 복귀 */
-          Location?: string
-          [name: string]: unknown
-        }
-        content?: never
-      }
-      /** @description GOOGLE_REAUTHENTICATION_UNAVAILABLE: 콜백 설정을 확인할 수 없습니다. */
-      503: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  post_me_withdrawal_requests: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      201: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['com.stelody.user.service.WithdrawalResults.Prepared']
-        }
-      }
-      /**
-       * @description 로그인 세션이 없거나 유효하지 않습니다.
-       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
-       */
-      401: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /**
-       * @description 권한 또는 CSRF 검증에 실패했습니다.
-       *     ACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.
-       */
-      403: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-      /** @description ACCOUNT_STORAGE_UNAVAILABLE, LOGIN_STORAGE_UNAVAILABLE: 발급 저장소 오류. DELETE를 실행하지 않습니다. */
-      503: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
         }
       }
       /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */

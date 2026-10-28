@@ -390,3 +390,18 @@
     padding: 20px;
   }
 }
+
+.original-artist-dialog {
+  padding: 16px;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.original-artist-dialog fieldset {
+  gap: 16px;
+  min-width: 0;
+}
+.original-artist-dialog button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

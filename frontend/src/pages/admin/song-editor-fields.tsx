@@ -17,6 +17,7 @@ export function SongEditorFields({
   errors,
   change,
   select,
+  editWorkArtists,
   names,
   workArtists,
   labelState,
@@ -31,6 +32,7 @@ export function SongEditorFields({
   errors: Record<string, string>
   change: DraftChange
   select: (v: Selection) => void
+  editWorkArtists: () => void
   names: Record<string, string>
   workArtists: string[]
   labelState: string
@@ -140,7 +142,7 @@ export function SongEditorFields({
               <FieldError message={errors.externalArtistIds} />
               <Hint>
                 참여 외부 아티스트는 이 곡에 참여한 사람을 뜻합니다. 원곡
-                아티스트와 별개이며 원곡 아티스트 편집은 후속 범위입니다.
+                아티스트와 별개입니다.
               </Hint>
             </SongCard>
           </div>
@@ -153,12 +155,13 @@ export function SongEditorFields({
               </ReadValue>
               <Button onClick={() => select('works')}>원곡 선택</Button>
               <FieldError message={errors.workId} />
-              <ReadValue label="원곡 아티스트 · 조회 전용">
+              <ReadValue label="원곡 아티스트">
                 {labelState === '확인됨' ? named(workArtists) : labelState}
               </ReadValue>
+              <Button onClick={editWorkArtists}>원곡 아티스트 편집</Button>
               <Hint>
-                여러 곡이 공유하는 원곡 정보입니다. 이번 곡 저장에는 원곡
-                아티스트 편집이 포함되지 않습니다.
+                여러 곡이 공유하는 원곡 정보입니다. 원곡 아티스트는 별도로
+                저장하며, 입력 중인 곡 정보는 그대로 유지됩니다.
               </Hint>
               <ReadValue label="대표 영상 · 이 곡에 연결된 영상에서 선택">
                 {video?.sourceTitle ??
