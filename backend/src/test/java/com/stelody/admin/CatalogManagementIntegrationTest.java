@@ -907,6 +907,185 @@ class CatalogManagementIntegrationTest {
         .andExpect(jsonPath("$.code").value("VIDEO_REQUIRES_OBSERVATION"));
   }
 
+  record WorkFixture(UUID id, WorkInput update) {}
+
+  WorkFixture workWithResources(String kyStatus) throws Exception {
+    UUID original = UUID.randomUUID(), corrected = UUID.randomUUID();
+    for (var id : List.of(original, corrected))
+      writer.update("INSERT INTO app.artist(id,name,search_name) VALUES(?,'Artist','artist')", id);
+    var links =
+        List.of(
+            new Link("YouTube", "https://example.invalid/video", "https://example.invalid/source"),
+            new Link(
+                "Spotify", "https://example.invalid/audio", "https://example.invalid/credits"));
+    var karaoke =
+        List.of(
+            new Karaoke(
+                Provider.TJ, KaraokeStatus.REGISTERED, "00123", "https://example.invalid/tj"),
+            new Karaoke(
+                Provider.KY,
+                KaraokeStatus.valueOf(kyStatus),
+                kyStatus.equals("REGISTERED") ? "00456" : null,
+                kyStatus.equals("UNKNOWN") ? null : "https://example.invalid/ky"));
+    var body =
+        new WorkInput(
+            0L, "Original work", List.of("原曲"), List.of(original), links, karaoke, "fixture");
+    var id = UUID.fromString(create("/works", body).path("item").path("id").asText());
+    writer.update(
+        "UPDATE app.external_link SET checked_at='2001-02-03T04:05:06Z' WHERE work_id=?", id);
+    writer.update(
+        "UPDATE app.karaoke_entry SET checked_at=CASE WHEN status='UNKNOWN' THEN NULL ELSE '2001-02-03T04:05:06Z'::timestamptz END WHERE work_id=?",
+        id);
+    return new WorkFixture(
+        id,
+        new WorkInput(
+            0L,
+            body.title(),
+            body.aliases(),
+            List.of(corrected),
+            List.of(links.get(1), links.get(0)),
+            List.of(karaoke.get(1), karaoke.get(0)),
+            "artist credit corrected"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"REGISTERED", "NOT_LISTED", "UNKNOWN"})
+  void artistOnlyWorkSavePreservesResourceIdsVerificationTimesAndUnknownNull(String kyStatus)
+      throws Exception {
+    var fixture = workWithResources(kyStatus);
+    var before = adminGet(ROOT + "/works/" + fixture.id());
+    mvc.perform(json(put(ROOT + "/works/" + fixture.id()), fixture.update()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.item.version").value(1));
+    var after = adminGet(ROOT + "/works/" + fixture.id());
+    assertThat(after.path("artistIds").get(0).asText())
+        .isEqualTo(fixture.update().artistIds().getFirst().toString());
+    for (var field : List.of("title", "aliases", "links", "karaoke"))
+      assertThat(after.path(field)).as(field).isEqualTo(before.path(field));
+    if (kyStatus.equals("UNKNOWN")) {
+      assertThat(after.path("karaoke").get(0).path("checkedAt").isNull()).isTrue();
+      assertThat(after.path("karaoke").get(0).path("number").isNull()).isTrue();
+      assertThat(after.path("karaoke").get(0).path("sourceUrl").isNull()).isTrue();
+    }
+    var audit =
+        writer.queryForMap(
+            "SELECT actor_id,reason,before_value::text,after_value::text FROM app.catalog_audit WHERE target_id=? AND action='UPDATE'",
+            fixture.id());
+    assertThat(audit.get("actor_id")).isEqualTo(ADMIN);
+    assertThat(audit.get("reason")).isEqualTo("artist credit corrected");
+    assertThat(mapper.readTree((String) audit.get("before_value"))).isEqualTo(before);
+    assertThat(mapper.readTree((String) audit.get("after_value"))).isEqualTo(after);
+    mvc.perform(json(put(ROOT + "/works/" + fixture.id()), fixture.update()))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CATALOG_VERSION_CONFLICT"));
+    assertThat(adminGet(ROOT + "/works/" + fixture.id())).isEqualTo(after);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.catalog_audit WHERE target_id=?",
+                Long.class,
+                fixture.id()))
+        .isEqualTo(2);
+  }
+
+  @Test
+  void workResourceEditsReplaceOnlyChangedRowsAndEmptyArraysStillRemoveAll() throws Exception {
+    var fixture = workWithResources("UNKNOWN");
+    var before = adminGet(ROOT + "/works/" + fixture.id());
+    var input = fixture.update();
+    var edit =
+        new WorkInput(
+            0L,
+            input.title(),
+            input.aliases(),
+            input.artistIds(),
+            List.of(
+                input.links().getFirst(),
+                new Link(
+                    "Bandcamp",
+                    "https://example.invalid/new",
+                    "https://example.invalid/new-source")),
+            List.of(
+                input.karaoke().getFirst(),
+                new Karaoke(
+                    Provider.TJ,
+                    KaraokeStatus.REGISTERED,
+                    "00999",
+                    "https://example.invalid/new-tj")),
+            "resources corrected");
+    mvc.perform(json(put(ROOT + "/works/" + fixture.id()), edit)).andExpect(status().isOk());
+    var after = adminGet(ROOT + "/works/" + fixture.id());
+    assertThat(after.path("links").get(1)).isEqualTo(before.path("links").get(0));
+    assertThat(after.path("karaoke").get(0)).isEqualTo(before.path("karaoke").get(0));
+    assertThat(after.path("links").get(0).path("id"))
+        .isNotEqualTo(before.path("links").get(1).path("id"));
+    assertThat(after.path("karaoke").get(1).path("id"))
+        .isNotEqualTo(before.path("karaoke").get(1).path("id"));
+    assertThat(after.path("karaoke").get(1).path("number").asText()).isEqualTo("00999");
+    for (var node : List.of(after.path("links").get(0), after.path("karaoke").get(1)))
+      assertThat(Instant.parse(node.path("checkedAt").asText()))
+          .isAfter(Instant.parse("2001-02-03T04:05:06Z"));
+    var clear =
+        new WorkInput(
+            1L,
+            input.title(),
+            input.aliases(),
+            input.artistIds(),
+            List.of(),
+            List.of(),
+            "remove resources");
+    mvc.perform(json(put(ROOT + "/works/" + fixture.id()), clear)).andExpect(status().isOk());
+    var cleared = adminGet(ROOT + "/works/" + fixture.id());
+    assertThat(cleared.path("links").isEmpty()).isTrue();
+    assertThat(cleared.path("karaoke").isEmpty()).isTrue();
+  }
+
+  @Test
+  void workArtistSaveStillRequiresAdminCsrfReasonAndRollsBackIfAuditFails() throws Exception {
+    var fixture = workWithResources("UNKNOWN");
+    var before = adminGet(ROOT + "/works/" + fixture.id());
+    String path = ROOT + "/works/" + fixture.id();
+    mvc.perform(
+            auth(put(path), user)
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(fixture.update())))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            put(path)
+                .cookie(admin.cookie())
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(fixture.update())))
+        .andExpect(status().isForbidden());
+    var input = fixture.update();
+    var invalid =
+        new WorkInput(
+            0L,
+            input.title(),
+            input.aliases(),
+            input.artistIds(),
+            input.links(),
+            input.karaoke(),
+            " ");
+    mvc.perform(json(put(path), invalid)).andExpect(status().isBadRequest());
+    var changed =
+        new WorkInput(
+            0L,
+            input.title(),
+            input.aliases(),
+            input.artistIds(),
+            List.of(),
+            List.of(),
+            "rollback all changes");
+    assertThatThrownBy(() -> service.work(fixture.id(), changed, UUID.randomUUID()))
+        .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    assertThat(adminGet(path)).isEqualTo(before);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.catalog_audit WHERE target_id=?",
+                Long.class,
+                fixture.id()))
+        .isEqualTo(1);
+  }
+
   @Test
   void workArtistExternalParticipantLinksKaraokeAndSearchHelpStaySeparate() throws Exception {
     UUID m = member(),
