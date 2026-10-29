@@ -61,6 +61,13 @@ export function AdminSongsPage() {
         />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <p>{page + 1}페이지</p>
+          <Button variant="primary" asChild>
+            <Link
+              to={`/admin/songs/new?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}
+            >
+              노래 수동 등록
+            </Link>
+          </Button>
           <Button asChild>
             <Link to={adminPaths.registrations}>자동 등록 정보 보완 목록</Link>
           </Button>
