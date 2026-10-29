@@ -9,6 +9,7 @@ import { formatAdminTime, isAdminAccessError } from '@/features/admin/format'
 import { useAdminUser } from '@/features/admin/admin-context'
 import { Button } from '@/shared/ui/button'
 import { SiteFooter } from '@/shared/ui/site-footer'
+import { AdminManagementMenu } from './admin-management-menu'
 
 export function AdminGate() {
   const session = useQuery(sessionOptions)
@@ -185,6 +186,7 @@ export function AdminScreen({
         >
           새로고침
         </Button>
+        <AdminManagementMenu />
       </nav>
       <section
         className="admin-panel"

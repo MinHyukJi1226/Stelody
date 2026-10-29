@@ -346,6 +346,24 @@
   flex-wrap: wrap;
   gap: 12px;
 }
+.admin-management-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 640px;
+  overflow: hidden;
+}
+.admin-management-scroll {
+  display: grid;
+  gap: 24px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.admin-management-menu button,
+.admin-management-menu a {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .work-list-search > div {
   width: min(100%, 600px);
 }

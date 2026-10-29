@@ -7,6 +7,25 @@ import type { WorkInput } from '../src/features/admin/original-artists'
 const original = '/admin/works?q=원곡&page=1&size=10'
 const path = `/admin/works/${wid}/edit?returnTo=${encodeURIComponent(original)}`
 const fresh = `/admin/works/new?returnTo=${encodeURIComponent(original)}`
+test('관리 메뉴의 영상 연결은 대상 곡을 선택한 뒤 기존 연결 화면으로 진입한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await page.goto('/admin/works')
+  await page.getByRole('button', { name: '관리 기능', exact: true }).click()
+  await page
+    .getByRole('button', { name: '영상 추가 연결', exact: true })
+    .click()
+  await expect(
+    page.getByRole('heading', { name: '기존 곡 선택', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('radio').first().check()
+  await page.getByRole('button', { name: '선택 적용', exact: true }).click()
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === `/admin/songs/${state.artists.song.song.id}/videos/new`,
+  )
+})
 async function setup(page: Page) {
   const artists = await fixture(page)
   const state = {
@@ -129,6 +148,26 @@ async function save(page: Page) {
     .getByRole('button', { name: '확인 후 저장', exact: true })
     .click()
 }
+test('관리 메뉴에서 원곡 목록에 진입하고 미구현 항목은 실행하지 않는다', async ({
+  page,
+}) => {
+  await setup(page)
+  await page.goto('/admin')
+  await page.getByRole('button', { name: '관리 기능', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: '멤버 관리 · 준비 중', exact: true }),
+  ).toBeDisabled()
+  await page.getByRole('link', { name: '원곡 관리', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: '원곡 관리', exact: true }),
+  ).toBeVisible()
+  await page.getByLabel('검색', { exact: true }).fill('원곡')
+  await page.getByRole('button', { name: '검색', exact: true }).click()
+  await page.getByRole('button', { name: '다음', exact: true }).click()
+  await expect(page).toHaveURL(
+    '/admin/works?q=%EC%9B%90%EA%B3%A1&page=1&size=20',
+  )
+})
 test('전체 저장·목록 문맥 복귀·새로고침 유지, 변경하지 않은 근거를 보존한다', async ({
   page,
 }) => {
@@ -388,6 +427,24 @@ for (const mode of ['lost', 'malformed'])
         url.searchParams.get('q') === '수정한 원곡',
     )
   })
+test('미저장 메뉴 이동은 목적지를 보존하고 취소·확인을 구분한다', async ({
+  page,
+}) => {
+  await setup(page)
+  await page.goto(path)
+  await fill(page)
+  await page.getByRole('button', { name: '관리 기능', exact: true }).click()
+  await page.getByRole('link', { name: '노래 수동 등록', exact: true }).click()
+  await page.getByRole('button', { name: '계속 작성', exact: true }).click()
+  await expect(page.getByLabel('원곡 제목*', { exact: true })).toHaveValue(
+    '수정한 원곡',
+  )
+  await page.getByRole('link', { name: '노래 목록', exact: true }).click()
+  await page
+    .getByRole('button', { name: '변경 버리고 이동', exact: true })
+    .click()
+  await expect(page).toHaveURL('/admin/songs')
+})
 test('저장 중 입력·중복 실행·이동을 잠그고 성공 후 원래 목록으로 간다', async ({
   page,
 }) => {
@@ -462,4 +519,36 @@ test('서버 필드 오류를 관련 입력 아래에 표시하고 초안을 유
     '수정한 원곡',
   )
   expect(state.writes).toHaveLength(1)
+})
+test('라이트·다크 원곡 편집과 관리 메뉴는 화면 너비를 넘지 않는다', async ({
+  page,
+}, testInfo) => {
+  await setup(page)
+  await page.goto(path)
+  await expect(page.getByLabel('원곡 제목*', { exact: true })).toBeVisible()
+  for (const theme of ['light', 'dark']) {
+    if (theme === 'dark')
+      await page
+        .getByRole('button', { name: '다크 모드로 변경', exact: true })
+        .click()
+    await expect(page.locator('html')).not.toHaveCSS('overflow-x', 'scroll')
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true)
+    await page.screenshot({
+      path: testInfo.outputPath(`work-${theme}.png`),
+      fullPage: true,
+    })
+    await page.getByRole('button', { name: '관리 기능', exact: true }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    expect(
+      await page
+        .getByRole('dialog')
+        .evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`menu-${theme}.png`) })
+    await page.getByRole('button', { name: '닫기', exact: true }).click()
+  }
 })

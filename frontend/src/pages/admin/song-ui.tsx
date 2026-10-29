@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Button } from '@/shared/ui/button'
 import { adminPaths } from '@/features/admin/api'
+import { AdminManagementMenu } from './admin-management-menu'
 
 export function SongNav() {
   return (
@@ -15,6 +16,7 @@ export function SongNav() {
           <Link to={to!}>{label}</Link>
         </Button>
       ))}
+      <AdminManagementMenu />
     </nav>
   )
 }
