@@ -8,6 +8,7 @@ import {
   useNavigate,
   useParams,
   useSearchParams,
+  Link,
 } from 'react-router'
 import { useAdminUser } from '@/features/admin/admin-context'
 import { isActiveAdmin } from '@/features/admin/api'
@@ -20,6 +21,7 @@ import {
   saveAdminSong,
   songOptions,
   songReturnPath,
+  songVideoPath,
   type AdminSong,
 } from '@/features/admin/songs'
 import {
@@ -404,6 +406,13 @@ function SongEditor({
         <>
           <h1 className="admin-heading">기존 곡 수정</h1>
           <SongNav />
+          <div>
+            <Button asChild disabled={allBusy || checking}>
+              <Link to={songVideoPath(base.id, returnTo)}>
+                YouTube 영상 연결
+              </Link>
+            </Button>
+          </div>
           <p className="text-xs text-muted">
             {returnTo.startsWith('/admin/registrations')
               ? '정보 보완'

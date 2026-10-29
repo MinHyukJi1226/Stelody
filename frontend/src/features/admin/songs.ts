@@ -17,7 +17,7 @@ export type EntityKind = 'members' | 'artists' | 'works'
 const uuid = z.uuid()
 const instant = z.iso.datetime({ offset: true }).nullable()
 const visibility = z.enum(['DRAFT', 'PUBLISHED', 'HIDDEN'])
-const video = z.object({
+export const adminVideoSchema = z.object({
   id: uuid,
   version: z.number().int().nonnegative(),
   songId: uuid,
@@ -69,7 +69,7 @@ export const songSchema = z.object({
   searchVisibility: z.enum(['UNCHECKED', 'NORMAL', 'DIFFICULT']),
   recommendedSearchQuery: z.string().nullable(),
   searchCheckedAt: instant,
-  videos: z.array(video),
+  videos: z.array(adminVideoSchema),
   links: z.array(link),
   karaoke: z.array(karaoke),
   missingFields: z.array(z.string()),
@@ -237,6 +237,9 @@ export async function saveAdminSong(
 }
 export function songEditPath(id: string, returnTo: string) {
   return `/admin/songs/${encodeURIComponent(id)}/edit?${new URLSearchParams({ returnTo })}`
+}
+export function songVideoPath(id: string, returnTo: string) {
+  return `/admin/songs/${encodeURIComponent(id)}/videos/new?${new URLSearchParams({ returnTo })}`
 }
 export function songReturnPath(value: string | null) {
   if (!value) return '/admin/songs'

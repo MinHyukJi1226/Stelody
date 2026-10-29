@@ -20,10 +20,26 @@ export const router = createBrowserRouter([
         },
         children: [
           {
+            path: 'songs/new',
+            handle: { preserveAdminDraft: true },
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-song-create'))
+                .AdminSongCreatePage,
+            }),
+          },
+          {
             path: 'songs',
             lazy: async () => ({
               Component: (await import('@/pages/admin/admin-songs'))
                 .AdminSongsPage,
+            }),
+          },
+          {
+            path: 'songs/:songId/videos/new',
+            handle: { preserveAdminDraft: true },
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-song-video'))
+                .AdminSongVideoPage,
             }),
           },
           {
