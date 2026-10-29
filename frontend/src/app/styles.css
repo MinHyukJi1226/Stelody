@@ -340,6 +340,38 @@
   gap: 24px;
   min-width: 0;
 }
+.work-list-search {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.work-list-search > div {
+  width: min(100%, 600px);
+}
+.work-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.work-list-row > a {
+  flex-shrink: 0;
+}
+@media (max-width: 767px) {
+  .work-list-row {
+    align-items: start;
+    flex-direction: column;
+    padding: 16px;
+  }
+  .work-list-search > div {
+    width: 100%;
+  }
+}
 .song-editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
