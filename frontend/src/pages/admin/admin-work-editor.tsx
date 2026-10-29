@@ -208,9 +208,19 @@ function WorkEditor({ initial }: { initial: Work | null }) {
   }
   const error = isAdminAccessError(artists.error) ? artists.error : accessError
   if (isAdminAccessError(error))
-    return <AdminApiAccess error={error} user={user} />
+    return (
+      <>
+        <AdminApiAccess error={error} user={user} />
+        {navigation.dialog}
+      </>
+    )
   if (session.isError)
-    return <AdminAccess state="error" onRetry={() => void session.refetch()} />
+    return (
+      <>
+        <AdminAccess state="error" onRetry={() => void session.refetch()} />
+        {navigation.dialog}
+      </>
+    )
   const comparing =
     edit.mode === 'conflict' ||
     edit.mode === 'unknown' ||

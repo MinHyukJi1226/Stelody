@@ -520,6 +520,152 @@ test('서버 필드 오류를 관련 입력 아래에 표시하고 초안을 유
   )
   expect(state.writes).toHaveLength(1)
 })
+for (const editor of ['edit', 'create'] as const) {
+  for (const action of ['home', 'account', 'back', 'logout'] as const) {
+    test(`${editor} 저장 403 후 ${action} 이동 확인을 취소하거나 완료할 수 있다`, async ({
+      page,
+      isMobile,
+    }) => {
+      const state = await setup(page)
+      let logouts = 0
+      await page.route('**/api/v1/auth/logout', (route) => {
+        logouts++
+        state.artists.song.admin.loggedIn = false
+        return route.fulfill({ status: 204 })
+      })
+      await page.goto(original)
+      await page
+        .getByRole('link', {
+          name: editor === 'edit' ? '원곡 수정' : '원곡 등록',
+          exact: true,
+        })
+        .click()
+      await fill(page)
+      state.mode = 'denied'
+      if (editor === 'edit') await save(page)
+      else {
+        await page
+          .getByRole('button', { name: '원곡 등록', exact: true })
+          .click()
+        await page
+          .getByRole('dialog')
+          .getByRole('button', { name: '등록', exact: true })
+          .click()
+      }
+      await expect(
+        page.getByRole('heading', {
+          name: '관리자 권한이 없어요',
+          exact: true,
+        }),
+      ).toBeVisible()
+      const attempt = async () => {
+        if (action === 'back') await page.evaluate(() => window.history.back())
+        else if (action === 'logout') {
+          if (isMobile)
+            await page
+              .getByRole('button', { name: '메뉴 열기', exact: true })
+              .click()
+          await page
+            .getByRole('button', { name: '로그아웃', exact: true })
+            .click()
+        } else
+          await page
+            .getByRole('main')
+            .getByRole('link', {
+              name: action === 'home' ? '홈으로' : '계정 관리',
+              exact: true,
+            })
+            .click()
+      }
+      await attempt()
+      await expect(
+        page.getByRole('heading', {
+          name: '저장하지 않고 이동할까요?',
+          exact: true,
+        }),
+      ).toBeVisible()
+      expect(logouts).toBe(0)
+      await page.getByRole('button', { name: '계속 작성', exact: true }).click()
+      await expect(
+        page.getByRole('heading', {
+          name: '관리자 권한이 없어요',
+          exact: true,
+        }),
+      ).toBeVisible()
+      expect(state.writes).toHaveLength(1)
+      await attempt()
+      await page
+        .getByRole('button', { name: '변경 버리고 이동', exact: true })
+        .click()
+      if (action === 'logout') {
+        await expect.poll(() => logouts).toBe(1)
+        await expect(
+          page.getByRole('heading', { name: '로그인이 필요해요', exact: true }),
+        ).toBeVisible()
+      } else
+        await expect(page).toHaveURL(
+          action === 'back' ? original : action === 'home' ? '/' : '/account',
+        )
+      expect(state.writes).toHaveLength(1)
+    })
+  }
+  test(`${editor} 세션 조회 장애 후 이동 확인과 재조회 시 입력 보존`, async ({
+    page,
+  }) => {
+    const state = await setup(page)
+    await page.goto(editor === 'edit' ? path : fresh)
+    await fill(page)
+    await page
+      .getByLabel('검색 별칭 · 선택', { exact: true })
+      .fill('입력 중 별칭')
+    state.artists.song.admin.sessionError = 503
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event('visibilitychange')),
+    )
+    await expect(
+      page.getByRole('heading', {
+        name: '권한을 확인하지 못했어요',
+        exact: true,
+      }),
+    ).toBeVisible()
+    await page.getByRole('link', { name: 'Stelody 홈', exact: true }).click()
+    await expect(
+      page.getByRole('heading', {
+        name: '저장하지 않고 이동할까요?',
+        exact: true,
+      }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: '계속 작성', exact: true }).click()
+    state.artists.song.admin.sessionError = 0
+    await page.getByRole('button', { name: '다시 조회', exact: true }).click()
+    await expect(page.getByLabel('원곡 제목*', { exact: true })).toHaveValue(
+      '수정한 원곡',
+    )
+    await expect(page.getByLabel('변경 사유*', { exact: true })).toHaveValue(
+      '공식 크레딧 확인',
+    )
+    await expect(
+      page.getByLabel('검색 별칭 · 선택', { exact: true }),
+    ).toHaveValue('입력 중 별칭')
+    expect(state.writes).toHaveLength(0)
+    state.artists.song.admin.sessionError = 503
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event('visibilitychange')),
+    )
+    await expect(
+      page.getByRole('heading', {
+        name: '권한을 확인하지 못했어요',
+        exact: true,
+      }),
+    ).toBeVisible()
+    await page.getByRole('link', { name: 'Stelody 홈', exact: true }).click()
+    await page
+      .getByRole('button', { name: '변경 버리고 이동', exact: true })
+      .click()
+    await expect(page).toHaveURL('/')
+    expect(state.writes).toHaveLength(0)
+  })
+}
 test('라이트·다크 원곡 편집과 관리 메뉴는 화면 너비를 넘지 않는다', async ({
   page,
 }, testInfo) => {
