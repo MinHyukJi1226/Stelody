@@ -93,8 +93,8 @@ export function AdminInboxPage() {
           <div className="admin-notice">
             <p>후속 기능 · 준비 중</p>
             <p className="text-muted">
-              신규 등록, 원곡·영상 편집, 개별 검토 처리, 실패 작업 재시도, 자동
-              공개 변경은 후속 범위입니다.
+              관리 기능 메뉴에서 준비 중인 항목과 정책 보류 항목을 확인할 수
+              있습니다.
             </p>
           </div>
         </>

@@ -20,6 +20,29 @@ export const router = createBrowserRouter([
         },
         children: [
           {
+            path: 'members',
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-members'))
+                .AdminMembersPage,
+            }),
+          },
+          {
+            path: 'members/new',
+            handle: { preserveAdminDraft: true },
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-member-editor'))
+                .AdminMemberCreatePage,
+            }),
+          },
+          {
+            path: 'members/:memberId/edit',
+            handle: { preserveAdminDraft: true },
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-member-editor'))
+                .AdminMemberEditPage,
+            }),
+          },
+          {
             path: 'works',
             lazy: async () => ({
               Component: (await import('@/pages/admin/admin-works'))

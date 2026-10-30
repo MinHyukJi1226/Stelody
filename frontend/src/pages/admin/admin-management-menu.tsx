@@ -24,8 +24,8 @@ export function AdminManagementMenu() {
     ['영상 추가 연결', 'select-song'],
     ['영상 정보 수정', null],
     ['원곡 관리', '/admin/works'],
+    ['멤버 관리', '/admin/members'],
     ...[
-      '멤버 관리',
       '공식 채널 관리',
       '수집 분류 규칙 관리',
       '개별 후보 검토',

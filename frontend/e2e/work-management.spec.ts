@@ -155,7 +155,7 @@ test('관리 메뉴에서 원곡 목록에 진입하고 미구현 항목은 실�
   await page.goto('/admin')
   await page.getByRole('button', { name: '관리 기능', exact: true }).click()
   await expect(
-    page.getByRole('button', { name: '멤버 관리 · 준비 중', exact: true }),
+    page.getByRole('button', { name: '공식 채널 관리 · 준비 중', exact: true }),
   ).toBeDisabled()
   await page.getByRole('link', { name: '원곡 관리', exact: true }).click()
   await expect(

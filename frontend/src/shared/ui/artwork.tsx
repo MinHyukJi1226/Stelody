@@ -5,10 +5,12 @@ export function Artwork({
   src,
   className,
   avatar = false,
+  fallbackText,
 }: {
   src: string | null
   className?: string
   avatar?: boolean
+  fallbackText?: string
 }) {
   const [failedSource, setFailedSource] = useState<string | null>(null)
   return (
@@ -27,10 +29,8 @@ export function Artwork({
           className="size-full object-cover"
           onError={() => setFailedSource(src)}
         />
-      ) : avatar ? (
-        '♪'
       ) : (
-        '이미지 준비 중'
+        (fallbackText ?? (avatar ? '♪' : '이미지 준비 중'))
       )}
     </span>
   )
