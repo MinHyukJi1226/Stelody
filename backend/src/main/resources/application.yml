@@ -58,6 +58,10 @@ stelody:
     db-username: ${COLLECTOR_DB_USERNAME:}
     db-password: ${COLLECTOR_DB_PASSWORD:}
     api-key: ${YOUTUBE_API_KEY:}
+    push:
+      enabled: ${DISCOVERY_PUSH_ENABLED:false}
+      origin: ${DISCOVERY_PUSH_CALLBACK_ORIGIN:${RENDER_EXTERNAL_URL:}}
+      secret: ${DISCOVERY_PUSH_SECRET:}
   withdrawal-journal:
     enabled: ${WITHDRAWAL_JOURNAL_ENABLED:false}
     endpoint: ${WITHDRAWAL_B2_ENDPOINT:}

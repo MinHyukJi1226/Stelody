@@ -52,6 +52,13 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void hubCallbacksAreNotPartOfTheFrontendApiContract() throws Exception {
+    var api = contract();
+    for (var path : api.path("paths").propertyNames())
+      assertThat(path).doesNotStartWith("/api/v1/integrations/youtube/push");
+  }
+
+  @Test
   void documentsUnchangedWorkResourcesWithoutChangingThePutContract() throws Exception {
     var update = contract().at("/paths/~1api~1v1~1admin~1works~1{id}/put");
     assertThat(update.path("description").asText())
@@ -243,17 +250,22 @@ class OpenApiIntegrationTest {
     mappings
         .getHandlerMethods()
         .forEach(
-            (mapping, handler) ->
-                mapping.getPatternValues().stream()
-                    .filter(path -> path.startsWith("/api/v1/"))
-                    .forEach(
-                        path -> {
-                          for (var method : mapping.getMethodsCondition().getMethods())
-                            assertThat(
-                                    api.path("paths").path(path).has(method.name().toLowerCase()))
-                                .as(method + " " + path)
-                                .isTrue();
-                        }));
+            (mapping, handler) -> {
+              if (handler
+                      .getBeanType()
+                      .isAnnotationPresent(io.swagger.v3.oas.annotations.Hidden.class)
+                  || handler.hasMethodAnnotation(io.swagger.v3.oas.annotations.Hidden.class))
+                return;
+              mapping.getPatternValues().stream()
+                  .filter(path -> path.startsWith("/api/v1/"))
+                  .forEach(
+                      path -> {
+                        for (var method : mapping.getMethodsCondition().getMethods())
+                          assertThat(api.path("paths").path(path).has(method.name().toLowerCase()))
+                              .as(method + " " + path)
+                              .isTrue();
+                      });
+            });
     assertThat(api.path("paths").has("/api/v1/auth/logout")).isTrue();
     api.path("paths")
         .properties()

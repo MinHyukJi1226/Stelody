@@ -99,6 +99,22 @@ class SecurityConfigurationTest {
   com.stelody.user.service.WithdrawalResults withdrawalResults;
 
   @Test
+  void disabledPushCallbacksUseNoBrowserSessionAndDoNotRequireCsrf() throws Exception {
+    String path = "/api/v1/integrations/youtube/push/UC" + "a".repeat(22) + "/" + "a".repeat(64);
+    for (var request : java.util.List.of(get(path), post(path).content("not signed"))) {
+      var result =
+          mvc.perform(request.cookie(new jakarta.servlet.http.Cookie("SESSION", "invalid")))
+              .andExpect(status().isNotFound())
+              .andExpect(header().doesNotExist("Set-Cookie"))
+              .andReturn();
+      org.assertj.core.api.Assertions.assertThat(result.getRequest().getSession(false)).isNull();
+    }
+    org.mockito.Mockito.verifyNoInteractions(accounts, persistent);
+    mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   void missingGoogleConfigurationIsReportedWithoutFakeLogin() throws Exception {
     mvc.perform(get("/api/v1/auth/google"))
         .andExpect(status().isServiceUnavailable())

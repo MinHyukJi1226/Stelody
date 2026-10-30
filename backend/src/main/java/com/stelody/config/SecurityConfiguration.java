@@ -76,6 +76,36 @@ public class SecurityConfiguration {
   }
 
   @Bean
+  @org.springframework.core.annotation.Order(2)
+  SecurityFilterChain youtubePushSecurity(HttpSecurity http) throws Exception {
+    http.securityMatcher("/api/v1/integrations/youtube/push/**")
+        .addFilterBefore(
+            new com.stelody.collector.push.YouTubePushRequestFilter(),
+            SecurityContextHolderFilter.class)
+        .anonymous(AbstractHttpConfigurer::disable)
+        .logout(AbstractHttpConfigurer::disable)
+        .authorizeHttpRequests(
+            a ->
+                a.requestMatchers(
+                        HttpMethod.GET, com.stelody.collector.push.YouTubePushSettings.PATH)
+                    .permitAll()
+                    .requestMatchers(
+                        HttpMethod.POST, com.stelody.collector.push.YouTubePushSettings.PATH)
+                    .permitAll()
+                    .anyRequest()
+                    .denyAll())
+        .sessionManagement(AbstractHttpConfigurer::disable)
+        .securityContext(
+            s ->
+                s.securityContextRepository(
+                    new org.springframework.security.web.context.NullSecurityContextRepository()))
+        .requestCache(AbstractHttpConfigurer::disable)
+        // This server-to-server endpoint authenticates content with HMAC; browser APIs retain CSRF.
+        .csrf(AbstractHttpConfigurer::disable);
+    return http.build();
+  }
+
+  @Bean
   SecurityFilterChain securityFilterChain(
       HttpSecurity http,
       ApiProblems problems,
