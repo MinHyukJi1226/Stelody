@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { type MemberDraft, validMemberUrl } from '@/features/admin/members'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -169,8 +170,8 @@ export function MemberFields({
           description="모든 등록·수정에서 필수 · 최대 500자"
         />
       </div>
-      <Button variant="primary" className="justify-self-start" disabled>
-        공식 YouTube 채널 관리 · 준비 중
+      <Button asChild variant="primary" className="justify-self-start">
+        <Link to="/admin/channels">공식 YouTube 채널 관리</Link>
       </Button>
       {activityOpen && (
         <Dialog

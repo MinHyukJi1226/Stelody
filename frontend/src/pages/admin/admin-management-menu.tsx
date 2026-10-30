@@ -25,8 +25,8 @@ export function AdminManagementMenu() {
     ['영상 정보 수정', null],
     ['원곡 관리', '/admin/works'],
     ['멤버 관리', '/admin/members'],
+    ['공식 채널 관리', '/admin/channels'],
     ...[
-      '공식 채널 관리',
       '수집 분류 규칙 관리',
       '개별 후보 검토',
       '실패 작업 재시도',
