@@ -155,6 +155,44 @@ public final class DiscoveryRepository {
     return ids.stream().filter(id -> !skip.contains(id)).toList();
   }
 
+  /** Repeated or older hub notifications must not invalidate an administrator's snapshot. */
+  public List<String> neededNotifications(Map<String, Instant> updates) {
+    var needed = needed(List.copyOf(updates.keySet()));
+    if (needed.isEmpty()) return needed;
+    var observed = new java.util.HashMap<String, Instant>();
+    jdbc.sql(
+            "SELECT youtube_id,source_observed_at FROM app.review_item WHERE youtube_id IN (:ids) AND source_title IS NOT NULL")
+        .param("ids", needed)
+        .query(
+            (r, n) -> {
+              observed.put(r.getString(1), r.getTimestamp(2).toInstant());
+              return true;
+            })
+        .list();
+    return needed.stream()
+        .filter(id -> !observed.containsKey(id) || observed.get(id).isBefore(updates.get(id)))
+        .toList();
+  }
+
+  /** A notification has no uploads cursor and must not complete the daily channel scan. */
+  public int saveNotification(
+      UUID token,
+      Channel channel,
+      Map<String, VideoObservation> observations,
+      Map<String, Decision> decisions,
+      Instant now) {
+    return transactions.execute(
+        status -> {
+          jdbc.sql("SET LOCAL statement_timeout='10s'").update();
+          jdbc.sql("UPDATE app.collection_control SET owner_token=:token WHERE singleton")
+              .param("token", token)
+              .update();
+          fence(token);
+          allowed(channel);
+          return save(token, channel, observations, decisions, now);
+        });
+  }
+
   public State savePage(
       UUID token,
       UUID run,

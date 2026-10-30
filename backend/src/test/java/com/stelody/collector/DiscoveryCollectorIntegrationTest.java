@@ -54,6 +54,7 @@ class DiscoveryCollectorIntegrationTest {
   JdbcTemplate writer, collector;
   HikariDataSource source;
   WireMockServer server;
+  com.stelody.collector.push.YouTubePushSubscriptions pushSubscriptions;
 
   @BeforeEach
   void setup() {
@@ -108,6 +109,7 @@ class DiscoveryCollectorIntegrationTest {
 
   @AfterEach
   void stop() {
+    if (pushSubscriptions != null) pushSubscriptions.close();
     server.stop();
     source.close();
   }
@@ -1129,5 +1131,317 @@ class DiscoveryCollectorIntegrationTest {
     assertThat(
             writer.queryForObject("SELECT status FROM app.collection_retry_request", String.class))
         .isEqualTo("SUCCEEDED");
+  }
+
+  org.springframework.test.web.servlet.MockMvc pushMvc(Instant now) {
+    if (pushSubscriptions != null) pushSubscriptions.close();
+    var settings = YouTubePushTest.settings();
+    var processor =
+        new com.stelody.collector.push.YouTubePushProcessor(
+            source, settings(), Clock.fixed(now, ZoneOffset.UTC), true, false, d -> {});
+    pushSubscriptions =
+        new com.stelody.collector.push.YouTubePushSubscriptions(
+            settings,
+            processor::channels,
+            Clock.fixed(now, ZoneOffset.UTC),
+            URI.create(server.baseUrl() + "/subscribe"));
+    var endpoint =
+        new com.stelody.collector.push.YouTubePushEndpoint(settings, pushSubscriptions, processor);
+    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+    beans.addBean("pushEndpoint", endpoint);
+    return org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+            new com.stelody.collector.push.YouTubePushController(
+                beans.getBeanProvider(com.stelody.collector.push.YouTubePushEndpoint.class)))
+        .build();
+  }
+
+  String pushPath() {
+    return "/api/v1/integrations/youtube/push/"
+        + YTCHANNEL
+        + "/"
+        + YouTubePushTest.settings().token(YTCHANNEL);
+  }
+
+  byte[] pushBody(int number, Instant updated) {
+    return YouTubePushTest.feed(YTCHANNEL, yt(number), updated);
+  }
+
+  org.springframework.test.web.servlet.ResultActions push(
+      org.springframework.test.web.servlet.MockMvc client, byte[] body) throws Exception {
+    return client.perform(
+        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(pushPath())
+            .contentType("application/atom+xml")
+            .header(
+                "X-Hub-Signature",
+                YouTubePushTest.signature(YouTubePushTest.settings(), YTCHANNEL, body, "sha1"))
+            .content(body));
+  }
+
+  @Test
+  void pushCreatesCandidateFromApiAndDeduplicatesWithoutCompletingDailyDiscovery()
+      throws Exception {
+    var client = pushMvc(NOW);
+    videos(1);
+    writer.execute("UPDATE app.cover_publication_control SET enabled=true");
+    var body = pushBody(1, NOW.minusSeconds(1));
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    assertThat(writer.queryForObject("SELECT source_title FROM app.review_item", String.class))
+        .isEqualTo("Test Cover 1");
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    push(client, pushBody(1, NOW.minusSeconds(100)))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
+    assertThat(writer.queryForObject("SELECT version FROM app.review_item", Long.class)).isZero();
+    assertThat(count("song_entry")).isZero();
+    assertThat(count("cover_auto_registration")).isZero();
+    assertThat(count("discovery_channel_state")).isZero();
+    assertThat(count("discovery_run")).isZero();
+    client = pushMvc(NOW.plusSeconds(60));
+    push(client, pushBody(1, NOW.plusSeconds(30)))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    assertThat(count("review_item")).isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT version FROM app.review_item", Long.class))
+        .isEqualTo(1);
+    server.verify(2, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
+  void pushPreservesIgnoredCandidatesAndAlreadyRegisteredVideos() throws Exception {
+    page(null, null, 1);
+    videos(1);
+    assertThat(run(NOW, false, 1).status()).isEqualTo("SUCCEEDED");
+    writer.execute("UPDATE app.review_item SET review_status='IGNORED'");
+    UUID song = UUID.randomUUID(), video = UUID.randomUUID();
+    writer.update(
+        "INSERT INTO app.song_entry(id,title,search_title,song_type) VALUES(?,'Registered','registered','COVER')",
+        song);
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,embeddable) VALUES(?,?,?,?,'OFFICIAL_COVER','PUBLIC','Registered',true)",
+        video,
+        song,
+        yt(2),
+        CHANNEL);
+    server.resetRequests();
+    var client = pushMvc(NOW.plusSeconds(60));
+    for (int n : new int[] {1, 2})
+      push(client, pushBody(n, NOW.plusSeconds(30)))
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                  .isNoContent());
+    server.verify(0, getRequestedFor(urlPathEqualTo("/videos")));
+    assertThat(count("review_item")).isEqualTo(1);
+    assertThat(count("video")).isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT review_status FROM app.review_item", String.class))
+        .isEqualTo("IGNORED");
+  }
+
+  @Test
+  void pushApiFailureAndBusyCollectorReturnRetryable503WithoutLosingOrDuplicatingCandidate()
+      throws Exception {
+    var client = pushMvc(NOW);
+    var body = pushBody(1, NOW.minusSeconds(1));
+    server.stubFor(get(urlPathEqualTo("/videos")).willReturn(serverError()));
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isServiceUnavailable())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                .string("Retry-After", "60"));
+    assertThat(count("review_item")).isZero();
+    try (var lock = com.stelody.collector.service.CollectionLock.acquire(source)) {
+      assertThat(lock).isNotNull();
+      videos(1);
+      push(client, body)
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                  .isServiceUnavailable());
+    }
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    assertThat(count("review_item")).isEqualTo(1);
+  }
+
+  @Test
+  void pushAuthenticatesCapabilityAndSignatureBeforeParsingAndHandlesVerification()
+      throws Exception {
+    var client = pushMvc(NOW);
+    var body = pushBody(1, NOW.minusSeconds(1));
+    client
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(pushPath())
+                .content(body))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isForbidden());
+    client
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(pushPath())
+                .header("X-Hub-Signature", "sha1=" + "0".repeat(40))
+                .content(body))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isForbidden());
+    byte[] mismatch = YouTubePushTest.feed("UC" + "b".repeat(22), yt(1), NOW);
+    push(client, mismatch)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isBadRequest());
+    push(
+            client,
+            "<!DOCTYPE feed [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><feed>&x;</feed>"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isBadRequest());
+    push(client, new byte[com.stelody.collector.push.YouTubePushFeed.MAX_BYTES + 1])
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isPayloadTooLarge());
+    server.stubFor(post(urlEqualTo("/subscribe")).willReturn(aResponse().withStatus(202)));
+    pushSubscriptions.renew();
+    client
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(pushPath())
+                .param("hub.mode", "subscribe")
+                .param("hub.topic", com.stelody.collector.push.YouTubePushSettings.topic(YTCHANNEL))
+                .param("hub.challenge", "challenge")
+                .param("hub.lease_seconds", "86400"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                .string("challenge"));
+    client
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(pushPath())
+                .param("hub.mode", "subscribe")
+                .param("hub.topic", "https://attacker.invalid")
+                .param("hub.challenge", "challenge")
+                .param("hub.lease_seconds", "86400"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNotFound());
+    client
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                pushPath().replace(YouTubePushTest.settings().token(YTCHANNEL), "0".repeat(64))))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNotFound());
+    server.verify(0, getRequestedFor(urlPathEqualTo("/videos")));
+    assertThat(count("review_item")).isZero();
+  }
+
+  @Test
+  void pushRejectsDisabledExternalAndMismatchedChannels() throws Exception {
+    var client = pushMvc(NOW);
+    videosFor("UC" + "b".repeat(22), "PUBLIC", 1);
+    push(client, pushBody(1, NOW.minusSeconds(1)))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isServiceUnavailable());
+    assertThat(count("review_item")).isZero();
+    writer.execute("UPDATE app.channel SET collection_enabled=false");
+    push(client, pushBody(1, NOW))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNotFound());
+    writer.execute("UPDATE app.channel SET collection_enabled=true,channel_type='EXTERNAL'");
+    push(client, pushBody(1, NOW))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNotFound());
+    server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
+  void pushRetriesWhenUploadIsNotYetVisibleInDataApi() throws Exception {
+    var client = pushMvc(NOW);
+    var body = pushBody(1, NOW.minusSeconds(1));
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .willReturn(okJson("{\"kind\":\"youtube#videoListResponse\",\"items\":[]}")));
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isServiceUnavailable());
+    assertThat(count("review_item")).isZero();
+    videos(1);
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    assertThat(count("review_item")).isEqualTo(1);
+  }
+
+  @Test
+  void pushPartialApiVisibilityDoesNotBlockAvailableVideosAndReplayFillsOnlyMissingOnes()
+      throws Exception {
+    var client = pushMvc(NOW);
+    var first =
+        new String(pushBody(1, NOW.minusSeconds(1)), java.nio.charset.StandardCharsets.UTF_8);
+    var second =
+        new String(pushBody(2, NOW.minusSeconds(1)), java.nio.charset.StandardCharsets.UTF_8);
+    var body =
+        first
+            .replace("</feed>", second.substring(second.indexOf("<entry>")))
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    var item =
+        Map.of(
+            "id",
+            yt(1),
+            "snippet",
+            Map.of(
+                "channelId",
+                YTCHANNEL,
+                "title",
+                "First Cover",
+                "publishedAt",
+                "2026-09-01T00:00:00Z"),
+            "status",
+            Map.of("privacyStatus", "public", "embeddable", true),
+            "contentDetails",
+            Map.of("duration", "PT3M"));
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .withQueryParam("id", equalTo(yt(1) + "," + yt(2)))
+            .willReturn(
+                okJson(
+                    mapper.writeValueAsString(
+                        Map.of("kind", "youtube#videoListResponse", "items", List.of(item))))));
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isServiceUnavailable());
+    assertThat(count("review_item")).isEqualTo(1);
+    videos(2);
+    push(client, body)
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    assertThat(count("review_item")).isEqualTo(2);
+    assertThat(
+            writer.queryForObject(
+                "SELECT version FROM app.review_item WHERE youtube_id=?", Long.class, yt(1)))
+        .isZero();
+    server.verify(
+        1, getRequestedFor(urlPathEqualTo("/videos")).withQueryParam("id", equalTo(yt(2))));
   }
 }
