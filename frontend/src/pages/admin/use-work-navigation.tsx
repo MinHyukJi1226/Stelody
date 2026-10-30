@@ -9,6 +9,7 @@ export function useWorkNavigation(
   busy: boolean,
   uncertain: boolean,
   returnTo: string,
+  discardDescription = '저장하지 않은 선택·입력은 버려집니다. 이미 별도로 저장한 아티스트 정보는 유지됩니다.',
 ) {
   const navigate = useNavigate()
   const actions = usePageActions()
@@ -77,7 +78,7 @@ export function useWorkNavigation(
           <p className="text-sm text-muted">
             {uncertain
               ? '이미 반영됐을 수 있습니다. 요청의 성공 여부를 확인하지 않고 나갑니다.'
-              : '저장하지 않은 선택·입력은 버려집니다. 이미 별도로 저장한 아티스트 정보는 유지됩니다.'}
+              : discardDescription}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={dismiss}>계속 작성</Button>
