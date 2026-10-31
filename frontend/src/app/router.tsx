@@ -20,6 +20,21 @@ export const router = createBrowserRouter([
         },
         children: [
           {
+            path: 'review-items',
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-review-items'))
+                .AdminReviewItemsPage,
+            }),
+          },
+          {
+            path: 'review-items/:reviewId',
+            handle: { preserveAdminDraft: true },
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-review-item'))
+                .AdminReviewItemPage,
+            }),
+          },
+          {
             path: 'collection-rules',
             handle: { preserveAdminDraft: true },
             lazy: async () => ({

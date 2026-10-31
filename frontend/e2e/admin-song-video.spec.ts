@@ -44,6 +44,7 @@ async function setup(page: Page) {
       firstSeenAt: '2026-10-28T00:00:00Z',
       sourceExpired: false,
       registeredVideoId: null,
+      registeredSongId: null,
     } satisfies VideoCandidate as VideoCandidate,
   }
   await page.route('**/api/v1/admin/songs', async (route) => {
@@ -409,4 +410,18 @@ test('모바일·PC와 라이트·다크에서 영상 연결 폼이 화면을 �
       animations: 'disabled',
     })
   }
+})
+
+test('개별 후보 문맥의 영상 연결은 지정 후보를 미리 선택하고 입력할 수 있다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await page.goto(
+    `/admin/songs/${sid}/videos/new?candidateId=${rid}&returnTo=${encodeURIComponent('/admin/review-items?status=PENDING&page=1')}`,
+  )
+  await expect(
+    page.getByText(/선택한 공식 영상 · 공식 채널/).first(),
+  ).toBeVisible()
+  await expect(page.getByLabel('연결 사유*', { exact: true })).toBeEnabled()
+  expect(state.pages).toHaveLength(0)
 })

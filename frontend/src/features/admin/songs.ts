@@ -243,7 +243,8 @@ export function songVideoPath(id: string, returnTo: string) {
 }
 export function songReturnPath(value: string | null) {
   if (!value) return '/admin/songs'
-  // Only the two list routes may receive the save result or be return destinations.
-  const match = /^\/admin\/(songs|registrations)(\?[^#\\]*)?$/.test(value)
+  // Only implemented admin lists may receive save results or be return destinations.
+  const match =
+    /^\/admin\/(songs|registrations|review-items)(\?[^#\\]*)?$/.test(value)
   return match ? value : '/admin/songs'
 }
