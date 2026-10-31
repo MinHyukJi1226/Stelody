@@ -602,7 +602,7 @@ public class CatalogAdminQueries {
             """
       INSERT INTO app.video(id,song_id,youtube_id,channel_id,video_kind,availability,source_title,
         source_published_at,source_thumbnail_url,source_duration_seconds,source_observed_at,status_observed_at,embeddable)
-      VALUES(:id,:song,:youtube,:channel,:kind,:availability,:title,:published,:thumbnail,:duration,:observed,:observed,false)
+      VALUES(:id,:song,:youtube,:channel,:kind,:availability,:title,:published,:thumbnail,:duration,:observed,:observed,true)
       """)
         .param("id", id)
         .param("song", song)

@@ -195,6 +195,8 @@ class ReviewIntegrationTest {
     assertThat(writer.queryForObject("SELECT count(*) FROM app.song_entry", Integer.class))
         .isEqualTo(2);
     assertThat(writer.queryForObject("SELECT count(*) FROM app.video", Integer.class)).isEqualTo(2);
+    assertThat(writer.queryForList("SELECT embeddable FROM app.video", Boolean.class))
+        .containsOnly(true);
     assertThat(writer.queryForObject("SELECT count(*) FROM app.admin_audit", Integer.class))
         .isZero();
     mvc.perform(get("/api/v1/songs"))

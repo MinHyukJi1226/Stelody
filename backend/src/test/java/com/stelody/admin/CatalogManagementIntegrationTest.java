@@ -598,7 +598,7 @@ class CatalogManagementIntegrationTest {
     mvc.perform(get("/api/v1/songs/" + song))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.song.title").value("Manual title"))
-        .andExpect(jsonPath("$.representativeVideo.embeddable").value(false));
+        .andExpect(jsonPath("$.representativeVideo.embeddable").value(true));
     var b = songBody(member, "COVER");
     b.put("version", 2);
     b.put("visibility", "HIDDEN");
