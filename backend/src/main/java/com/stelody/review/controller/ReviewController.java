@@ -24,7 +24,10 @@ public class ReviewController {
   }
 
   @GetMapping
-  @Operation(summary = "수집 후보 목록")
+  @Operation(
+      summary = "수집 후보 목록",
+      description =
+          "status 기본값은 PENDING이며 ALL은 검토 상태 제한 없이 조회합니다. ALL에도 disposition(만료 출처는 DEFERRED)·page·size 조건과 최초 발견일 내림차순 정렬을 동일하게 적용합니다. registeredSongId는 등록된 영상의 현재 연결 곡 ID이며 미등록 후보는 null입니다.")
   public ResponseEntity<ReviewDtos.Page> list(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
@@ -66,7 +69,10 @@ public class ReviewController {
   }
 
   @GetMapping("/{id}")
-  @Operation(summary = "수집 후보 상세")
+  @Operation(
+      summary = "수집 후보 상세",
+      description =
+          "registeredVideoId를 유지하고 해당 영상의 현재 연결 곡 ID를 registeredSongId로 반환합니다. 곡 연결을 변경하면 변경된 ID를 반환하며 미등록 후보는 null입니다.")
   public ResponseEntity<ReviewDtos.Item> detail(@PathVariable UUID id) {
     return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.detail(id));
   }

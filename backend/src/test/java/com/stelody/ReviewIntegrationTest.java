@@ -1103,6 +1103,113 @@ class ReviewIntegrationTest {
   }
 
   @Test
+  void allStatusesKeepDispositionFilteringOrderAndPaginationAndPendingDefault() throws Exception {
+    batches.complete(ADMIN, batch(List.of(REVIEW)));
+    for (int n = 5; n <= 8; n++) seed(new UUID(0, n), n);
+    writer.execute(
+        "UPDATE app.review_item SET review_status='IGNORED' WHERE id IN ('00000000-0000-0000-0000-000000000006','00000000-0000-0000-0000-000000000008')");
+    writer.update("UPDATE app.review_item SET disposition='EXCLUDED' WHERE id=?", new UUID(0, 7));
+    writer.update(
+        "UPDATE app.review_item SET source_observed_at=now()-interval '31 days' WHERE id=?",
+        new UUID(0, 8));
+    writer.execute("UPDATE app.review_item SET first_seen_at='2026-01-01T00:00:00Z'");
+
+    mvc.perform(auth(get(ROOT), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(2))
+        .andExpect(jsonPath("$.items[0].status").value("PENDING"))
+        .andExpect(jsonPath("$.items[1].status").value("PENDING"));
+    for (String state : List.of("ALL", "PENDING", "IGNORED", "REGISTERED"))
+      mvc.perform(auth(get(ROOT).param("status", state), admin))
+          .andExpect(status().isOk())
+          .andExpect(
+              jsonPath("$.items.length()")
+                  .value(state.equals("ALL") ? 5 : state.equals("REGISTERED") ? 1 : 2));
+    mvc.perform(
+            auth(
+                get(ROOT).param("status", "ALL").param("disposition", "REVIEW").param("size", "2"),
+                admin))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(jsonPath("$.items.length()").value(2))
+        .andExpect(jsonPath("$.items[0].id").value(new UUID(0, 6).toString()))
+        .andExpect(jsonPath("$.items[1].id").value(new UUID(0, 5).toString()))
+        .andExpect(jsonPath("$.hasNext").value(true));
+    mvc.perform(
+            auth(
+                get(ROOT)
+                    .param("status", "ALL")
+                    .param("disposition", "REVIEW")
+                    .param("size", "2")
+                    .param("page", "1"),
+                admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.items[0].id").value(REVIEW.toString()))
+        .andExpect(jsonPath("$.items[0].status").value("REGISTERED"))
+        .andExpect(jsonPath("$.hasNext").value(false));
+    for (String disposition : List.of("EXCLUDED", "DEFERRED"))
+      mvc.perform(auth(get(ROOT).param("status", "ALL").param("disposition", disposition), admin))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.items.length()").value(1))
+          .andExpect(
+              jsonPath("$.items[0].id")
+                  .value(new UUID(0, disposition.equals("EXCLUDED") ? 7 : 8).toString()))
+          .andExpect(jsonPath("$.items[0].disposition").value(disposition));
+    mvc.perform(auth(get(ROOT).param("status", "ALL").param("page", "-1"), admin))
+        .andExpect(status().isBadRequest());
+    mvc.perform(auth(get(ROOT).param("status", "UNKNOWN"), admin))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void registeredSongIsNullableAndFollowsTheVideosCurrentSongEvenAfterSourceExpiry()
+      throws Exception {
+    for (String state : List.of("PENDING", "IGNORED")) {
+      writer.update("UPDATE app.review_item SET review_status=? WHERE id=?", state, REVIEW);
+      var item =
+          mapper.readTree(
+              mvc.perform(auth(get(ROOT + "/" + REVIEW), admin))
+                  .andExpect(status().isOk())
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString());
+      assertThat(item.has("registeredSongId")).isTrue();
+      assertThat(item.path("registeredSongId").isNull()).isTrue();
+      assertThat(item.has("registeredVideoId")).isTrue();
+      assertThat(item.path("registeredVideoId").isNull()).isTrue();
+    }
+    writer.update("UPDATE app.review_item SET review_status='PENDING' WHERE id=?", REVIEW);
+    UUID original =
+        batches.complete(ADMIN, batch(List.of(REVIEW))).registeredSongs().getFirst().songId();
+    UUID video =
+        writer.queryForObject(
+            "SELECT registered_video_id FROM app.review_item WHERE id=?", UUID.class, REVIEW);
+    mvc.perform(auth(get(ROOT + "/" + REVIEW), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.registeredVideoId").value(video.toString()))
+        .andExpect(jsonPath("$.registeredSongId").value(original.toString()));
+    UUID current = UUID.randomUUID();
+    writer.update(
+        "INSERT INTO app.song_entry(id,title,search_title,song_type) VALUES(?,'Changed song','changedsong','COVER')",
+        current);
+    writer.update("UPDATE app.song_entry SET representative_video_id=NULL WHERE id=?", original);
+    writer.update("UPDATE app.video SET song_id=? WHERE id=?", current, video);
+    writer.update(
+        "UPDATE app.review_item SET source_observed_at=now()-interval '31 days' WHERE id=?",
+        REVIEW);
+    mvc.perform(auth(get(ROOT + "/" + REVIEW), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.registeredVideoId").value(video.toString()))
+        .andExpect(jsonPath("$.registeredSongId").value(current.toString()))
+        .andExpect(jsonPath("$.sourceExpired").value(true));
+    mvc.perform(auth(get(ROOT).param("status", "ALL"), admin))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].registeredVideoId").value(video.toString()))
+        .andExpect(jsonPath("$.items[0].registeredSongId").value(current.toString()));
+  }
+
+  @Test
   void adminCanPageAndReadDetailsWithoutCaching() throws Exception {
     seed(new UUID(0, 5), 2);
     mvc.perform(auth(get(ROOT).param("size", "1"), admin))

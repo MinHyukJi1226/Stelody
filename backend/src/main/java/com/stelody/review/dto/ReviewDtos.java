@@ -62,7 +62,8 @@ public final class ReviewDtos {
         "firstSeenAt",
         "version",
         "sourceExpired",
-        "registeredVideoId"
+        "registeredVideoId",
+        "registeredSongId"
       })
   public record Item(
       UUID id,
@@ -84,7 +85,11 @@ public final class ReviewDtos {
       Instant firstSeenAt,
       long version,
       boolean sourceExpired,
-      @Schema(nullable = true) UUID registeredVideoId) {}
+      @Schema(nullable = true) UUID registeredVideoId,
+      @Schema(
+              nullable = true,
+              description = "registeredVideoId 영상에 현재 연결된 곡 ID입니다. 미등록 등 연결 영상이 없으면 null입니다.")
+          UUID registeredSongId) {}
 
   @Schema(requiredProperties = {"items", "page", "size", "hasNext"})
   public record Page(List<Item> items, int page, int size, boolean hasNext) {}

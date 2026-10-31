@@ -44,6 +44,7 @@ class ReviewRegistrationRulesTest {
         Instant.now(),
         0,
         false,
+        null,
         null);
   }
 

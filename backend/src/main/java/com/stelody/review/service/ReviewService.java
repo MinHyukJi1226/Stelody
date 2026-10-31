@@ -27,7 +27,7 @@ public class ReviewService {
         || page > 10000
         || size < 1
         || size > 50
-        || !List.of("PENDING", "IGNORED", "REGISTERED").contains(status)
+        || !List.of("PENDING", "IGNORED", "REGISTERED", "ALL").contains(status)
         || (disposition != null
             && !List.of("REVIEW", "EXCLUDED", "DEFERRED").contains(disposition)))
       throw ReviewException.invalid();
