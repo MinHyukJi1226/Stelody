@@ -427,3 +427,68 @@ test('실행 실패 뒤 원본을 다시 확인하고 명시적으로 새 요청
   expect(s.writes).toHaveLength(2)
   expect(s.writes[0]?.requestId).not.toBe(s.writes[1]?.requestId)
 })
+
+test('VIDEO가 동일 작업 ID로 완료돼도 실행 결과 진입에서 최신 실행을 조회한다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  await page.goto(path)
+  await submit(page)
+  await expect(
+    page.getByRole('heading', { name: '재시도가 접수되었습니다', exact: true }),
+  ).toBeVisible()
+  s.run = {
+    ...s.run,
+    status: 'SUCCEEDED',
+    attempt: 3,
+    errorCode: null,
+    observedCount: 12,
+    pendingCount: 0,
+  }
+  s.retry = {
+    ...s.retry,
+    status: 'SUCCEEDED',
+    executionRunId: id,
+    finishedAt: new Date().toISOString(),
+  }
+  await page.getByRole('button', { name: '상태 새로고침', exact: true }).click()
+  await page.getByRole('link', { name: '실행 작업 확인', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: '실행 작업 결과', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('VIDEO / SUCCEEDED', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByText(`${id} · 3회`, { exact: true })).toBeVisible()
+  await expect(page.getByText('12 / 12 / 0 / 0', { exact: true })).toBeVisible()
+  await expect(page.getByText('오류 코드 없음', { exact: true })).toBeVisible()
+})
+
+test('탭 복귀·재연결 시 조회 장애가 있어도 미접수 사유를 보존한다', async ({
+  page,
+}) => {
+  await setup(page)
+  await page.goto(path)
+  await page.getByLabel('재시도 사유 *', { exact: true }).fill('유지할 사유')
+  let refreshes = 0
+  await page.route('**/api/v1/admin/collection-status', (r) => {
+    refreshes++
+    return r.fulfill({ status: 503, json: { code: 'UNAVAILABLE' } })
+  })
+  await page.route('**/api/v1/admin/collection-runs/VIDEO/*', (r) => {
+    refreshes++
+    return r.fulfill({ status: 503, json: { code: 'UNAVAILABLE' } })
+  })
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('visibilitychange'))
+    window.dispatchEvent(new Event('focus'))
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect(page.getByLabel('재시도 사유 *', { exact: true })).toHaveValue(
+    '유지할 사유',
+  )
+  // A later user action provides a round trip after the focus events.
+  await page.getByRole('button', { name: '재시도 확인', exact: true }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  expect(refreshes).toBe(0)
+})

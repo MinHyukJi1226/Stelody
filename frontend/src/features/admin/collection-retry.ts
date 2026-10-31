@@ -89,9 +89,10 @@ export const retryRunOptions = (
   kind: string,
   id: string,
   retryId: string | null = null,
+  execution = false,
 ) =>
   queryOptions({
-    queryKey: [...adminKeys(user), 'retry-run', kind, id, retryId],
+    queryKey: [...adminKeys(user), 'retry-run', kind, id, retryId, execution],
     queryFn: async ({ signal }) => ({
       run: await getRun(kind, id, signal),
       overview: await getRetryOverview(signal),
@@ -100,7 +101,9 @@ export const retryRunOptions = (
         : null,
     }),
     retry: false,
-    staleTime: 0,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     gcTime: 0,
   })
 export async function getRetry(receipt: Receipt, signal: AbortSignal) {

@@ -39,7 +39,15 @@ export function AdminCollectionRunPage() {
     { kind = '', runId = '' } = useParams(),
     [params] = useSearchParams()
   const returnTo = failureReturnPath(params.get('returnTo'))
-  const q = useQuery(retryRunOptions(user, kind, runId, params.get('retryId')))
+  const q = useQuery(
+    retryRunOptions(
+      user,
+      kind,
+      runId,
+      params.get('retryId'),
+      params.get('execution') === '1',
+    ),
+  )
   if (isAdminAccessError(q.error))
     return <AdminApiAccess error={q.error} user={user} />
   if (q.isPending) return <SongLoading />
@@ -60,7 +68,7 @@ export function AdminCollectionRunPage() {
     )
   return (
     <RunEditor
-      key={`${user}:${kind}:${runId}:${params.get('retryId') ?? ''}`}
+      key={`${user}:${kind}:${runId}:${params.get('retryId') ?? ''}:${params.get('execution') === '1'}`}
       user={user}
       initial={q.data}
       returnTo={returnTo}
