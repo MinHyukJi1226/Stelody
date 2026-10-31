@@ -17,7 +17,9 @@ public class ReviewQueries {
       "CASE WHEN r.source_observed_at <= CURRENT_TIMESTAMP - INTERVAL '30 days' THEN 'DEFERRED' ELSE r.disposition END";
   private static final String SELECT =
       """
-      SELECT r.*,c.name AS channel_name FROM app.review_item r JOIN app.channel c ON c.id=r.channel_id
+      SELECT r.*,c.name AS channel_name,v.song_id AS registered_song_id
+      FROM app.review_item r JOIN app.channel c ON c.id=r.channel_id
+      LEFT JOIN app.video v ON v.id=r.registered_video_id
       """;
   private final JdbcClient jdbc;
   private final ObjectMapper mapper;
@@ -142,7 +144,7 @@ public class ReviewQueries {
   public List<ReviewDtos.Item> list(int page, int size, String status, String disposition) {
     return jdbc.sql(
             SELECT
-                + " WHERE r.review_status=:status "
+                + " WHERE (:status='ALL' OR r.review_status=:status) "
                 + (disposition == null ? "" : "AND (" + EFFECTIVE_DISPOSITION + ")=:disposition ")
                 + "ORDER BY r.first_seen_at DESC,r.id DESC LIMIT :limit OFFSET :offset")
         .param("status", status)
@@ -201,7 +203,8 @@ public class ReviewQueries {
         rs.getTimestamp("first_seen_at").toInstant(),
         rs.getLong("version"),
         expired,
-        rs.getObject("registered_video_id", UUID.class));
+        rs.getObject("registered_video_id", UUID.class),
+        rs.getObject("registered_song_id", UUID.class));
   }
 
   private Instant instant(Timestamp value) {

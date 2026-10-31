@@ -864,9 +864,11 @@ public class ApiDocumentationConfiguration {
       }
       case "status" -> {
         if (path.equals("/api/v1/members")) schema.setEnum(List.of("ALL", "ACTIVE", "GRADUATED"));
-        else if (path.equals("/api/v1/admin/reviews"))
-          schema.setEnum(List.of("PENDING", "IGNORED", "REGISTERED"));
-        else if (path.equals("/api/v1/admin/collection-runs"))
+        else if (path.equals("/api/v1/admin/reviews")) {
+          schema.setEnum(List.of("PENDING", "IGNORED", "REGISTERED", "ALL"));
+          parameter.setDescription(
+              "기본 PENDING. ALL은 검토 상태 제한 없이 조회하며 disposition·페이지 조건은 동일하게 적용합니다.");
+        } else if (path.equals("/api/v1/admin/collection-runs"))
           schema.setEnum(List.of("RUNNING", "SUCCEEDED", "FAILED", "QUOTA_EXHAUSTED", "TIMED_OUT"));
       }
       case "disposition" -> schema.setEnum(List.of("REVIEW", "EXCLUDED", "DEFERRED"));
