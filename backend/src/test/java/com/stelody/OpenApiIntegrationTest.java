@@ -52,6 +52,39 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsAllReviewStatusesAndNullableCurrentRegisteredSong() throws Exception {
+    var api = contract();
+    var list = api.at("/paths/~1api~1v1~1admin~1reviews/get");
+    var parameters = new java.util.HashMap<String, JsonNode>();
+    list.path("parameters").forEach(p -> parameters.put(p.path("name").asText(), p));
+    assertParameterEnum(
+        parameters.get("status").path("schema"), "PENDING", "IGNORED", "REGISTERED", "ALL");
+    assertThat(parameters.get("status").at("/schema/default").asText()).isEqualTo("PENDING");
+    assertThat(parameters.get("status").path("required").asBoolean()).isFalse();
+    assertParameterEnum(
+        parameters.get("disposition").path("schema"), "REVIEW", "EXCLUDED", "DEFERRED");
+    assertThat(parameters.get("page").at("/schema/default").asInt()).isZero();
+    assertThat(parameters.get("size").at("/schema/default").asInt()).isEqualTo(20);
+    assertThat(list.path("description").asText())
+        .contains("ALL", "disposition", "page", "size", "DEFERRED");
+    assertThat(list.path("security").toString()).contains("session");
+    var detail = api.at("/paths/~1api~1v1~1admin~1reviews~1{id}/get");
+    var item =
+        api.at(
+            detail
+                .at("/responses/200/content/application~1json/schema/$ref")
+                .asText()
+                .substring(1));
+    for (String field : java.util.List.of("registeredVideoId", "registeredSongId")) {
+      var property = item.path("properties").path(field);
+      assertThat(property.path("type").toString()).contains("string", "null");
+      assertThat(property.path("format").asText()).isEqualTo("uuid");
+      assertThat(item.path("required").toString()).contains(field);
+    }
+    assertThat(item.at("/properties/registeredSongId/description").asText()).contains("현재", "null");
+  }
+
+  @Test
   void hubCallbacksAreNotPartOfTheFrontendApiContract() throws Exception {
     var api = contract();
     for (var path : api.path("paths").propertyNames())
