@@ -26,12 +26,10 @@ export function AdminManagementMenu() {
     ['원곡 관리', '/admin/works'],
     ['멤버 관리', '/admin/members'],
     ['공식 채널 관리', '/admin/channels'],
-    ...[
-      '수집 분류 규칙 관리',
-      '개별 후보 검토',
-      '실패 작업 재시도',
-      '변경 이력',
-    ].map((label) => [label, null] as const),
+    ['수집 분류 규칙 관리', '/admin/collection-rules'],
+    ...['개별 후보 검토', '실패 작업 재시도', '변경 이력'].map(
+      (label) => [label, null] as const,
+    ),
   ]
   return (
     <>
