@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/shared/api/errors'
 import {
+  reviewPreviewSchema,
   reviewRequest,
   reviewFieldErrors,
   parseReviewResult,
@@ -31,6 +32,7 @@ const preview: ReviewPreview = {
     firstSeenAt: '2026-10-26T00:00:00Z',
     sourceExpired: false,
     registeredVideoId: null,
+    registeredSongId: null,
   })),
   hasMore: true,
   channelMembers: { [id(99)]: id(98) },
@@ -109,4 +111,14 @@ describe('신규 검토 일괄 등록 계약', () => {
         .replayed,
     ).toBe(true)
   })
+})
+
+it('등록 곡 필드가 없는 이전 후보 응답도 조회하고 잘못된 ID는 거절한다', () => {
+  const legacy = JSON.parse(JSON.stringify(preview))
+  for (const item of legacy.items) delete item.registeredSongId
+  const parsed = reviewPreviewSchema.parse(legacy)
+  expect(parsed.items).toHaveLength(21)
+  expect(parsed.items[0]?.registeredSongId).toBeNull()
+  legacy.items[0].registeredSongId = 'invalid'
+  expect(reviewPreviewSchema.safeParse(legacy).success).toBe(false)
 })

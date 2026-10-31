@@ -30,6 +30,7 @@ function preview(count = 21): ReviewPreview {
       firstSeenAt: '2026-10-26T00:00:00Z',
       sourceExpired: false,
       registeredVideoId: null,
+      registeredSongId: null,
     })),
     channelMembers: { [id(900)]: id(901) },
     hasMore: false,
@@ -540,4 +541,21 @@ test('세션 조회의 일시적 실패에도 검토 선택을 유지하고 복�
   await expect(
     page.getByRole('heading', { name: '등록·정리를 완료했어요' }),
   ).toBeVisible()
+})
+
+test('새 등록 곡 필드가 없는 운영 응답에서도 기존 검토 목록을 표시한다', async ({
+  page,
+}) => {
+  const { state: s } = await setup(page)
+  // Simulate the currently deployed response without registeredSongId.
+  for (const item of s.preview.items)
+    Reflect.deleteProperty(item, 'registeredSongId')
+  await page.goto('/admin/reviews')
+  await expect(
+    page.getByRole('heading', {
+      name: '검토 대상을 불러오지 못했어요',
+      exact: true,
+    }),
+  ).toHaveCount(0)
+  await expect(page.getByRole('checkbox').first()).toBeVisible()
 })

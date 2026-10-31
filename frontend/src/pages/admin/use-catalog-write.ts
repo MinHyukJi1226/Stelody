@@ -8,6 +8,7 @@ import { ApiError } from '@/shared/api/errors'
 
 export type CatalogGuard = {
   user: string
+  conflictCodes?: readonly string[]
   onAccessError: (error: unknown) => void
 }
 export type EditGuard = { dirty: boolean; busy: boolean; uncertain: boolean }
@@ -101,7 +102,10 @@ export function useCatalogWrite<T>(initial: T, guard: CatalogGuard) {
         error.status < 500
       ) {
         setMode(
-          error.status === 409 && error.code === 'CATALOG_VERSION_CONFLICT'
+          error.status === 409 &&
+            (guard.conflictCodes ?? ['CATALOG_VERSION_CONFLICT']).includes(
+              error.code,
+            )
             ? 'conflict'
             : 'edit',
         )
