@@ -513,7 +513,9 @@ export interface paths {
     }
     /**
      * 수집 후보 목록
-     * @description 현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     * @description status 기본값은 PENDING이며 ALL은 검토 상태 제한 없이 조회합니다. ALL에도 disposition(만료 출처는 DEFERRED)·page·size 조건과 최초 발견일 내림차순 정렬을 동일하게 적용합니다. registeredSongId는 등록된 영상의 현재 연결 곡 ID이며 미등록 후보는 null입니다.
+     *
+     *     현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_admin_reviews']
     put?: never
@@ -561,7 +563,9 @@ export interface paths {
     }
     /**
      * 수집 후보 상세
-     * @description 현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     * @description registeredVideoId를 유지하고 해당 영상의 현재 연결 곡 ID를 registeredSongId로 반환합니다. 곡 연결을 변경하면 변경된 ID를 반환하며 미등록 후보는 null입니다.
+     *
+     *     현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_admin_reviews_id']
     put?: never
@@ -2750,6 +2754,11 @@ export interface components {
       /** Format: int64 */
       version: number
       youtubeId: string
+      /**
+       * Format: uuid
+       * @description registeredVideoId 영상에 현재 연결된 곡 ID입니다. 미등록 등 연결 영상이 없으면 null입니다.
+       */
+      registeredSongId: string | null
     }
     'com.stelody.review.dto.ReviewDtos.Page': {
       hasNext: boolean
@@ -5033,7 +5042,8 @@ export interface operations {
       query?: {
         page?: number
         size?: number
-        status?: 'PENDING' | 'IGNORED' | 'REGISTERED'
+        /** @description 기본 PENDING. ALL은 검토 상태 제한 없이 조회하며 disposition·페이지 조건은 동일하게 적용합니다. */
+        status?: 'PENDING' | 'IGNORED' | 'REGISTERED' | 'ALL'
         disposition?: 'REVIEW' | 'EXCLUDED' | 'DEFERRED'
       }
       header?: never

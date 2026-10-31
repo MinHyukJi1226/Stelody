@@ -31,6 +31,7 @@ const preview: ReviewPreview = {
       firstSeenAt: '2026-10-26T00:00:00Z',
       sourceExpired: false,
       registeredVideoId: null,
+      registeredSongId: null,
     },
   ],
   hasMore: false,

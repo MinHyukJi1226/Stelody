@@ -160,6 +160,7 @@ export async function mockAdmin(page: Page) {
                   firstSeenAt: '2026-10-23T15:05:00Z',
                   sourceExpired: false,
                   registeredVideoId: null,
+                  registeredSongId: null,
                 },
               ],
           hasMore: false,

@@ -2358,7 +2358,7 @@
     },
     "/api/v1/admin/reviews": {
       "get": {
-        "description": "현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "description": "status 기본값은 PENDING이며 ALL은 검토 상태 제한 없이 조회합니다. ALL에도 disposition(만료 출처는 DEFERRED)·page·size 조건과 최초 발견일 내림차순 정렬을 동일하게 적용합니다. registeredSongId는 등록된 영상의 현재 연결 곡 ID이며 미등록 후보는 null입니다.\n\n현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
         "operationId": "get_admin_reviews",
         "parameters": [
           {
@@ -2392,8 +2392,9 @@
             "schema": {
               "type": "string",
               "default": "PENDING",
-              "enum": ["PENDING", "IGNORED", "REGISTERED"]
-            }
+              "enum": ["PENDING", "IGNORED", "REGISTERED", "ALL"]
+            },
+            "description": "기본 PENDING. ALL은 검토 상태 제한 없이 조회하며 disposition·페이지 조건은 동일하게 적용합니다."
           },
           {
             "in": "query",
@@ -2419,7 +2420,9 @@
           "401": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "로그인 세션이 없거나 유효하지 않습니다.\nAUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.",
@@ -2428,7 +2431,9 @@
           "403": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "권한 또는 CSRF 검증에 실패했습니다.\nACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.",
@@ -2437,13 +2442,19 @@
           "default": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
           }
         },
-        "security": [{ "session": [] }],
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "summary": "수집 후보 목록",
         "tags": ["관리자"]
       }
@@ -2584,14 +2595,17 @@
     },
     "/api/v1/admin/reviews/{id}": {
       "get": {
-        "description": "현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "description": "registeredVideoId를 유지하고 해당 영상의 현재 연결 곡 ID를 registeredSongId로 반환합니다. 곡 연결을 변경하면 변경된 ID를 반환하며 미등록 후보는 null입니다.\n\n현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
         "operationId": "get_admin_reviews_id",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2608,7 +2622,9 @@
           "401": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "로그인 세션이 없거나 유효하지 않습니다.\nAUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.",
@@ -2617,7 +2633,9 @@
           "403": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "권한 또는 CSRF 검증에 실패했습니다.\nACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.",
@@ -2626,13 +2644,19 @@
           "default": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
           }
         },
-        "security": [{ "session": [] }],
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "summary": "수집 후보 상세",
         "tags": ["관리자"]
       },
@@ -2644,7 +2668,10 @@
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -2671,7 +2698,9 @@
           "401": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "로그인 세션이 없거나 유효하지 않습니다.\nAUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.",
@@ -2680,7 +2709,9 @@
           "403": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "권한 또는 CSRF 검증에 실패했습니다.\nACCESS_DENIED: ADMIN 권한 또는 CSRF 토큰을 확인합니다.",
@@ -2689,13 +2720,20 @@
           "default": {
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
               }
             },
             "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
           }
         },
-        "security": [{ "csrf": [], "session": [] }],
+        "security": [
+          {
+            "csrf": [],
+            "session": []
+          }
+        ],
         "summary": "수집 후보 검토 상태 변경",
         "tags": ["관리자"]
       }
@@ -9071,26 +9109,79 @@
       "com.stelody.review.dto.ReviewDtos.Item": {
         "type": "object",
         "properties": {
-          "availability": { "type": "string" },
-          "channelId": { "type": ["string", "null"], "format": "uuid" },
-          "channelName": { "type": ["string", "null"] },
-          "decisionReason": { "type": "string" },
-          "disposition": { "type": "string" },
-          "durationSeconds": { "type": ["integer", "null"], "format": "int64" },
-          "firstSeenAt": { "type": "string", "format": "date-time" },
-          "id": { "type": "string", "format": "uuid" },
-          "observedAt": { "type": ["string", "null"], "format": "date-time" },
-          "publishedAt": { "type": ["string", "null"], "format": "date-time" },
-          "registeredVideoId": { "type": ["string", "null"], "format": "uuid" },
-          "reviewNote": { "type": ["string", "null"] },
-          "ruleVersion": { "type": "string" },
-          "sourceExpired": { "type": "boolean" },
-          "status": { "type": "string" },
-          "suggestedType": { "type": "string" },
-          "thumbnailUrl": { "type": ["string", "null"] },
-          "title": { "type": ["string", "null"] },
-          "version": { "type": "integer", "format": "int64" },
-          "youtubeId": { "type": "string" }
+          "availability": {
+            "type": "string"
+          },
+          "channelId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "channelName": {
+            "type": ["string", "null"]
+          },
+          "decisionReason": {
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string"
+          },
+          "durationSeconds": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "firstSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "observedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "registeredVideoId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "reviewNote": {
+            "type": ["string", "null"]
+          },
+          "ruleVersion": {
+            "type": "string"
+          },
+          "sourceExpired": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "suggestedType": {
+            "type": "string"
+          },
+          "thumbnailUrl": {
+            "type": ["string", "null"]
+          },
+          "title": {
+            "type": ["string", "null"]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "youtubeId": {
+            "type": "string"
+          },
+          "registeredSongId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "registeredVideoId 영상에 현재 연결된 곡 ID입니다. 미등록 등 연결 영상이 없으면 null입니다."
+          }
         },
         "required": [
           "availability",
@@ -9103,6 +9194,7 @@
           "id",
           "observedAt",
           "publishedAt",
+          "registeredSongId",
           "registeredVideoId",
           "reviewNote",
           "ruleVersion",

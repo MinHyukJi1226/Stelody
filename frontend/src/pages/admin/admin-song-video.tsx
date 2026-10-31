@@ -8,6 +8,8 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
+import { isActiveAdmin } from '@/features/admin/api'
+import { adminKeys } from '@/features/admin/queries'
 import { useAdminUser } from '@/features/admin/admin-context'
 import {
   isAdminAccessError,
@@ -63,13 +65,43 @@ export function AdminSongVideoPage() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   })
+  const candidateId = params.get('candidateId') ?? ''
+  const candidateQuery = useQuery({
+    queryKey: [...adminKeys(user), 'video-preset-candidate', candidateId],
+    queryFn: ({ signal }) => getVideoCandidate(candidateId, signal),
+    enabled: !!candidateId,
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 0,
+  })
+  if (candidateId && isAdminAccessError(candidateQuery.error))
+    return <AdminApiAccess error={candidateQuery.error} user={user} />
+  if (candidateId && candidateQuery.isError)
+    return (
+      <>
+        <SongNav />
+        <section className="admin-panel" role="alert">
+          <h1 className="admin-heading">연결할 후보를 조회하지 못했습니다</h1>
+          <Button onClick={() => void candidateQuery.refetch()}>
+            다시 조회
+          </Button>
+          <Button asChild>
+            <Link to={songReturnPath(params.get('returnTo'))}>
+              원래 목록으로
+            </Link>
+          </Button>
+        </section>
+      </>
+    )
+  if (candidateId && !candidateQuery.data) return <SongLoading />
   if (isAdminAccessError(query.error))
     return <AdminApiAccess error={query.error} user={user} />
   if (query.isSuccess && !query.isFetching)
     return (
       <VideoConnection
-        key={`${user}:${songId}`}
+        key={`${user}:${songId}:${candidateId}`}
         initial={query.data}
+        initialCandidate={candidateQuery.data ?? null}
         returnTo={songReturnPath(params.get('returnTo'))}
       />
     )
@@ -93,10 +125,12 @@ export function AdminSongVideoPage() {
   )
 }
 function VideoConnection({
+  initialCandidate,
   initial,
   returnTo,
 }: {
   initial: AdminSong
+  initialCandidate: VideoCandidate | null
   returnTo: string
 }) {
   const user = useAdminUser()
@@ -111,7 +145,9 @@ function VideoConnection({
   const [page, setPage] = useState(() => listPage(params.get('page')))
   const navigate = useNavigate()
   const actions = usePageActions()
-  const [selected, setSelected] = useState<VideoCandidate | null>(null)
+  const [selected, setSelected] = useState<VideoCandidate | null>(
+    initialCandidate,
+  )
   const [kind, setKind] = useState<VideoKind>(
     initial.type === 'COVER' ? 'OFFICIAL_COVER' : 'OFFICIAL_MV',
   )
@@ -124,7 +160,7 @@ function VideoConnection({
   const [exit, setExit] = useState(false)
   const leaving = useRef(false)
   const edit = useCatalogWrite<Snapshot>(
-    { song: initial, candidate: null },
+    { song: initial, candidate: initialCandidate },
     { user, onAccessError: setAccessError },
   )
   const candidates = useQuery({
@@ -137,7 +173,9 @@ function VideoConnection({
     edit.uncertain ||
     edit.mode === 'conflict' ||
     session.isError ||
-    !edit.verified()
+    !session.isSuccess ||
+    !isActiveAdmin(session.data) ||
+    session.data?.id !== user
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       !leaving.current &&

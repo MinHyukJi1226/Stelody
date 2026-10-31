@@ -12,7 +12,7 @@ export type VideoCandidate =
 type Registration =
   ApiSchemas['com.stelody.admin.dto.CatalogAdminDtos.Registration']
 const instant = z.iso.datetime({ offset: true }).nullable()
-const candidateSchema = z.object({
+export const candidateSchema = z.object({
   id: z.uuid(),
   version: z.number().int().nonnegative(),
   youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
@@ -33,6 +33,8 @@ const candidateSchema = z.object({
   firstSeenAt: z.iso.datetime({ offset: true }),
   sourceExpired: z.boolean(),
   registeredVideoId: z.uuid().nullable(),
+  // Older deployments omit this field; never infer the song ID from the video ID.
+  registeredSongId: z.uuid().nullable().default(null),
 }) satisfies z.ZodType<VideoCandidate>
 const pageSchema = z.object({
   items: z.array(candidateSchema),

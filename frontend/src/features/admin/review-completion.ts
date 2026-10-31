@@ -32,6 +32,8 @@ const candidateSchema = z.object({
   firstSeenAt: z.iso.datetime({ offset: true }),
   sourceExpired: z.literal(false),
   registeredVideoId: z.uuid().nullable(),
+  // Older deployments omit this field; never infer the song ID from the video ID.
+  registeredSongId: z.uuid().nullable().default(null),
 })
 export const reviewPreviewSchema = z
   .object({
