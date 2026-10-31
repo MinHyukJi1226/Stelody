@@ -1,3 +1,4 @@
+import { runPath } from '@/features/admin/collection-retry'
 import { Button } from '@/shared/ui/button'
 import { songEditPath } from '@/features/admin/songs'
 import { adminLabel } from '@/features/admin/format'
@@ -176,7 +177,8 @@ function FailureWindowPage() {
   )
 }
 function FailuresWithWindow({ window }: { window: FailureWindow }) {
-  const { page, onPage } = useAdminPage()
+  const { page, onPage, params } = useAdminPage()
+  const returnTo = '/admin/failures?' + params.toString()
   const query = useQuery(adminFailureOptions(useAdminUser(), page, window))
   return (
     <AdminScreen title="수집 실패 작업" query={query}>
@@ -197,8 +199,9 @@ function FailuresWithWindow({ window }: { window: FailureWindow }) {
           '종료 시각 (KST)',
           '시도 횟수',
           '오류 코드',
+          '작업 상세',
         ]}
-        widths={[18, 14, 18, 18, 10, 22]}
+        widths={[14, 12, 18, 18, 10, 16, 12]}
         rows={(query.data?.items ?? []).map((item) => ({
           key: `${item.kind}:${item.id}`,
           cells: [
@@ -208,6 +211,9 @@ function FailuresWithWindow({ window }: { window: FailureWindow }) {
             <AdminTime value={item.finishedAt} empty="종료 시각 없음" />,
             `${item.attempt}회`,
             item.errorCode ?? '오류 코드 없음',
+            <Button asChild>
+              <Link to={runPath(item.kind, item.id, returnTo)}>작업 상세</Link>
+            </Button>,
           ],
         }))}
         empty="해당 기간에 미해결 실패 작업이 없습니다."
@@ -220,7 +226,6 @@ function FailuresWithWindow({ window }: { window: FailureWindow }) {
           onPage={onPage}
         />
       )}
-      <ReadOnlyNote />
     </AdminScreen>
   )
 }
