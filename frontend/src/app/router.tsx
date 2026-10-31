@@ -20,6 +20,14 @@ export const router = createBrowserRouter([
         },
         children: [
           {
+            path: 'collection-rules',
+            handle: { preserveAdminDraft: true },
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-collection-rules'))
+                .AdminCollectionRulesPage,
+            }),
+          },
+          {
             path: 'channels',
             lazy: async () => ({
               Component: (await import('@/pages/admin/admin-channels'))
