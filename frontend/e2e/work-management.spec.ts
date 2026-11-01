@@ -148,7 +148,7 @@ async function save(page: Page) {
     .getByRole('button', { name: '확인 후 저장', exact: true })
     .click()
 }
-test('관리 메뉴에서 원곡 목록에 진입하고 미구현 항목은 실행하지 않는다', async ({
+test('관리 메뉴에서 원곡 목록에 진입하고 영상 정보 수정 메뉴는 표시하지 않는다', async ({
   page,
 }) => {
   await setup(page)
@@ -159,7 +159,7 @@ test('관리 메뉴에서 원곡 목록에 진입하고 미구현 항목은 실�
       name: '영상 정보 수정 · 준비 중',
       exact: true,
     }),
-  ).toBeDisabled()
+  ).toHaveCount(0)
   await page.getByRole('link', { name: '원곡 관리', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: '원곡 관리', exact: true }),
