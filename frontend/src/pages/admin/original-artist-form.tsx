@@ -1,3 +1,4 @@
+import { AuditButton, AuditScope } from './audit-button'
 import { useEffect, useState } from 'react'
 import {
   getArtist,
@@ -91,93 +92,96 @@ function ExistingArtistEditor({
     )
   if (!props.enabled) return null
   return (
-    <Dialog
-      labelledBy="original-artist-title"
-      onDismiss={cancel}
-      busy={edit.busy}
-      className="song-selector original-artist-dialog"
-    >
-      {exit ? (
-        <CatalogExit
-          onContinue={() => setExit(false)}
-          onLeave={props.onDismiss}
-          uncertain={edit.uncertain}
-        />
-      ) : edit.mode === 'confirm' ? (
-        <>
-          <h2 id="original-artist-title" className="text-lg font-bold">
-            아티스트 정보를 저장할까요?
-          </h2>
-          <p className="text-sm text-muted">
-            이 아티스트를 연결한 원곡과 외부 참여자 표시에도 변경이 반영될 수
-            있습니다.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={edit.busy} onClick={() => edit.setMode('edit')}>
-              취소
-            </Button>
-            <Button
-              variant="primary"
-              disabled={edit.busy}
-              onClick={() => void save()}
-            >
-              {edit.busy ? '저장 중…' : '아티스트 정보 저장'}
-            </Button>
-          </div>
-        </>
-      ) : edit.mode !== 'edit' ? (
-        <CatalogWriteStatus
-          mode={edit.mode}
-          busy={edit.busy}
-          notice={edit.notice}
-          base={describe(edit.base)}
-          draft={describe({ name, aliases })}
-          latest={edit.latest ? describe(edit.latest) : null}
-          check={() => {
-            void edit.check((signal) => getArtist(initial.id, signal))
-          }}
-          review={edit.review}
-          back={cancel}
-        />
-      ) : (
-        <>
-          <h2 id="original-artist-title" className="text-lg font-bold">
-            아티스트 정보 수정
-          </h2>
-          {initial && (
-            <div className="song-read-value grid gap-2">
-              <strong>이 아티스트를 쓰는 곳에 함께 반영돼요</strong>
-              <p>
-                이름·별칭 수정은 다른 원곡과 외부 참여자 표시에도 영향을 줄 수
-                있습니다.
-              </p>
-            </div>
-          )}
-          {edit.notice && (
-            <p role="status" className="text-sm text-warning">
-              {edit.notice}
-            </p>
-          )}
-          <ArtistFields
-            value={{ name, aliases, alias, reason }}
-            change={(patch) => {
-              if (patch.name !== undefined) setName(patch.name)
-              if (patch.aliases !== undefined) setAliases(patch.aliases)
-              if (patch.alias !== undefined) setAlias(patch.alias)
-              if (patch.reason !== undefined) setReason(patch.reason)
-            }}
-            errors={edit.errors}
-            busy={edit.busy}
-            dirty={dirty}
-            action="아티스트 정보 저장"
-            save={confirm}
-            cancel={cancel}
+    <AuditScope dirty={dirty} busy={edit.busy} uncertain={edit.uncertain}>
+      <Dialog
+        labelledBy="original-artist-title"
+        onDismiss={cancel}
+        busy={edit.busy}
+        className="song-selector original-artist-dialog"
+      >
+        {exit ? (
+          <CatalogExit
+            onContinue={() => setExit(false)}
+            onLeave={props.onDismiss}
+            uncertain={edit.uncertain}
           />
-          <Hint>
-            아티스트 정보 저장과 원곡 아티스트 연결 저장은 별개입니다.
-          </Hint>
-        </>
-      )}
-    </Dialog>
+        ) : edit.mode === 'confirm' ? (
+          <>
+            <h2 id="original-artist-title" className="text-lg font-bold">
+              아티스트 정보를 저장할까요?
+            </h2>
+            <p className="text-sm text-muted">
+              이 아티스트를 연결한 원곡과 외부 참여자 표시에도 변경이 반영될 수
+              있습니다.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={edit.busy} onClick={() => edit.setMode('edit')}>
+                취소
+              </Button>
+              <Button
+                variant="primary"
+                disabled={edit.busy}
+                onClick={() => void save()}
+              >
+                {edit.busy ? '저장 중…' : '아티스트 정보 저장'}
+              </Button>
+            </div>
+          </>
+        ) : edit.mode !== 'edit' ? (
+          <CatalogWriteStatus
+            mode={edit.mode}
+            busy={edit.busy}
+            notice={edit.notice}
+            base={describe(edit.base)}
+            draft={describe({ name, aliases })}
+            latest={edit.latest ? describe(edit.latest) : null}
+            check={() => {
+              void edit.check((signal) => getArtist(initial.id, signal))
+            }}
+            review={edit.review}
+            back={cancel}
+          />
+        ) : (
+          <>
+            <h2 id="original-artist-title" className="text-lg font-bold">
+              아티스트 정보 수정
+            </h2>
+            <AuditButton kind="artists" id={initial.id} />
+            {initial && (
+              <div className="song-read-value grid gap-2">
+                <strong>이 아티스트를 쓰는 곳에 함께 반영돼요</strong>
+                <p>
+                  이름·별칭 수정은 다른 원곡과 외부 참여자 표시에도 영향을 줄 수
+                  있습니다.
+                </p>
+              </div>
+            )}
+            {edit.notice && (
+              <p role="status" className="text-sm text-warning">
+                {edit.notice}
+              </p>
+            )}
+            <ArtistFields
+              value={{ name, aliases, alias, reason }}
+              change={(patch) => {
+                if (patch.name !== undefined) setName(patch.name)
+                if (patch.aliases !== undefined) setAliases(patch.aliases)
+                if (patch.alias !== undefined) setAlias(patch.alias)
+                if (patch.reason !== undefined) setReason(patch.reason)
+              }}
+              errors={edit.errors}
+              busy={edit.busy}
+              dirty={dirty}
+              action="아티스트 정보 저장"
+              save={confirm}
+              cancel={cancel}
+            />
+            <Hint>
+              아티스트 정보 저장과 원곡 아티스트 연결 저장은 별개입니다.
+            </Hint>
+          </>
+        )}
+      </Dialog>
+    </AuditScope>
   )
 }

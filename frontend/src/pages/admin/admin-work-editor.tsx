@@ -1,3 +1,4 @@
+import { AuditButton, AuditScope } from './audit-button'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router'
@@ -226,11 +227,12 @@ function WorkEditor({ initial }: { initial: Work | null }) {
     edit.mode === 'unknown' ||
     edit.mode === 'checked'
   return (
-    <>
+    <AuditScope dirty={dirty} busy={busy} uncertain={edit.uncertain}>
       <SongNav />
       <h1 className="admin-heading">
         {created ? '원곡을 등록했습니다' : initial ? '원곡 수정' : '원곡 등록'}
       </h1>
+      {base && <AuditButton kind="works" id={base.id} />}
       {created ? (
         <section className="admin-panel" role="status">
           <p>서버의 생성 성공 응답에서 등록된 원곡을 확인했습니다.</p>
@@ -365,7 +367,7 @@ function WorkEditor({ initial }: { initial: Work | null }) {
                         {busy ? '조회 중…' : '최신 저장값 조회'}
                       </Button>
                     )}
-                    <Button disabled>변경 이력 · 준비 중</Button>
+
                     <Button disabled={busy} onClick={navigation.cancel}>
                       목록으로
                     </Button>
@@ -491,7 +493,7 @@ function WorkEditor({ initial }: { initial: Work | null }) {
         />
       )}
       {navigation.dialog}
-    </>
+    </AuditScope>
   )
 }
 function WorkValue({

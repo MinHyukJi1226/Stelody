@@ -1,3 +1,4 @@
+import { AuditButton } from './audit-button'
 import { songLabel } from '@/features/admin/format'
 import type { Draft } from '@/features/admin/song-draft'
 import type { AdminSong } from '@/features/admin/songs'
@@ -171,6 +172,13 @@ export function SongEditorFields({
                     : '선택된 영상 없음')}
               </ReadValue>
               <Button onClick={() => select('video')}>대표 영상 선택</Button>
+              {video && (
+                <AuditButton
+                  kind="videos"
+                  id={video.id}
+                  label="영상 변경 이력"
+                />
+              )}
               <FieldError message={errors.representativeVideoId} />
               <ReadValue label="영상 정보 · 조회 전용">
                 {video ? (

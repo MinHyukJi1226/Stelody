@@ -1,3 +1,4 @@
+import { AuditButton, AuditScope } from './audit-button'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAdminUser } from '@/features/admin/admin-context'
@@ -190,11 +191,12 @@ function RulesEditor({ initial }: { initial: RuleSnapshot }) {
     )
   const comparing = ['conflict', 'unknown', 'checked'].includes(edit.mode)
   return (
-    <>
+    <AuditScope dirty={dirty} busy={busy} uncertain={edit.uncertain}>
       <SongNav />
       <h1 className="admin-heading">
         {view === 'preview' ? '변경할 규칙으로 샘플 판정' : '수집 분류 규칙'}
       </h1>
+      <AuditButton kind="collection-rules" label="규칙 변경 이력" />
       {edit.notice && (
         <p role="alert" className="admin-notice text-error">
           {edit.notice}
@@ -372,7 +374,6 @@ function RulesEditor({ initial }: { initial: RuleSnapshot }) {
               >
                 샘플 판정
               </Button>
-              <Button disabled>규칙 변경 이력 · 준비 중</Button>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" onClick={confirm}>
@@ -554,7 +555,7 @@ function RulesEditor({ initial }: { initial: RuleSnapshot }) {
         </Dialog>
       )}
       {nav.dialog}
-    </>
+    </AuditScope>
   )
 }
 function Markers({ values }: { values: Configuration['cover'] }) {

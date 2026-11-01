@@ -1,3 +1,4 @@
+import { AuditButton, AuditScope } from './audit-button'
 import { VideoTargetPicker } from './admin-management-menu'
 import { songVideoPath, songEditPath } from '@/features/admin/songs'
 import { useState } from 'react'
@@ -138,9 +139,10 @@ function ReviewEditor({
       </>
     )
   return (
-    <>
+    <AuditScope dirty={dirty} busy={edit.busy} uncertain={edit.uncertain}>
       <SongNav />
       <h1 className="admin-heading">수집 후보 상세</h1>
+      <AuditButton kind="reviews" id={base.id} label="후보 변경 이력" />
       <section className="admin-panel gap-2">
         <h2 className="font-bold">확인해 주세요</h2>
         <p className="text-sm text-muted">
@@ -359,7 +361,7 @@ function ReviewEditor({
             이 후보를 기존 곡에 연결
           </Button>
         )}
-        <Button disabled>후보 변경 이력 · 준비 중</Button>
+
         <Button disabled={edit.busy} onClick={nav.cancel}>
           취소
         </Button>
@@ -449,7 +451,7 @@ function ReviewEditor({
         </Dialog>
       )}
       {nav.dialog}
-    </>
+    </AuditScope>
   )
 }
 

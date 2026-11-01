@@ -1,3 +1,4 @@
+import { AuditButton, AuditScope } from './audit-button'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -51,7 +52,12 @@ function SelectionRows({
   onToggle,
   multiple,
 }: {
-  rows: { id: string; name: string; detail?: React.ReactNode }[]
+  rows: {
+    id: string
+    name: string
+    detail?: React.ReactNode
+    actions?: React.ReactNode
+  }[]
   selected: string[]
   onToggle: (id: string) => void
   multiple: boolean
@@ -59,20 +65,25 @@ function SelectionRows({
   return (
     <div className="grid gap-3">
       {rows.map((row) => (
-        <label key={row.id} className="song-select-row">
-          <input
-            type={multiple ? 'checkbox' : 'radio'}
-            name="song-selection"
-            checked={row.id ? selected.includes(row.id) : selected.length === 0}
-            onChange={() => onToggle(row.id)}
-          />
-          <span className="min-w-0 break-words">
-            {row.name}
-            {row.detail && (
-              <span className="block text-xs text-muted">{row.detail}</span>
-            )}
-          </span>
-        </label>
+        <div key={row.id} className="grid gap-2">
+          <label className="song-select-row">
+            <input
+              type={multiple ? 'checkbox' : 'radio'}
+              name="song-selection"
+              checked={
+                row.id ? selected.includes(row.id) : selected.length === 0
+              }
+              onChange={() => onToggle(row.id)}
+            />
+            <span className="min-w-0 break-words">
+              {row.name}
+              {row.detail && (
+                <span className="block text-xs text-muted">{row.detail}</span>
+              )}
+            </span>
+          </label>
+          {row.actions}
+        </div>
       ))}
     </div>
   )
@@ -184,36 +195,45 @@ function EntitySelector(props: Props & { kind: EntityKind }) {
 function VideoSelector(props: Props) {
   const [selected, setSelected] = useState(props.selected)
   return (
-    <div className="grid gap-6">
-      <p className="text-xs text-muted">
-        현재 곡에 연결된 영상에서 선택합니다. 공개 가능 여부는 저장 시 서버에서
-        검증합니다.
-      </p>
-      <SelectionRows
-        rows={[
-          { id: '', name: '대표 영상 지정 안 함' },
-          ...props.videos.map((v) => ({
-            id: v.id,
-            name: v.sourceTitle ?? v.youtubeId,
-            detail: (
-              <>
-                {songLabel(v.kind)} · {songLabel(v.availability)} ·{' '}
-                <AdminTime value={v.publishedAt} empty="공개일 없음" />
-              </>
-            ),
-          })),
-        ]}
-        selected={selected}
-        multiple={false}
-        onToggle={(id) => setSelected(id ? [id] : [])}
-      />
-      {!props.videos.length && <p>연결된 영상이 없습니다.</p>}
-      <div className="grid justify-items-start gap-2">
-        <Button variant="primary" onClick={() => props.onApply(selected)}>
-          선택 적용
-        </Button>
-        <Button onClick={props.onDismiss}>취소</Button>
+    <AuditScope
+      dirty={JSON.stringify(selected) !== JSON.stringify(props.selected)}
+      busy={false}
+      uncertain={false}
+    >
+      <div className="grid gap-6">
+        <p className="text-xs text-muted">
+          현재 곡에 연결된 영상에서 선택합니다. 공개 가능 여부는 저장 시
+          서버에서 검증합니다.
+        </p>
+        <SelectionRows
+          rows={[
+            { id: '', name: '대표 영상 지정 안 함' },
+            ...props.videos.map((v) => ({
+              id: v.id,
+              name: v.sourceTitle ?? v.youtubeId,
+              actions: (
+                <AuditButton kind="videos" id={v.id} label="영상 변경 이력" />
+              ),
+              detail: (
+                <>
+                  {songLabel(v.kind)} · {songLabel(v.availability)} ·{' '}
+                  <AdminTime value={v.publishedAt} empty="공개일 없음" />
+                </>
+              ),
+            })),
+          ]}
+          selected={selected}
+          multiple={false}
+          onToggle={(id) => setSelected(id ? [id] : [])}
+        />
+        {!props.videos.length && <p>연결된 영상이 없습니다.</p>}
+        <div className="grid justify-items-start gap-2">
+          <Button variant="primary" onClick={() => props.onApply(selected)}>
+            선택 적용
+          </Button>
+          <Button onClick={props.onDismiss}>취소</Button>
+        </div>
       </div>
-    </div>
+    </AuditScope>
   )
 }
