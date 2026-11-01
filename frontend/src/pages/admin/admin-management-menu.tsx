@@ -30,10 +30,9 @@ export function AdminManagementMenu() {
     location.pathname === '/admin/songs'
       ? location.pathname + location.search
       : '/admin/songs'
-  const items: readonly (readonly [string, string | null])[] = [
+  const items: readonly (readonly [string, string])[] = [
     ['노래 수동 등록', `/admin/songs/new?${new URLSearchParams({ returnTo })}`],
     ['영상 추가 연결', 'select-song'],
-    ['영상 정보 수정', null],
     ['원곡 관리', '/admin/works'],
     ['멤버 관리', '/admin/members'],
     ['공식 채널 관리', '/admin/channels'],
@@ -72,15 +71,11 @@ export function AdminManagementMenu() {
                   >
                     {label}
                   </Button>
-                ) : to ? (
+                ) : (
                   <Button asChild key={label}>
                     <Link to={to} onClick={() => setOpen(false)}>
                       {label}
                     </Link>
-                  </Button>
-                ) : (
-                  <Button disabled key={label}>
-                    {label} · 준비 중
                   </Button>
                 ),
               )}
