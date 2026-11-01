@@ -1,3 +1,4 @@
+import { AuditButton, AuditScope } from './audit-button'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router'
@@ -166,7 +167,7 @@ function ChannelEditor({ initial }: { initial: AdminChannel | null }) {
     )
   const comparing = ['conflict', 'unknown', 'checked'].includes(edit.mode)
   return (
-    <>
+    <AuditScope dirty={dirty} busy={edit.busy} uncertain={edit.uncertain}>
       <SongNav />
       <h1 className="admin-heading">
         {created
@@ -175,6 +176,7 @@ function ChannelEditor({ initial }: { initial: AdminChannel | null }) {
             ? '공식 채널 수정'
             : '공식 채널 등록'}
       </h1>
+      {base && <AuditButton kind="channels" id={base.id} />}
       {created ? (
         <section className="admin-panel" role="status">
           <p>서버의 생성 성공 응답에서 등록된 채널을 확인했습니다.</p>
@@ -289,7 +291,7 @@ function ChannelEditor({ initial }: { initial: AdminChannel | null }) {
                     채널 목록에서 확인
                   </Button>
                 )}
-                <Button disabled>변경 이력 · 준비 중</Button>
+
                 <Button disabled={edit.busy} onClick={navigation.cancel}>
                   원래 목록으로
                 </Button>
@@ -359,7 +361,7 @@ function ChannelEditor({ initial }: { initial: AdminChannel | null }) {
         </Dialog>
       )}
       {navigation.dialog}
-    </>
+    </AuditScope>
   )
 }
 function ChannelValue({

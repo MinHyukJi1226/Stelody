@@ -1,3 +1,4 @@
+import { AuditButton, AuditScope } from './audit-button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/ui/tabs'
 import { usePageActions, type PageAction } from '@/shared/lib/page-action-guard'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -399,13 +400,18 @@ function SongEditor({
   if (accessError || isAdminAccessError(labels.error))
     return <AdminApiAccess error={accessError ?? labels.error} user={user} />
   return (
-    <>
+    <AuditScope
+      dirty={dirty || workGuard.dirty}
+      busy={allBusy || checking}
+      uncertain={anyUncertain}
+    >
       {session.isError ? (
         <AdminAccess state="error" onRetry={() => void session.refetch()} />
       ) : (
         <>
           <h1 className="admin-heading">기존 곡 수정</h1>
           <SongNav />
+          <AuditButton kind="songs" id={base.id} />
           <div>
             <Button asChild disabled={allBusy || checking}>
               <Link to={songVideoPath(base.id, returnTo)}>
@@ -674,6 +680,6 @@ function SongEditor({
           </div>
         </Dialog>
       )}
-    </>
+    </AuditScope>
   )
 }
