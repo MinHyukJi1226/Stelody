@@ -392,6 +392,46 @@ test('새로고침 후에도 같은 대상·이력 페이지를 복구한다', a
     .getByRole('button', { name: '원래 화면으로', exact: true })
     .click()
   await expect(page).toHaveURL(editPath)
+  await page.getByRole('button', { name: '변경 이력', exact: true }).click()
+  await expect(overlay.getByText('1페이지', { exact: true })).toBeVisible()
+})
+
+test('관리 메뉴의 대상·상세를 새로고침으로 복구하고 닫은 후에는 새 대상 선택으로 연다', async ({
+  page,
+}) => {
+  await setup(page)
+  await openHub(page)
+  await kind(page, '곡')
+  const overlay = page.getByRole('dialog').last()
+  await overlay
+    .getByRole('button', { name: '이 대상 선택', exact: true })
+    .first()
+    .click()
+  await overlay.getByRole('button', { name: '이력 보기', exact: true }).click()
+  await overlay.getByRole('button', { name: '다음', exact: true }).click()
+  await overlay
+    .getByRole('button', { name: '변경 전후 보기', exact: true })
+    .click()
+  await page.reload()
+  await expect(
+    overlay.getByRole('heading', { name: '변경 전후 상세', exact: true }),
+  ).toBeVisible()
+  await overlay
+    .getByRole('button', { name: '이력 목록으로', exact: true })
+    .first()
+    .click()
+  await expect(overlay.getByText('2페이지', { exact: true })).toBeVisible()
+  await overlay
+    .getByRole('button', { name: '원래 화면으로', exact: true })
+    .click()
+  const menu = page.getByRole('dialog').last()
+  await menu.getByRole('button', { name: '변경 이력', exact: true }).click()
+  await expect(
+    overlay.getByRole('heading', {
+      name: '어떤 대상의 이력을 볼까요?',
+      exact: true,
+    }),
+  ).toBeVisible()
 })
 
 test('영상 선택창에서 이력을 열어도 미적용 대표 영상 선택을 유지한다', async ({

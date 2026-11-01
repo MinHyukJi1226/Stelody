@@ -1,10 +1,11 @@
 import { useLocation } from 'react-router'
 import { useAdminUser } from '@/features/admin/admin-context'
 import {
+  auditRecoveryKey,
   readAuditRecovery,
   saveAuditRecovery,
 } from '@/features/admin/audit-recovery'
-import { useContext, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { AuditGuardContext } from '@/features/admin/audit-context'
 import type { AuditKind } from '@/features/admin/audit'
 import { Button } from '@/shared/ui/button'
@@ -49,18 +50,24 @@ export function AuditButton({
 }) {
   const location = useLocation(),
     user = useAdminUser(),
-    recoveryKey = JSON.stringify([
-      'stelody:audit',
+    recoveryKey = auditRecoveryKey(
       user,
       location.pathname + location.search,
-      kind ?? 'hub',
-      id ?? '',
-    ])
-  const [recovery] = useState(() => readAuditRecovery(recoveryKey))
+      kind,
+      id,
+    )
+  const [recovery, setRecovery] = useState(() => readAuditRecovery(recoveryKey))
   const guard = useContext(AuditGuardContext),
-    [open, setOpen] = useState(!!recovery),
+    [open, setOpen] = useState(false),
     [confirm, setConfirm] = useState(false)
+  useEffect(() => {
+    if (!recovery) return
+    // Open after the containing native dialog has entered the top layer.
+    const frame = requestAnimationFrame(() => setOpen(true))
+    return () => cancelAnimationFrame(frame)
+  }, [recovery])
   function show() {
+    setRecovery(null)
     saveAuditRecovery(recoveryKey, {
       target: kind ? { kind, id: id ?? null, name: name ?? '' } : null,
       page: 0,
@@ -114,6 +121,7 @@ export function AuditButton({
           initial={kind ? { kind, id: id ?? null, name: name ?? '' } : null}
           onClose={() => {
             saveAuditRecovery(recoveryKey, null)
+            setRecovery(null)
             setOpen(false)
           }}
         />

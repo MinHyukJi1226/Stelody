@@ -1,4 +1,11 @@
 import { z } from 'zod'
+import type { AuditKind } from './audit'
+export const auditRecoveryKey = (
+  user: string,
+  origin: string,
+  kind?: AuditKind,
+  id?: string | null,
+) => JSON.stringify(['stelody:audit', user, origin, kind ?? 'hub', id ?? ''])
 const target = z.object({
   kind: z.enum([
     'songs',

@@ -1,4 +1,8 @@
 import { AuditButton } from './audit-button'
+import {
+  auditRecoveryKey,
+  readAuditRecovery,
+} from '@/features/admin/audit-recovery'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -12,9 +16,15 @@ import { AdminApiAccess, AdminPagination } from './admin-shared'
 
 /** AD01-menu: expose implemented destinations; retain the other designs as 준비 중. */
 export function AdminManagementMenu() {
-  const [open, setOpen] = useState(false)
-  const [chooseSong, setChooseSong] = useState(false)
   const location = useLocation()
+  const user = useAdminUser()
+  const [open, setOpen] = useState(
+    () =>
+      !!readAuditRecovery(
+        auditRecoveryKey(user, location.pathname + location.search),
+      ),
+  )
+  const [chooseSong, setChooseSong] = useState(false)
   const navigate = useNavigate()
   const returnTo =
     location.pathname === '/admin/songs'
