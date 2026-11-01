@@ -156,7 +156,7 @@ test('관리 메뉴에서 원곡 목록에 진입하고 미구현 항목은 실�
   await page.getByRole('button', { name: '관리 기능', exact: true }).click()
   await expect(
     page.getByRole('button', {
-      name: '실패 작업 재시도 · 준비 중',
+      name: '변경 이력 · 준비 중',
       exact: true,
     }),
   ).toBeDisabled()

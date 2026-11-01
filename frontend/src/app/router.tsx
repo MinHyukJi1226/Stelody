@@ -20,6 +20,14 @@ export const router = createBrowserRouter([
         },
         children: [
           {
+            path: 'collection-runs/:kind/:runId',
+            handle: { preserveAdminDraft: true },
+            lazy: async () => ({
+              Component: (await import('@/pages/admin/admin-collection-retry'))
+                .AdminCollectionRunPage,
+            }),
+          },
+          {
             path: 'review-items',
             lazy: async () => ({
               Component: (await import('@/pages/admin/admin-review-items'))

@@ -125,10 +125,10 @@ export function AdminCollectionPage() {
             후보 {data.deferredReviews.toLocaleString('ko-KR')}건
           </p>
           <div className="admin-notice">
-            <p>실패 작업 재시도 · 후속 범위</p>
+            <p>실패 작업 재시도</p>
             <p className="text-muted">
-              현재 화면에서는 실행 결과만 조회합니다. 재시도 버튼과 자동 공개
-              변경은 제공하지 않습니다.
+              관리 기능의 실패 작업 재시도에서 실패 목록과 작업 상세를 확인하고
+              재시도를 요청할 수 있습니다.
             </p>
           </div>
         </>
