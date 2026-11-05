@@ -69,6 +69,9 @@ class SecurityConfigurationTest {
   com.stelody.milestone.MilestoneService milestones;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.schedule.PublicScheduleRepository publicSchedules;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.export.service.ExportService exports;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean

@@ -10,6 +10,7 @@ import com.stelody.collector.domain.CollectionFailure;
 import com.stelody.collector.youtube.YouTubeVideoClient;
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
@@ -108,6 +109,28 @@ class YouTubeVideoClientTest {
     assertThat(value.liveBroadcastContent()).isEqualTo("none");
     assertThat(value.liveStreamingDetailsPresent()).isTrue();
     assertThat(value.availability()).isEqualTo("PUBLIC");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"public", "private", "unlisted"})
+  void onlyPublicUpcomingVideosExposeTheScheduledStart(String privacy) {
+    response(
+        200,
+        video(
+                ",\"liveStreamingDetails\":{\"scheduledStartTime\":\"2026-11-07T11:00:00Z\"}",
+                "\"viewCount\":\"123\"")
+            .replace("\"privacyStatus\":\"public\"", "\"privacyStatus\":\"" + privacy + "\"")
+            .replace(
+                "\"title\":\"테스트 영상\"",
+                "\"title\":\"테스트 영상\",\"liveBroadcastContent\":\"upcoming\""));
+    var value =
+        new YouTubeVideoClient(settings(1, Duration.ofSeconds(1)), d -> {})
+            .fetch(List.of(ID), new CollectionBudget(Duration.ofSeconds(5)))
+            .get(ID);
+    assertThat(value.publicScheduledStartAt())
+        .isEqualTo(privacy.equals("public") ? Instant.parse("2026-11-07T11:00:00Z") : null);
+    assertThat(value.availability()).isEqualTo("UNAVAILABLE");
+    assertThat(value.viewCount()).isNull();
   }
 
   @ParameterizedTest

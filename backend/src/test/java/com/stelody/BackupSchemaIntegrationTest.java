@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -131,6 +131,16 @@ class BackupSchemaIntegrationTest {
       owner.execute(
           "INSERT INTO app.view_milestone_event(video_id,target,detected_at) VALUES('00000000-0000-0000-0000-000000000015',100000,now())");
     }
+    if (version >= 30) {
+      assertThat(
+              owner.update(
+                  """
+          INSERT INTO app.youtube_public_schedule(youtube_id,channel_id,title,scheduled_start_at,observed_at)
+          SELECT 'schedule001',id,'public schedule',now()+interval '1 day',now()
+          FROM app.channel ORDER BY id LIMIT 1
+          """))
+          .isEqualTo(1);
+    }
     var videos = owner.queryForList("SELECT * FROM app.video ORDER BY id");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
@@ -195,6 +205,12 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 30) {
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT count(*) FROM app.youtube_public_schedule", Long.class))
+          .isZero();
+    }
     if (version >= 29) {
       assertThat(
               runtime.queryForObject("SELECT count(*) FROM app.view_milestone_state", Long.class))

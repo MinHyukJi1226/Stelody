@@ -117,6 +117,14 @@ public final class CollectorExecution {
             discovered.status(),
             discovered.code());
       }
+      if (exitCode == 0
+          && result != null
+          && result.status().equals("SUCCEEDED")
+          && environment.getProperty("DISCOVERY_ENABLED", Boolean.class, false)) {
+        new PublicScheduleRefresh(
+                source, settings, Clock.systemUTC(), duration -> Thread.sleep(duration))
+            .refresh(budget);
+      }
     } catch (RuntimeException exception) {
       exitCode = 1;
       // Configuration and outbound exceptions can contain credentials or API URLs.

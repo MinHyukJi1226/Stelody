@@ -62,8 +62,10 @@ public final class YouTubeVideoClient {
         if (upload.equals("deleted")) availability = "DELETED";
         else if (upload.equals("failed") || upload.equals("rejected")) availability = "UNAVAILABLE";
         var snippet = item.path("snippet");
-        if (snippet.path("liveBroadcastContent").asText().equals("upcoming"))
-          availability = "UNAVAILABLE";
+        String broadcast = optionalText(snippet, "liveBroadcastContent");
+        boolean upcoming = "upcoming".equals(broadcast);
+        boolean publicUpcoming = upcoming && availability.equals("PUBLIC");
+        if (upcoming) availability = "UNAVAILABLE";
         boolean publicVideo = availability.equals("PUBLIC") || availability.equals("UNLISTED");
         String channel = optionalText(snippet, "channelId");
         String title = optionalText(snippet, "title");
@@ -86,6 +88,10 @@ public final class YouTubeVideoClient {
         // An absent part means no broadcast history. A malformed present part is not absence.
         var liveStreamingDetails = item.path("liveStreamingDetails");
         if (!liveStreamingDetails.isMissingNode() && !liveStreamingDetails.isObject()) invalid();
+        Instant scheduledStart =
+            publicUpcoming && optionalInstant(liveStreamingDetails, "actualStartTime") == null
+                ? optionalInstant(liveStreamingDetails, "scheduledStartTime")
+                : null;
         result.put(
             id,
             new VideoObservation(
@@ -98,8 +104,9 @@ public final class YouTubeVideoClient {
                 seconds,
                 status.path("embeddable").asBoolean(),
                 publicVideo ? views : null,
-                optionalText(snippet, "liveBroadcastContent"),
-                !liveStreamingDetails.isMissingNode()));
+                broadcast,
+                !liveStreamingDetails.isMissingNode(),
+                scheduledStart));
       }
       for (String id : ids) result.putIfAbsent(id, VideoObservation.unavailable(id));
       return Map.copyOf(result);
