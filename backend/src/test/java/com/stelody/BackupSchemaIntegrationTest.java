@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -123,6 +123,14 @@ class BackupSchemaIntegrationTest {
           VALUES('00000000-0000-0000-0000-000000000014','00000000-0000-0000-0000-000000000002',repeat('d',64),'FAILED','INVALID_CATALOG_REQUEST',400,now());
           """);
     }
+    if (version >= 29) {
+      owner.execute(
+          "INSERT INTO app.video(id,song_id,youtube_id,video_kind,availability,source_title) VALUES('00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000003','12345678901','OFFICIAL_COVER','PUBLIC','fixture')");
+      owner.execute(
+          "INSERT INTO app.view_milestone_state(video_id,view_count,observed_at,highest_target,next_check_at) VALUES('00000000-0000-0000-0000-000000000015',100001,now(),100000,now())");
+      owner.execute(
+          "INSERT INTO app.view_milestone_event(video_id,target,detected_at) VALUES('00000000-0000-0000-0000-000000000015',100000,now())");
+    }
     var videos = owner.queryForList("SELECT * FROM app.video ORDER BY id");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
@@ -187,6 +195,14 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 29) {
+      assertThat(
+              runtime.queryForObject("SELECT count(*) FROM app.view_milestone_state", Long.class))
+          .isZero();
+      assertThat(
+              runtime.queryForObject("SELECT count(*) FROM app.view_milestone_event", Long.class))
+          .isZero();
+    }
     if (version >= 28) {
       assertThat(
               runtime.queryForObject(

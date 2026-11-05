@@ -383,6 +383,12 @@ public final class CollectionRepository {
                   "UPDATE app.video SET availability = 'UNAVAILABLE', embeddable = false, status_observed_at = NULL WHERE status_observed_at < :oldest")
               .param("oldest", ts(now.minusSeconds(30L * 86400)))
               .update();
+          jdbc.sql("DELETE FROM app.view_milestone_event WHERE detected_at < :oldest")
+              .param("oldest", ts(now.minusSeconds(86400)))
+              .update();
+          jdbc.sql("DELETE FROM app.view_milestone_state WHERE observed_at < :oldest")
+              .param("oldest", ts(now.minusSeconds(30L * 86400)))
+              .update();
           return null;
         });
   }

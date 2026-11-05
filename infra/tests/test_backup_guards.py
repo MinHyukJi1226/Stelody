@@ -37,19 +37,19 @@ class BackupGuardsTest(unittest.TestCase):
         path.chmod(0o600)
 
     def test_validated_archives_remain_valid_but_unknown_schema_is_rejected(self):
-        for version in (19, 20, 21, 22, 23, 24, 25, 26, 27, 28):
+        for version in (19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29):
             self.metadata['schemaVersion'] = version
             self.metadata['excludedData'] = list(backup.excluded_data(version))
             self.save_manifest()
             self.assertEqual(version, backup.validate_archive(self.bundle)['schemaVersion'])
-        self.metadata['schemaVersion'] = 29
+        self.metadata['schemaVersion'] = 30
         self.save_manifest()
         with self.assertRaisesRegex(backup.OperationError, 'Unsupported backup format/schema'):
             backup.validate_archive(self.bundle)
 
     def test_unvalidated_database_schema_rejected_before_dump(self):
         with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner'}), \
-             patch.object(backup, 'sql', return_value='29') as statements, patch.object(backup, 'run') as command:
+             patch.object(backup, 'sql', return_value='30') as statements, patch.object(backup, 'run') as command:
             with self.assertRaisesRegex(backup.OperationError, 'Unsupported database schema'):
                 backup.backup(self.root)
             command.assert_not_called()
@@ -97,6 +97,19 @@ class BackupGuardsTest(unittest.TestCase):
     def test_artist_registration_receipts_are_retained_for_deduplication(self):
         self.assertNotIn('app.artist_registration_request', backup.excluded_data(28))
         self.metadata.update(schemaVersion=28, excludedData=list(backup.excluded_data(28)))
+        self.save_manifest()
+        backup.validate_archive(self.bundle)
+
+    def test_milestone_state_and_news_are_rebuilt_after_restore(self):
+        tables = ('app.view_milestone_state', 'app.view_milestone_event', 'app.view_milestone_control')
+        for table in tables:
+            self.assertNotIn(table, backup.excluded_data(28))
+            self.assertIn(table, backup.excluded_data(29))
+        self.metadata.update(schemaVersion=29, excludedData=list(backup.excluded_data(28)))
+        self.save_manifest()
+        with self.assertRaisesRegex(backup.OperationError, 'exclusion policy'):
+            backup.validate_archive(self.bundle)
+        self.metadata['excludedData'] = list(backup.excluded_data(29))
         self.save_manifest()
         backup.validate_archive(self.bundle)
 
