@@ -52,6 +52,21 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsHomepageMilestonesAsReadOnlyObservedNews() throws Exception {
+    var api = contract();
+    var op = api.at("/paths/~1api~1v1~1songs~1milestones/get");
+    assertThat(op.path("description").asText())
+        .contains("5000", "24시간", "10건", "최초 관측", "실제 달성 시각", "1·10·60분", "읽기 전용");
+    assertThat(op.path("parameters").isEmpty()).isTrue();
+    assertThat(op.path("security").toString()).doesNotContain("csrf");
+    var schema =
+        api.at(op.at("/responses/200/content/application~1json/schema/$ref").asText().substring(1));
+    assertThat(schema.path("required").toString())
+        .contains("status", "checkedAt", "approaching", "achievements");
+    assertThat(api.path("paths").path("/api/v1/songs/milestones").has("post")).isFalse();
+  }
+
+  @Test
   void documentsAllReviewStatusesAndNullableCurrentRegisteredSong() throws Exception {
     var api = contract();
     var list = api.at("/paths/~1api~1v1~1admin~1reviews/get");
