@@ -1177,6 +1177,120 @@ class DiscoveryCollectorIntegrationTest {
             .content(body));
   }
 
+  void scheduledVideo(int number, String privacy, String title, Instant starts) {
+    var item =
+        Map.of(
+            "id", yt(number),
+            "snippet",
+                Map.of(
+                    "channelId",
+                    YTCHANNEL,
+                    "title",
+                    title,
+                    "publishedAt",
+                    "2026-09-01T00:00:00Z",
+                    "liveBroadcastContent",
+                    "upcoming"),
+            "status", Map.of("privacyStatus", privacy, "embeddable", true),
+            "liveStreamingDetails", Map.of("scheduledStartTime", starts.toString()));
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .withQueryParam("id", equalTo(yt(number)))
+            .willReturn(
+                okJson(
+                    mapper.writeValueAsString(
+                        Map.of("kind", "youtube#videoListResponse", "items", List.of(item))))));
+  }
+
+  tools.jackson.databind.JsonNode upcoming() throws Exception {
+    return mapper
+        .readTree(
+            mvc.perform(
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/v1/songs/upcoming"))
+                .andExpect(
+                    org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                        .isOk())
+                .andExpect(
+                    org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Cache-Control", "no-store"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+        .path("items");
+  }
+
+  void refreshSchedule(Instant now) {
+    new com.stelody.collector.service.PublicScheduleRefresh(
+            source, settings(), Clock.fixed(now, ZoneOffset.UTC), d -> {})
+        .refresh(new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(10)));
+  }
+
+  @Test
+  void uploadNotificationAddsPublicScheduleAndRefreshHandlesReschedulingAndCancellation()
+      throws Exception {
+    var now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+    var observed = now.minusSeconds(3600);
+    var first = now.plusSeconds(7200);
+    scheduledVideo(1, "public", "Scheduled video", first);
+    push(pushMvc(observed), pushBody(1, observed.minusSeconds(1)))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    var list = upcoming();
+    assertThat(list.size()).isEqualTo(1);
+    assertThat(list.get(0).path("title").asText()).isEqualTo("Scheduled video");
+    assertThat(list.get(0).path("scheduledStartAt").asText()).isEqualTo(first.toString());
+    assertThat(list.get(0).path("url").asText())
+        .isEqualTo("https://www.youtube.com/watch?v=" + yt(1));
+    assertThat(count("song_entry")).isZero();
+    server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
+
+    var rescheduled = first.plusSeconds(3600);
+    scheduledVideo(1, "public", "Updated title", rescheduled);
+    refreshSchedule(now);
+    assertThat(upcoming().get(0).path("scheduledStartAt").asText())
+        .isEqualTo(rescheduled.toString());
+    assertThat(upcoming().get(0).path("title").asText()).isEqualTo("Updated title");
+    refreshSchedule(now.plusSeconds(5));
+    server.verify(2, getRequestedFor(urlPathEqualTo("/videos")));
+
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .withQueryParam("id", equalTo(yt(1)))
+            .willReturn(okJson("{\"kind\":\"youtube#videoListResponse\",\"items\":[]}")));
+    refreshSchedule(now.plusSeconds(3600));
+    assertThat(upcoming().size()).isZero();
+    assertThat(count("youtube_public_schedule")).isZero();
+    assertThat(count("review_item")).isEqualTo(1);
+  }
+
+  @Test
+  void scheduleFeedOmitsPrivateExpiredStaleAndDisabledChannelItems() throws Exception {
+    var now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+    var observed = now.minusSeconds(3600);
+    scheduledVideo(1, "private", "Private title", now.plusSeconds(7200));
+    push(pushMvc(observed), pushBody(1, observed.minusSeconds(1)))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    assertThat(count("youtube_public_schedule")).isZero();
+    scheduledVideo(2, "public", "Public title", now.plusSeconds(7200));
+    push(pushMvc(observed), pushBody(2, observed.minusSeconds(1)))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                .isNoContent());
+    assertThat(upcoming().size()).isEqualTo(1);
+    writer.update("UPDATE app.channel SET collection_enabled=false WHERE id=?", CHANNEL);
+    assertThat(upcoming().size()).isZero();
+    writer.update("UPDATE app.channel SET collection_enabled=true WHERE id=?", CHANNEL);
+    writer.execute("UPDATE app.youtube_public_schedule SET observed_at=now()-interval '3 hours'");
+    assertThat(upcoming().size()).isZero();
+    writer.execute(
+        "UPDATE app.youtube_public_schedule SET observed_at=now()-interval '1 hour',scheduled_start_at=now()-interval '1 minute'");
+    assertThat(upcoming().size()).isZero();
+  }
+
   @Test
   void pushCreatesCandidateFromApiAndDeduplicatesWithoutCompletingDailyDiscovery()
       throws Exception {

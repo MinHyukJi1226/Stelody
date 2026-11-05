@@ -5,6 +5,7 @@ import com.stelody.collector.domain.CollectionFailure;
 import com.stelody.collector.domain.CoverPublicationRules;
 import com.stelody.collector.domain.DiscoveryRules.Decision;
 import com.stelody.collector.domain.VideoObservation;
+import com.stelody.schedule.PublicScheduleRepository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -29,6 +30,7 @@ public final class DiscoveryRepository {
       Instant lastScanned) {}
 
   private final JdbcClient jdbc;
+  private final PublicScheduleRepository publicSchedules;
   private final TransactionTemplate transactions;
   private final boolean autoPublicationAllowed;
 
@@ -38,6 +40,7 @@ public final class DiscoveryRepository {
 
   public DiscoveryRepository(DataSource source, boolean autoPublicationAllowed) {
     jdbc = JdbcClient.create(source);
+    publicSchedules = new PublicScheduleRepository(jdbc);
     this.autoPublicationAllowed = autoPublicationAllowed;
     transactions = new TransactionTemplate(new JdbcTransactionManager(source));
     transactions.setTimeout(10);
@@ -268,6 +271,7 @@ public final class DiscoveryRepository {
     var publicationRules = new CoverPublicationRules();
     int changed = 0;
     for (var video : observations.values()) {
+      publicSchedules.observe(channel.id(), channel.youtubeId(), video, now);
       var decision = decisions.get(video.youtubeId());
       CoverPublicationRules.Result eligibility = null;
       if (publish) {
@@ -434,6 +438,7 @@ public final class DiscoveryRepository {
     transactions.executeWithoutResult(
         status -> {
           fence(token);
+          publicSchedules.cleanup(now);
           jdbc.sql(
                   """
           UPDATE app.review_item SET source_title=NULL,source_published_at=NULL,source_thumbnail_url=NULL,

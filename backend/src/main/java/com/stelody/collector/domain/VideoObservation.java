@@ -13,7 +13,35 @@ public record VideoObservation(
     boolean embeddable,
     Long viewCount,
     String liveBroadcastContent,
-    boolean liveStreamingDetailsPresent) {
+    boolean liveStreamingDetailsPresent,
+    Instant publicScheduledStartAt) {
+  public VideoObservation(
+      String youtubeId,
+      String channelId,
+      String availability,
+      String title,
+      Instant publishedAt,
+      String thumbnailUrl,
+      Long durationSeconds,
+      boolean embeddable,
+      Long viewCount,
+      String liveBroadcastContent,
+      boolean liveStreamingDetailsPresent) {
+    this(
+        youtubeId,
+        channelId,
+        availability,
+        title,
+        publishedAt,
+        thumbnailUrl,
+        durationSeconds,
+        embeddable,
+        viewCount,
+        liveBroadcastContent,
+        liveStreamingDetailsPresent,
+        null);
+  }
+
   public VideoObservation(
       String youtubeId,
       String channelId,
