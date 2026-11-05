@@ -2,6 +2,7 @@ package com.stelody.milestone;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -62,6 +63,7 @@ class MilestoneIntegrationTest {
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper mapper;
   @Autowired JdbcTemplate runtime;
+  @Autowired MilestoneService service;
   JdbcTemplate writer;
   HikariDataSource source;
   MilestoneRepository repo;
@@ -172,6 +174,48 @@ class MilestoneIntegrationTest {
   }
 
   @Test
+  void baselineReplayCorrectionAndRestartDoNotInventDuplicateAchievements() {
+    seed(1);
+    observe(1, 199_999, NOW.minusSeconds(120));
+    assertThat(events()).isZero();
+    observe(1, 200_001, NOW.minusSeconds(60));
+    assertThat(events()).isEqualTo(1);
+    observe(1, 999_999, NOW.minusSeconds(120));
+    assertThat(events()).isEqualTo(1);
+    observe(1, 199_990, NOW.minusSeconds(30));
+    assertThat(service.feed().approaching()).isEmpty();
+    new MilestoneRepository(source)
+        .observe(
+            new MilestoneRepository.Observation(
+                video(1), youtube(1), YT_CHANNEL, 200_010, NOW, null, null));
+    assertThat(events()).isEqualTo(1);
+    assertThat(service.feed().achievements()).hasSize(1);
+  }
+
+  @Test
+  void homepageSeparatesLatestCountsFromHourlyCardsAndHidesUnusableSongs() throws Exception {
+    seed(1);
+    latest(1, 94_000, NOW.minusSeconds(3600));
+    observe(1, 95_000, NOW);
+    mvc.perform(get("/api/v1/songs/milestones"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"))
+        .andExpect(jsonPath("$.status").value("READY"))
+        .andExpect(jsonPath("$.approaching[0].target").value(100_000))
+        .andExpect(jsonPath("$.approaching[0].viewCount").value(95_000))
+        .andExpect(jsonPath("$.approaching[0].song.viewCount").value(94_000));
+    writer.update("UPDATE app.song_entry SET visibility='HIDDEN' WHERE id=?", song(1));
+    assertThat(service.feed().approaching()).isEmpty();
+    writer.update("UPDATE app.song_entry SET visibility='PUBLISHED' WHERE id=?", song(1));
+    writer.update("UPDATE app.channel SET collection_enabled=false WHERE id=?", CHANNEL);
+    assertThat(service.feed().approaching()).isEmpty();
+    writer.update("UPDATE app.channel SET collection_enabled=true WHERE id=?", CHANNEL);
+    repo.unavailable(
+        new MilestoneRepository.Target(video(1), youtube(1), YT_CHANNEL), NOW.plusSeconds(1));
+    assertThat(service.feed().approaching()).isEmpty();
+  }
+
+  @Test
   void snapshotImporterOnlyUsesCompletedPublicationsAndKeepsPredictionBaseline() {
     seed(1);
     latest(1, 99_000, NOW);
@@ -183,6 +227,23 @@ class MilestoneIntegrationTest {
     assertThat(repo.due(NOW.plusSeconds(600))).hasSize(1);
     writer.execute("UPDATE app.collection_run SET status='FAILED'");
     assertThat(repo.published(NOW)).isEmpty();
+  }
+
+  @Test
+  void eventsAreLimitedToTenAndTwentyFourHoursAndCleanupRebaselinesOldState() {
+    seed(1);
+    observe(1, 90_000, NOW.minusSeconds(200));
+    observe(1, 2_000_000, NOW.minusSeconds(100));
+    assertThat(events()).isEqualTo(10);
+    assertThat(service.feed().achievements()).hasSize(10);
+    assertThat(service.feed().achievements().getFirst().target()).isEqualTo(2_000_000);
+    writer.execute("UPDATE app.view_milestone_event SET detected_at=detected_at-interval '2 days'");
+    assertThat(service.feed().achievements()).isEmpty();
+    writer.execute(
+        "UPDATE app.view_milestone_state SET observed_at=observed_at-interval '31 days'");
+    repo.cleanup(NOW);
+    observe(1, 3_000_000, NOW);
+    assertThat(events()).isZero();
   }
 
   @Test
@@ -270,8 +331,7 @@ class MilestoneIntegrationTest {
         com.github.tomakehurst.wiremock.client.WireMock.get(urlPathEqualTo("/youtube/v3/videos"))
             .willReturn(okJson(response(100_001, YT_CHANNEL))));
     worker().tick();
-    assertThat(writer.queryForObject("SELECT view_count FROM app.view_milestone_state", Long.class))
-        .isEqualTo(100_001);
+    assertThat(events()).isEqualTo(1);
     assertThat(
             writer.queryForObject("SELECT view_publication_id FROM app.catalog_state", UUID.class))
         .isEqualTo(PUB);
@@ -308,6 +368,7 @@ class MilestoneIntegrationTest {
             .willReturn(okJson("{\"kind\":\"youtube#videoListResponse\",\"items\":[]}")));
     worker().tick();
     assertThat(events()).isZero();
+    assertThat(service.feed().approaching()).isEmpty();
     assertThat(
             writer
                 .queryForObject("SELECT observed_at FROM app.view_milestone_state", Timestamp.class)

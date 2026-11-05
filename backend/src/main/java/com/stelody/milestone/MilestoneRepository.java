@@ -110,6 +110,24 @@ public final class MilestoneRepository {
               flat == 1
                   ? java.time.Duration.ofMinutes(10)
                   : MilestonePolicy.interval(o.at(), estimate);
+          if (previous != null && reached > previous.highest()) {
+            // At most the ten latest steps can appear on the homepage, including a large jump.
+            jdbc.sql(
+                    """
+          INSERT INTO app.view_milestone_event(video_id,target,detected_at)
+          SELECT :id,target,:at FROM generate_series(CAST(:low AS bigint),CAST(:high AS bigint),100000) target
+          ON CONFLICT DO NOTHING
+          """)
+                .param("id", o.videoId())
+                .param("at", ts(o.at()))
+                .param(
+                    "low",
+                    Math.max(
+                        previous.highest() + MilestonePolicy.STEP,
+                        reached - 9 * MilestonePolicy.STEP))
+                .param("high", reached)
+                .update();
+          }
           jdbc.sql(
                   """
         INSERT INTO app.view_milestone_state(video_id,view_count,observed_at,highest_target,estimated_at,next_check_at,available,flat_checks)

@@ -136,6 +136,7 @@ public class SecurityConfiguration {
                         "/api/v1/me/youtube/callback/local",
                         "/api/v1/songs",
                         "/api/v1/songs/trending",
+                        "/api/v1/songs/milestones",
                         "/api/v1/songs/recommendations",
                         "/api/v1/songs/years",
                         "/api/v1/songs/{id}",
