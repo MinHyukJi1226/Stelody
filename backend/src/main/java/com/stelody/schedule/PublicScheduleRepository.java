@@ -11,9 +11,23 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class PublicScheduleRepository {
-  @Schema(requiredProperties = {"youtubeId", "title", "channelName", "scheduledStartAt", "url"})
+  @Schema(
+      requiredProperties = {
+        "youtubeId",
+        "title",
+        "channelName",
+        "scheduledStartAt",
+        "url",
+        "thumbnailUrl"
+      })
   public record Item(
-      String youtubeId, String title, String channelName, Instant scheduledStartAt, String url) {}
+      String youtubeId,
+      String title,
+      String channelName,
+      Instant scheduledStartAt,
+      String url,
+      @Schema(nullable = true, description = "YouTube 원본 썸네일 URL. 확인된 이미지가 없으면 null.")
+          String thumbnailUrl) {}
 
   public record Target(String youtubeId, UUID channelId, String youtubeChannelId) {}
 
@@ -26,7 +40,7 @@ public class PublicScheduleRepository {
   public List<Item> upcoming() {
     return jdbc.sql(
             """
-        SELECT p.youtube_id,p.title,c.name,p.scheduled_start_at
+        SELECT p.youtube_id,p.title,c.name,p.scheduled_start_at,p.thumbnail_url
         FROM app.youtube_public_schedule p JOIN app.channel c ON c.id=p.channel_id
         WHERE c.collection_enabled AND c.channel_type IN ('GROUP','MEMBER')
           AND p.scheduled_start_at>CURRENT_TIMESTAMP
@@ -40,7 +54,8 @@ public class PublicScheduleRepository {
                     r.getString(2),
                     r.getString(3),
                     r.getTimestamp(4).toInstant(),
-                    "https://www.youtube.com/watch?v=" + r.getString(1)))
+                    "https://www.youtube.com/watch?v=" + r.getString(1),
+                    r.getString(5)))
         .list();
   }
 
@@ -65,12 +80,14 @@ public class PublicScheduleRepository {
     }
     jdbc.sql(
             """
-        INSERT INTO app.youtube_public_schedule(youtube_id,channel_id,title,scheduled_start_at,observed_at)
-        SELECT :id,c.id,:title,:start,:now FROM app.channel c
+        INSERT INTO app.youtube_public_schedule(
+          youtube_id,channel_id,title,scheduled_start_at,observed_at,thumbnail_url)
+        SELECT :id,c.id,:title,:start,:now,:thumbnail FROM app.channel c
         WHERE c.id=:channel AND c.youtube_id=:youtubeChannel AND c.collection_enabled
           AND c.channel_type IN ('GROUP','MEMBER')
         ON CONFLICT(youtube_id) DO UPDATE SET channel_id=EXCLUDED.channel_id,title=EXCLUDED.title,
-          scheduled_start_at=EXCLUDED.scheduled_start_at,observed_at=EXCLUDED.observed_at
+          scheduled_start_at=EXCLUDED.scheduled_start_at,observed_at=EXCLUDED.observed_at,
+          thumbnail_url=EXCLUDED.thumbnail_url
         WHERE youtube_public_schedule.observed_at<=EXCLUDED.observed_at
         """)
         .param("id", video.youtubeId())
@@ -79,6 +96,7 @@ public class PublicScheduleRepository {
         .param("title", video.title())
         .param("start", Timestamp.from(start))
         .param("now", Timestamp.from(now))
+        .param("thumbnail", video.thumbnailUrl())
         .update();
   }
 

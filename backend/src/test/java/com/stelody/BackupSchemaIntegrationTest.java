@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;

@@ -1178,19 +1178,20 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   void scheduledVideo(int number, String privacy, String title, Instant starts) {
+    scheduledVideo(number, privacy, title, starts, null);
+  }
+
+  void scheduledVideo(int number, String privacy, String title, Instant starts, String thumbnail) {
+    var snippet = new HashMap<String, Object>();
+    snippet.put("channelId", YTCHANNEL);
+    snippet.put("title", title);
+    snippet.put("publishedAt", "2026-09-01T00:00:00Z");
+    snippet.put("liveBroadcastContent", "upcoming");
+    if (thumbnail != null) snippet.put("thumbnails", Map.of("high", Map.of("url", thumbnail)));
     var item =
         Map.of(
             "id", yt(number),
-            "snippet",
-                Map.of(
-                    "channelId",
-                    YTCHANNEL,
-                    "title",
-                    title,
-                    "publishedAt",
-                    "2026-09-01T00:00:00Z",
-                    "liveBroadcastContent",
-                    "upcoming"),
+            "snippet", snippet,
             "status", Map.of("privacyStatus", privacy, "embeddable", true),
             "liveStreamingDetails", Map.of("scheduledStartTime", starts.toString()));
     server.stubFor(
@@ -1232,7 +1233,8 @@ class DiscoveryCollectorIntegrationTest {
     var now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
     var observed = now.minusSeconds(3600);
     var first = now.plusSeconds(7200);
-    scheduledVideo(1, "public", "Scheduled video", first);
+    var thumbnail = "https://i.ytimg.com/vi/" + yt(1) + "/hqdefault.jpg";
+    scheduledVideo(1, "public", "Scheduled video", first, thumbnail);
     push(pushMvc(observed), pushBody(1, observed.minusSeconds(1)))
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
@@ -1243,15 +1245,18 @@ class DiscoveryCollectorIntegrationTest {
     assertThat(list.get(0).path("scheduledStartAt").asText()).isEqualTo(first.toString());
     assertThat(list.get(0).path("url").asText())
         .isEqualTo("https://www.youtube.com/watch?v=" + yt(1));
+    assertThat(list.get(0).path("thumbnailUrl").asText()).isEqualTo(thumbnail);
     assertThat(count("song_entry")).isZero();
     server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
 
     var rescheduled = first.plusSeconds(3600);
-    scheduledVideo(1, "public", "Updated title", rescheduled);
+    var updatedThumbnail = thumbnail + "?v=2";
+    scheduledVideo(1, "public", "Updated title", rescheduled, updatedThumbnail);
     refreshSchedule(now);
-    assertThat(upcoming().get(0).path("scheduledStartAt").asText())
-        .isEqualTo(rescheduled.toString());
-    assertThat(upcoming().get(0).path("title").asText()).isEqualTo("Updated title");
+    var updated = upcoming().get(0);
+    assertThat(updated.path("scheduledStartAt").asText()).isEqualTo(rescheduled.toString());
+    assertThat(updated.path("title").asText()).isEqualTo("Updated title");
+    assertThat(updated.path("thumbnailUrl").asText()).isEqualTo(updatedThumbnail);
     refreshSchedule(now.plusSeconds(5));
     server.verify(2, getRequestedFor(urlPathEqualTo("/videos")));
 
@@ -1280,7 +1285,9 @@ class DiscoveryCollectorIntegrationTest {
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
                 .isNoContent());
-    assertThat(upcoming().size()).isEqualTo(1);
+    var items = upcoming();
+    assertThat(items.size()).isEqualTo(1);
+    assertThat(items.get(0).path("thumbnailUrl").isNull()).isTrue();
     writer.update("UPDATE app.channel SET collection_enabled=false WHERE id=?", CHANNEL);
     assertThat(upcoming().size()).isZero();
     writer.update("UPDATE app.channel SET collection_enabled=true WHERE id=?", CHANNEL);

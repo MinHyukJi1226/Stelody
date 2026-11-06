@@ -52,6 +52,17 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void documentsNullableUpcomingThumbnail() throws Exception {
+    var api = contract();
+    var response = api.at("/paths/~1api~1v1~1songs~1upcoming/get/responses/200");
+    var schedule =
+        api.at(response.at("/content/application~1json/schema/$ref").asText().substring(1));
+    var item = api.at(schedule.at("/properties/items/items/$ref").asText().substring(1));
+    assertThat(item.path("required").toString()).contains("thumbnailUrl");
+    assertThat(item.at("/properties/thumbnailUrl/type").toString()).contains("string", "null");
+  }
+
+  @Test
   void documentsHomepageMilestonesAsReadOnlyObservedNews() throws Exception {
     var api = contract();
     var op = api.at("/paths/~1api~1v1~1songs~1milestones/get");
