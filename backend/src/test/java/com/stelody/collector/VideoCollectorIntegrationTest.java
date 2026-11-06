@@ -531,6 +531,52 @@ class VideoCollectorIntegrationTest {
   }
 
   @Test
+  void cleanupFailureIsRecordedOnTheCollectionRun() {
+    seed(1);
+    writer.execute("REVOKE DELETE ON app.view_snapshot FROM stelody_collector");
+
+    var result = collector(NOW).collect();
+
+    assertThat(result.status()).isEqualTo("FAILED");
+    assertThat(result.code()).isEqualTo("DATABASE_ERROR");
+    assertThat(
+            writer.queryForObject(
+                "SELECT status FROM app.collection_run WHERE id = ?", String.class, result.runId()))
+        .isEqualTo("FAILED");
+    server.verify(0, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
+  void cleanupDoesNotRewriteAlreadyClearedTargets() {
+    seed(1);
+    success(List.of(1), 100);
+    assertThat(collector(NOW).collect().status()).isEqualTo("SUCCEEDED");
+    var repo = new CollectionRepository(source);
+    var cleanupAt = NOW.plusSeconds(49 * 3600L);
+    var token = UUID.randomUUID();
+    repo.begin(token, cleanupAt.truncatedTo(java.time.temporal.ChronoUnit.HOURS), cleanupAt);
+
+    repo.cleanup(token, cleanupAt);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.collection_target WHERE view_count IS NOT NULL",
+                Long.class))
+        .isZero();
+    var rowVersion =
+        writer.queryForObject(
+            "SELECT xmin::text FROM app.collection_target WHERE observed_at IS NOT NULL",
+            String.class);
+
+    repo.cleanup(token, cleanupAt.plusSeconds(3600));
+
+    assertThat(
+            writer.queryForObject(
+                "SELECT xmin::text FROM app.collection_target WHERE observed_at IS NOT NULL",
+                String.class))
+        .isEqualTo(rowVersion);
+  }
+
+  @Test
   void dailySampleUsesLastSuccessfulObservationInKstAndRetentionIsBounded() {
     seed(1);
     success(List.of(1), 100);
