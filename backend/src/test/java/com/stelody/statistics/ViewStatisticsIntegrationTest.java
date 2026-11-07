@@ -265,7 +265,7 @@ class ViewStatisticsIntegrationTest {
   }
 
   @Test
-  void trendingIncludesOneHourBoundaryAndRejectsLateOldMissingZeroNegativeOrHiddenSamples()
+  void trendingIncludesEarlierBaselinesAndRejectsLateMissingZeroNegativeOrHiddenSamples()
       throws Exception {
     for (int n = 1; n <= 10; n++) song(n, "2020-01-01T00:00:00Z");
     latest(1, 200, NOW.minusSeconds(3600));
@@ -288,12 +288,34 @@ class ViewStatisticsIntegrationTest {
     writer.update("UPDATE app.song_entry SET visibility='HIDDEN' WHERE id=?", id(109));
     sample(10, 0, NOW.minusSeconds(86400)); // no current count
     var items = request("/api/v1/songs/trending").path("items");
-    assertThat(items.size()).isEqualTo(1);
-    assertThat(items.get(0).path("song").path("id").asText()).isEqualTo(id(101).toString());
+    assertThat(items.size()).isEqualTo(2);
+    assertThat(items.get(0).path("song").path("id").asText()).isEqualTo(id(104).toString());
+    assertThat(items.get(1).path("song").path("id").asText()).isEqualTo(id(101).toString());
     assertThat(
             writer.queryForObject(
                 "SELECT view_count FROM app.view_snapshot WHERE video_id=?", Long.class, id(1008)))
         .isEqualTo(100);
+  }
+
+  @Test
+  void trendingUsesLastKnownCountBeforeTargetAcrossCollectionGaps() throws Exception {
+    UUID olderSong = song(1, "2020-01-01T00:00:00Z");
+    latest(1, 500, NOW);
+    sample(1, 100, NOW.minusSeconds(40 * 3600));
+    sample(1, 200, NOW.minusSeconds(32 * 3600));
+    sample(1, 450, NOW.minusSeconds(23 * 3600)); // after the comparison target
+    song(2, "2020-01-01T00:00:00Z");
+    latest(2, 900, NOW);
+    sample(2, 1, NOW.minusSeconds(31L * 86400)); // outside retention
+
+    var data = request("/api/v1/songs/trending");
+    assertThat(data.path("toleranceMinutes").asInt()).isZero();
+    var items = data.path("items");
+    assertThat(items.size()).isEqualTo(1);
+    assertThat(items.get(0).path("song").path("id").asText()).isEqualTo(olderSong.toString());
+    assertThat(items.get(0).path("increase").asLong()).isEqualTo(300);
+    assertThat(items.get(0).path("startObservedAt").asText())
+        .isEqualTo(NOW.minusSeconds(32 * 3600).toString());
   }
 
   @Test

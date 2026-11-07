@@ -95,11 +95,11 @@ public class ViewStatisticsService {
               value.startAt(),
               value.endAt()));
     return new Trending(
-        "READY", "STELODY_VIEW_GROWTH", 24, 60, publication.id(), reference, List.copyOf(items));
+        "READY", "STELODY_VIEW_GROWTH", 24, 0, publication.id(), reference, List.copyOf(items));
   }
 
   private Trending empty(String status, UUID publication, Instant reference) {
-    return new Trending(status, "STELODY_VIEW_GROWTH", 24, 60, publication, reference, List.of());
+    return new Trending(status, "STELODY_VIEW_GROWTH", 24, 0, publication, reference, List.of());
   }
 
   private CatalogException invalid() {

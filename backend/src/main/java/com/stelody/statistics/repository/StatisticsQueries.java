@@ -92,7 +92,7 @@ public class StatisticsQueries {
         JOIN LATERAL (
           SELECT v.view_count,v.observed_at FROM app.view_snapshot v
           WHERE v.video_id=s.representative_video_id
-            AND v.observed_at>=:previousOldest
+            AND v.observed_at>=:retentionStart
             AND v.observed_at<current.observed_at
             AND (v.observed_at<=:previousTarget
               OR (s.published_at>:previousTarget AND v.observed_at>=s.published_at))
@@ -109,7 +109,7 @@ public class StatisticsQueries {
         .param("reference", Timestamp.from(reference))
         .param("currentOldest", Timestamp.from(reference.minusSeconds(3600)))
         .param("previousTarget", Timestamp.from(reference.minusSeconds(86400)))
-        .param("previousOldest", Timestamp.from(reference.minusSeconds(90000)))
+        .param("retentionStart", Timestamp.from(reference.minusSeconds(30L * 86400)))
         .param("size", size)
         .query(
             (r, n) ->
