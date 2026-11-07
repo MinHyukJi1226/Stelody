@@ -81,7 +81,8 @@ public final class StatisticsDtos {
       String status,
       String metricSource,
       int periodHours,
-      int toleranceMinutes,
+      @Schema(description = "고정 비교 허용 폭을 두지 않아 0을 반환합니다. 30일 보관 기록 중 24시간 전 이전의 마지막 관측을 사용합니다.")
+          int toleranceMinutes,
       @Schema(nullable = true) UUID publicationId,
       @Schema(nullable = true) Instant referenceAt,
       List<RisingItem> items) {}
