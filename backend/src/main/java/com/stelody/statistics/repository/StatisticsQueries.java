@@ -92,8 +92,13 @@ public class StatisticsQueries {
         JOIN LATERAL (
           SELECT v.view_count,v.observed_at FROM app.view_snapshot v
           WHERE v.video_id=s.representative_video_id
-            AND v.observed_at>=:previousOldest AND v.observed_at<=:previousTarget
-          ORDER BY v.observed_at DESC,v.logical_slot DESC LIMIT 1
+            AND v.observed_at>=:previousOldest
+            AND v.observed_at<current.observed_at
+            AND (v.observed_at<=:previousTarget
+              OR (s.published_at>:previousTarget AND v.observed_at>=s.published_at))
+          ORDER BY
+            CASE WHEN v.observed_at<=:previousTarget THEN v.observed_at END DESC NULLS LAST,
+            v.observed_at ASC,v.logical_slot DESC LIMIT 1
         ) previous ON true
         WHERE current.observed_at>=:currentOldest AND current.observed_at<=:reference
           AND current.view_count>previous.view_count

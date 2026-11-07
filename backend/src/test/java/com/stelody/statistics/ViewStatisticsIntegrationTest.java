@@ -297,6 +297,28 @@ class ViewStatisticsIntegrationTest {
   }
 
   @Test
+  void trendingUsesFirstPostReleaseSampleForNewVideosOnly() throws Exception {
+    UUID newSong = song(1, NOW.minusSeconds(14400).toString());
+    latest(1, 200, NOW);
+    sample(1, 5, NOW.minusSeconds(18000)); // before release
+    sample(1, 20, NOW.minusSeconds(10800));
+    sample(1, 80, NOW.minusSeconds(7200));
+
+    song(2, NOW.minusSeconds(3600).toString());
+    latest(2, 300, NOW);
+    sample(2, 300, NOW); // only one observation
+
+    song(3, NOW.minusSeconds(86400).toString());
+    latest(3, 400, NOW);
+    sample(3, 40, NOW.minusSeconds(82800)); // past the 24-hour release boundary
+
+    var items = request("/api/v1/songs/trending").path("items");
+    assertThat(items.size()).isEqualTo(1);
+    assertThat(items.get(0).path("song").path("id").asText()).isEqualTo(newSong.toString());
+    assertThat(items.get(0).path("increase").asLong()).isEqualTo(180);
+  }
+
+  @Test
   void partialFailedCollectionDoesNotReplaceCompletedRanking() throws Exception {
     song(1, "2020-01-01T00:00:00Z");
     latest(1, 200, NOW.minusSeconds(100));
