@@ -1,6 +1,6 @@
 import { test, expect, makeSong, emptyPage } from './fixtures'
 
-test('홈 데이터와 KST 공개일을 표시하고 최신곡 전체 목록으로 이동한다', async ({
+test('홈의 간결한 곡 카드를 표시하고 최신곡 전체 목록으로 이동한다', async ({
   page,
 }) => {
   const songs = [
@@ -31,16 +31,16 @@ test('홈 데이터와 KST 공개일을 표시하고 최신곡 전체 목록으�
   )
   await page.goto('/')
   const latest = page.getByRole('region', {
-    name: '새로 공개된 노래',
+    name: '최신 곡',
     exact: true,
   })
   await expect(latest.getByRole('article')).toHaveCount(2)
-  await expect(latest.getByText('2026.10.15')).toHaveCount(2)
+  await expect(latest.getByText('2026.10.15')).toHaveCount(0)
   await expect(latest.getByText('콜라보', { exact: true })).toHaveCount(0)
-  await expect(latest.getByText('생일', { exact: true })).toBeVisible()
-  await expect(latest.getByText('원곡 · 정보 준비 중')).toHaveCount(2)
+  await expect(latest.getByText('생일', { exact: true })).toHaveCount(0)
+  await expect(latest.getByText('원곡 · 정보 준비 중')).toHaveCount(0)
   await expect(
-    page.getByRole('region', { name: '최근 24시간 급상승' }),
+    page.getByRole('region', { name: '현재 인기 급상승 중인 곡' }),
   ).toContainText('준비 중입니다.')
   await page.getByRole('link', { name: '최신곡 전체 보기' }).click()
   await expect(page).toHaveURL('/songs')
@@ -66,33 +66,21 @@ test('검색 폼은 한글과 특수문자를 보존해 검색 주소로 이동�
   expect(new URL(page.url()).searchParams.get('q')).toBe('노래 & 멤버')
 })
 
-test('추천을 다시 불러오다가 실패하면 기존 추천과 재시도를 유지한다', async ({
-  page,
-}) => {
-  let fail = false
+test('추천 조회 실패 후 재시도로 추천곡을 표시한다', async ({ page }) => {
+  let fail = true
   await page.route('**/api/v1/songs/recommendations?*', (route) =>
     route.fulfill(
       fail
         ? { status: 503, json: { code: 'SERVICE_UNAVAILABLE' } }
-        : { json: { items: [makeSong(3, { title: '기존 추천곡' })] } },
+        : { json: { items: [makeSong(3, { title: '추천곡' })] } },
     ),
   )
   await page.goto('/')
-  const section = page.getByRole('region', { name: '우연히 만나는 한 곡' })
-  await expect(
-    section.getByRole('heading', { name: '기존 추천곡' }),
-  ).toBeVisible()
-  fail = true
-  await section.getByRole('button', { name: '다시 추천' }).click()
-  await expect(section.getByText('새 추천을 불러오지 못했습니다')).toBeVisible()
-  await expect(
-    section.getByRole('heading', { name: '기존 추천곡' }),
-  ).toBeVisible()
+  const section = page.getByRole('region', { name: '오늘의 추천 곡' })
+  await expect(section.getByText('추천을 불러오지 못했습니다')).toBeVisible()
   fail = false
   await section.getByRole('button', { name: '다시 시도' }).click()
-  await expect(section.getByText('새 추천을 불러오지 못했습니다')).toHaveCount(
-    0,
-  )
+  await expect(section.getByRole('heading', { name: '추천곡' })).toBeVisible()
 })
 
 test('최신곡 오류가 다른 영역을 막지 않고 재시도로 회복한다', async ({
@@ -111,7 +99,7 @@ test('최신곡 오류가 다른 영역을 막지 않고 재시도로 회복한�
   )
   await page.goto('/')
   const latest = page.getByRole('region', {
-    name: '새로 공개된 노래',
+    name: '최신 곡',
     exact: true,
   })
   await expect(latest.getByText('노래를 불러오지 못했습니다')).toBeVisible()
@@ -138,7 +126,7 @@ test('처음 불러오는 동안 스켈레톤을 표시하고 빈 결과를 안�
   })
   await page.goto('/')
   const latest = page.getByRole('region', {
-    name: '새로 공개된 노래',
+    name: '최신 곡',
     exact: true,
   })
   await expect(
@@ -224,7 +212,7 @@ test('멤버의 졸업 상태와 이미지 누락을 처리하고 화면이 넘�
       },
     }),
   )
-  await page.goto('/')
+  await page.goto('/members')
   await expect(
     page.getByRole('link', { name: '테스트 멤버 이름 (졸업)' }),
   ).toBeVisible()
@@ -290,7 +278,7 @@ test('썸네일 로드가 실패해도 카드 정보와 화면 규격을 유지�
   )
   await page.goto('/')
   const latest = page.getByRole('region', {
-    name: '새로 공개된 노래',
+    name: '최신 곡',
     exact: true,
   })
   await expect(latest.getByText('이미지 준비 중')).toBeVisible()
@@ -298,13 +286,16 @@ test('썸네일 로드가 실패해도 카드 정보와 화면 규격을 유지�
     latest.getByRole('heading', { name: '테스트 노래 200' }),
   ).toBeVisible()
   const mobile = (page.viewportSize()?.width ?? 0) < 768
-  const hero = page.getByRole('region', { name: /좋아하는 목소리/ })
-  await expect(hero).toHaveCSS('padding-top', mobile ? '24px' : '48px')
-  await expect(hero).toHaveCSS('padding-left', mobile ? '24px' : '40px')
   await expect(page.locator('header')).toHaveCSS(
     'padding-left',
-    mobile ? '20px' : '24px',
+    mobile ? '20px' : '40px',
   )
+  await expect(latest.getByRole('article')).toHaveCount(1)
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true)
 })
 
 test('멤버 명단 전체 페이지로 유닛 전원을 판정하고 혼합곡을 축약한다', async ({
@@ -467,4 +458,339 @@ test('멤버 명단 조회가 실패해도 단체곡 카드와 첫 참여자 축
   )
   await page.goto('/songs')
   await expect(page.getByRole('article')).toContainText('첫 멤버 외 3명')
+})
+
+test('메인 소식과 급상승을 API 값으로 표시하고 로그인 후 보관함을 표시한다', async ({
+  page,
+}, info) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.clock.install({ time: new Date('2026-11-05T18:00:00Z') })
+  await page.route('**/test-home-thumbnail.svg', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#6450d8"/></svg>',
+    }),
+  )
+  const song = makeSong(1, {
+    title: '소식 테스트곡',
+    thumbnailUrl: '/test-home-thumbnail.svg',
+  })
+  const songs = [
+    song,
+    ...Array.from({ length: 5 }, (_, index) =>
+      makeSong(index + 2, { thumbnailUrl: song.thumbnailUrl }),
+    ),
+  ]
+  await page.route('**/api/v1/songs?*', (route) =>
+    route.fulfill({
+      json: { ...emptyPage, items: songs, totalCount: songs.length },
+    }),
+  )
+  await page.route('**/api/v1/songs/recommendations?*', (route) =>
+    route.fulfill({ json: { items: songs } }),
+  )
+  const playlistId = '00000000-0000-4000-8000-000000000002'
+  await page.route('**/api/v1/songs/milestones', (route) =>
+    route.fulfill({
+      json: {
+        status: 'READY',
+        checkedAt: '2026-11-06T00:00:00Z',
+        approaching: [
+          {
+            song,
+            target: 100000,
+            viewCount: 99600,
+            observedAt: '2026-11-06T00:00:00Z',
+          },
+        ],
+        achievements: [
+          { song, target: 100000, detectedAt: '2026-11-06T00:00:00Z' },
+          {
+            song: songs[1],
+            target: 200000,
+            detectedAt: '2026-11-06T00:00:00Z',
+          },
+        ],
+      },
+    }),
+  )
+  await page.route('**/api/v1/songs/upcoming', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            youtubeId: 'example',
+            title: '예약 영상',
+            channelName: '테스트 채널',
+            scheduledStartAt: '2026-11-06T11:00:00Z',
+            url: 'https://www.youtube.com/watch?v=example',
+            thumbnailUrl: '/test-home-thumbnail.svg',
+          },
+          {
+            youtubeId: 'next',
+            title: '다음 예약 영상',
+            channelName: '다음 채널',
+            scheduledStartAt: '2026-11-07T10:00:00Z',
+            url: 'https://www.youtube.com/watch?v=next',
+          },
+        ],
+      },
+    }),
+  )
+  await page.route('**/api/v1/songs/trending?size=10', (route) =>
+    route.fulfill({
+      json: { status: 'READY', items: [{ rank: 1, increase: 123123, song }] },
+    }),
+  )
+  await page.goto('/')
+  const news = page.getByRole('region', { name: '최신 소식' })
+  await expect(
+    news.getByRole('link', { name: /100,000회까지 400회 남았어요!/ }),
+  ).toHaveAttribute('href', `/songs/${song.id}`)
+  await expect(
+    news.getByRole('link', { name: /100,000회를 달성했어요! 축하합니다!/ }),
+  ).toBeVisible()
+  const premieres = news.getByRole('group', {
+    name: 'YouTube 공개 예정',
+    exact: true,
+  })
+  const premiere = premieres.getByRole('link', {
+    name: '오늘 20:00 YouTube 공개 예정 예약 영상 테스트 채널',
+  })
+  await expect(premiere).toHaveAttribute(
+    'href',
+    'https://www.youtube.com/watch?v=example',
+  )
+  const thumbnail = premiere.locator('img')
+  await expect(thumbnail).toHaveJSProperty('naturalWidth', 160)
+  const expectedSize = info.project.name === 'mobile' ? [128, 72] : [250, 141]
+  await expect(thumbnail).toHaveCSS('width', `${expectedSize[0]}px`)
+  await expect(thumbnail).toHaveCSS('height', `${expectedSize[1]}px`)
+  const nextPremiere = premieres.getByRole('link', {
+    name: '11월 7일 19:00 YouTube 공개 예정 다음 예약 영상 다음 채널',
+  })
+  await expect(nextPremiere).toHaveAttribute(
+    'href',
+    'https://www.youtube.com/watch?v=next',
+  )
+  await expect(nextPremiere.locator('img')).toHaveCount(0)
+  await expect(page.getByText('+123,123회')).toBeVisible()
+  const rail = news.getByRole('group', { name: '조회수 달성' })
+  const slide = () =>
+    rail.evaluate((node) => Math.round(node.scrollTop / node.clientHeight))
+  expect(await slide()).toBe(0)
+  await page.clock.runFor(3000)
+  await expect.poll(slide).toBe(1)
+  await page.clock.runFor(3000)
+  await expect.poll(slide).toBe(2)
+  await expect
+    .poll(() =>
+      premieres.evaluate((node) =>
+        Math.round(node.scrollTop / node.clientHeight),
+      ),
+    )
+    .toBe(1)
+  await page.clock.runFor(3000)
+  await expect.poll(slide).toBe(1)
+  const approach = news.getByRole('group', { name: '조회수 임박' })
+  expect(await approach.evaluate((node) => node.scrollTop)).toBe(0)
+
+  await expect(
+    page.getByRole('region', { name: '내가 좋아하는 곡' }),
+  ).toHaveCount(0)
+
+  await page.route('**/api/v1/me', (route) =>
+    route.fulfill({
+      json: {
+        id: '00000000-0000-4000-8000-000000000001',
+        role: 'USER',
+        status: 'ACTIVE',
+        email: 'test@example.com',
+      },
+    }),
+  )
+  await page.route('**/api/v1/me/playlists?*', (route) =>
+    route.fulfill({
+      json: {
+        ...emptyPage,
+        items: [
+          { id: playlistId, name: '내 음악', totalCount: 8, availableCount: 1 },
+        ],
+      },
+    }),
+  )
+  await page.route('**/api/v1/me/playlists/*/items?*', (route) =>
+    route.fulfill({
+      json: { ...emptyPage, version: 1, items: [{ available: true, song }] },
+    }),
+  )
+  await page.route('**/api/v1/me/favorites?*', (route) =>
+    route.fulfill({
+      json: {
+        ...emptyPage,
+        availableCount: 1,
+        items: [{ songId: song.id, available: true, song }],
+      },
+    }),
+  )
+  await page.reload()
+  await expect(page.getByRole('link', { name: '내 계정' })).toHaveAttribute(
+    'href',
+    '/account',
+  )
+  const playlist = page.getByRole('link', { name: /내 음악.*8곡/ })
+  await expect(playlist).toHaveAttribute(
+    'href',
+    `/library/playlists/${playlistId}`,
+  )
+  await expect(playlist.locator('img')).toHaveCount(1)
+  await expect(playlist.locator('img')).toHaveJSProperty('naturalWidth', 160)
+  await expect(
+    page
+      .getByRole('region', { name: '내가 좋아하는 곡' })
+      .getByRole('link', { name: '소식 테스트곡 상세 보기' }),
+  ).toBeVisible()
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true)
+  await page.screenshot({
+    path: info.outputPath('home-light.png'),
+    fullPage: true,
+  })
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await expect(
+    page.getByRole('link', { name: '좋아하는 곡', exact: true }),
+  ).toHaveAttribute('href', '/library')
+  await page.getByRole('button', { name: '다크 모드로 변경' }).click()
+  await page.keyboard.press('Escape')
+  await page.screenshot({
+    path: info.outputPath('home-dark.png'),
+    animations: 'disabled',
+    fullPage: true,
+  })
+})
+
+for (const firstPageAvailable of [0, 1]) {
+  test(`홈 좋아하는 곡은 첫 페이지의 정상 곡이 ${firstPageAvailable}개여도 뒤 페이지를 조회한다`, async ({
+    page,
+  }) => {
+    const songs = [makeSong(101), makeSong(102), makeSong(103)]
+    const cursors: (string | null)[] = []
+    await page.route('**/api/v1/me', (route) =>
+      route.fulfill({
+        json: {
+          id: '00000000-0000-4000-8000-000000000001',
+          role: 'USER',
+          status: 'ACTIVE',
+          email: 'test@example.com',
+        },
+      }),
+    )
+    await page.route('**/api/v1/me/favorites?*', (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor')
+      cursors.push(cursor)
+      const available = cursor
+        ? songs.slice(firstPageAvailable)
+        : songs.slice(0, firstPageAvailable)
+      return route.fulfill({
+        json: {
+          totalCount: 23 - firstPageAvailable,
+          availableCount: 3,
+          hasNext: !cursor,
+          nextCursor: cursor ? null : 'later-favorites',
+          items: [
+            ...available.map((song) => ({
+              songId: song.id,
+              available: true,
+              song,
+            })),
+            ...(cursor
+              ? []
+              : Array.from({ length: 20 - firstPageAvailable }, (_, index) => ({
+                  songId: `unavailable-${index}`,
+                  available: false,
+                  song: null,
+                }))),
+          ],
+        },
+      })
+    })
+    await page.goto('/')
+    const section = page.getByRole('region', { name: '내가 좋아하는 곡' })
+    for (const song of songs) {
+      await expect(
+        section.getByRole('link', {
+          name: `${song.title} 상세 보기`,
+          exact: true,
+        }),
+      ).toBeVisible()
+    }
+    expect(cursors).toEqual([null, 'later-favorites'])
+    await expect(section.getByRole('button', { name: /곡 보기/ })).toHaveCount(
+      0,
+    )
+  })
+}
+
+test('홈 좋아하는 곡은 빈 중간 페이지를 지나 일곱 번째 곡을 찾아 탐색 버튼을 표시한다', async ({
+  page,
+}) => {
+  const songs = Array.from({ length: 7 }, (_, index) => makeSong(index + 201))
+  const cursors: (string | null)[] = []
+  await page.route('**/api/v1/me', (route) =>
+    route.fulfill({
+      json: {
+        id: '00000000-0000-4000-8000-000000000001',
+        role: 'USER',
+        status: 'ACTIVE',
+        email: 'test@example.com',
+      },
+    }),
+  )
+  await page.route('**/api/v1/me/favorites?*', (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    cursors.push(cursor)
+    const available =
+      cursor === 'last' ? songs.slice(6) : cursor ? [] : songs.slice(0, 6)
+    return route.fulfill({
+      json: {
+        totalCount: 41,
+        availableCount: 7,
+        hasNext: cursor !== 'last',
+        nextCursor: cursor === 'last' ? null : cursor ? 'last' : 'middle',
+        items: [
+          ...available.map((song) => ({
+            songId: song.id,
+            available: true,
+            song,
+          })),
+          ...Array.from(
+            { length: cursor === 'last' ? 0 : 20 - available.length },
+            (_, index) => ({
+              songId: `${cursor ?? 'first'}-unavailable-${index}`,
+              available: false,
+              song: null,
+            }),
+          ),
+        ],
+      },
+    })
+  })
+  await page.goto('/')
+  const section = page.getByRole('region', { name: '내가 좋아하는 곡' })
+  const next = section.getByRole('button', {
+    name: '내가 좋아하는 곡 다음 곡 보기',
+  })
+  await expect(next).toBeVisible()
+  expect(cursors).toEqual([null, 'middle', 'last'])
+  await next.click()
+  await expect(
+    section.getByRole('link', {
+      name: `${songs[6]!.title} 상세 보기`,
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(next).toHaveCount(0)
 })

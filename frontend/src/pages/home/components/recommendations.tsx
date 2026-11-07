@@ -1,27 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { recommendationsOptions } from '@/features/songs/queries'
-import { SongGrid, SongGridSkeleton } from '@/features/songs/song-card'
-import { Button } from '@/shared/ui/button'
+import { HomeSongSkeleton } from './home-song-grid'
+import { HomeSongCarousel } from './home-song-carousel'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { HomeSection } from './home-section'
 
 export function Recommendations() {
   const query = useQuery(recommendationsOptions)
   return (
-    <HomeSection
-      title="우연히 만나는 한 곡"
-      action={
-        <Button
-          disabled={query.isFetching}
-          aria-busy={query.isFetching}
-          onClick={() => void query.refetch()}
-        >
-          {query.isFetching && !query.isPending ? '추천 중…' : '다시 추천'}
-        </Button>
-      }
-    >
+    <HomeSection title="오늘의 추천 곡" loading={query.isPending}>
       {query.isPending ? (
-        <SongGridSkeleton />
+        <HomeSongSkeleton />
       ) : query.isError && !query.data ? (
         <StatePanel
           title="추천을 불러오지 못했습니다"
@@ -30,7 +19,7 @@ export function Recommendations() {
       ) : (
         <>
           {query.data?.items.length ? (
-            <SongGrid songs={query.data.items} />
+            <HomeSongCarousel songs={query.data.items} label="오늘의 추천 곡" />
           ) : (
             <StatePanel title="추천할 노래가 아직 없습니다" />
           )}

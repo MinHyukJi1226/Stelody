@@ -44,7 +44,7 @@ describe('공개 곡 조회', () => {
         expect(Object.fromEntries(q)).toEqual({
           mode: 'BROWSE',
           sort: 'LATEST',
-          size: '4',
+          size: '20',
         })
         return HttpResponse.json(emptyPage)
       }),

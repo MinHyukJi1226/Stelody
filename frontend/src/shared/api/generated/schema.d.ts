@@ -4,6 +4,50 @@
  */
 
 export interface paths {
+  '/api/v1/songs/upcoming': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * YouTube 공개 예정 영상
+     * @description 수집이 활성화된 멤버·그룹 채널에서 YouTube API가 공개 예약으로 확인한 영상만 제공합니다. 제목과 시작 시각은 YouTube 원본이며 시작 시각은 UTC입니다. 일반 예약 방송과 최초공개를 구분하는 필드는 제공되지 않으므로 화면에는 ‘YouTube 공개 예정’으로 표시하고 원본 링크와 출처를 함께 제공합니다. 시작 시각이 지난 항목과 2시간 넘게 갱신되지 않은 항목은 제외합니다. 예약 시작 시각·영상 ID 오름차순 최대 50건이며 대상이 없으면 items는 빈 배열입니다. 요청 시 외부 API를 호출하지 않습니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_upcoming']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/songs/milestones': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 조회수 임박·달성 소식
+     * @description 10만 회부터 10만 회 간격의 목표입니다. approaching은 다음 목표까지 5000회 이하로 남은 공개 대표 영상이며 남은 횟수·곡 ID 순입니다. achievements는 감지 후 24시간 이내 달성 소식입니다. 곡별 가장 최근 달성 한 건을 남기고, 감지 시각이 같으면 가장 높은 목표를 선택합니다. 곡별로 합친 뒤 감지 시각·목표 내림차순으로 최신 10곡을 제공합니다. 최초 관측은 기준점만 만들고 과거 달성은 생성하지 않습니다. 조회수 감소 후 같은 목표를 다시 넘겨도 중복 생성하지 않습니다. 30일간 관측이 없으면 기준점을 폐기하고 다음 관측을 새 기준점으로 사용합니다. 비공개·이용 불가·숨김·대표 영상 교체·수집 제외 채널은 소식에서 제외합니다. 최대 2시간 이내 실제 관측만 제공합니다. DISABLED는 기능 비활성, PENDING은 유효한 관측 없음, READY는 조회 가능 상태이며 두 배열이 비어 있을 수 있습니다. detectedAt은 실제 달성 시각이 아닌 서버 확인 시각입니다. 예상 도달 시각은 내부 조회 주기 조절에만 사용하며 사용자에게 확정 시각으로 제공하지 않습니다. 추가 조회는 임박 영상만 1·10·60분으로 조절하며 API 장애·한도·서버 휴면·유튜브 집계 지연에 따라 늦어질 수 있습니다. 읽기 전용이며 이 GET 요청으로 외부 조회·수집을 실행하지 않습니다. 기존 곡 카드의 viewCount는 정각 수집 기준이고 approaching.viewCount·observedAt은 별도의 최신 확인값입니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_milestones']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/admin/artist-registrations/{requestId}': {
     parameters: {
       query?: never
@@ -1581,8 +1625,10 @@ export interface paths {
       cookie?: never
     }
     /**
-     * 24시간 조회수 급상승 목록
-     * @description 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     * 조회수 급상승 목록
+     * @description 대표 영상의 최근 24시간 조회수 증가량 순입니다. 공개 24시간 미만인 영상은 24시간 전 비교 기록이 없으면 공개 후 첫 관측과 최신 관측의 증가량을 사용합니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_songs_trending']
     put?: never
@@ -1681,6 +1727,46 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    'com.stelody.schedule.PublicScheduleRepository.Item': {
+      channelName: string
+      /** Format: date-time */
+      scheduledStartAt: string
+      /** @description YouTube 원본 썸네일 URL. 확인된 이미지가 없으면 null. */
+      thumbnailUrl: string | null
+      title: string
+      url: string
+      youtubeId: string
+    }
+    'com.stelody.schedule.PublicScheduleController.Schedule': {
+      items: components['schemas']['com.stelody.schedule.PublicScheduleRepository.Item'][]
+    }
+    'com.stelody.milestone.MilestoneDtos.Approaching': {
+      /** Format: date-time */
+      observedAt: string
+      song: components['schemas']['com.stelody.song.dto.SongDtos.Card']
+      /** Format: int64 */
+      target: number
+      /** Format: int64 */
+      viewCount: number
+    }
+    'com.stelody.milestone.MilestoneDtos.Achievement': {
+      /**
+       * Format: date-time
+       * @description 서버가 목표 돌파를 처음 확인한 시각입니다. 실제 유튜브 달성 시각이 아닙니다.
+       */
+      detectedAt: string
+      song: components['schemas']['com.stelody.song.dto.SongDtos.Card']
+      /** Format: int64 */
+      target: number
+    }
+    'com.stelody.milestone.MilestoneDtos.Feed': {
+      achievements: components['schemas']['com.stelody.milestone.MilestoneDtos.Achievement'][]
+      approaching: components['schemas']['com.stelody.milestone.MilestoneDtos.Approaching'][]
+      /** Format: date-time */
+      checkedAt: string
+      /** @enum {string} */
+      status: 'DISABLED' | 'PENDING' | 'READY'
+    }
     ApiProblem: {
       /** @description 기능별 오류 코드. 각 API의 오류 응답 description·x-error-codes와 HTTP status로 분기합니다. fieldErrors[].code와 내보내기 Job.errorCode는 별도입니다. 새 코드는 추가될 수 있으므로 알 수 없는 코드는 일반 오류로 안내하고 traceId를 보관합니다. */
       code: string
@@ -3014,6 +3100,64 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  get_songs_upcoming: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.schedule.PublicScheduleController.Schedule']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_songs_milestones: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.milestone.MilestoneDtos.Feed']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_admin_artist_registrations_requestId: {
     parameters: {
       query?: never

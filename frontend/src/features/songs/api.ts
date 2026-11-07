@@ -25,7 +25,7 @@ export function getSongs(query: SongListQuery, signal?: AbortSignal) {
 
 export function getRecommendations(signal?: AbortSignal) {
   return apiClient.request<Recommendations>(
-    '/songs/recommendations?size=4',
+    '/songs/recommendations?size=20',
     signal ? { signal } : {},
   )
 }

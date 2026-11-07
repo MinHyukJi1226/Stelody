@@ -5,11 +5,11 @@ test('직접 접근한 주소와 알 수 없는 경로에서 홈으로 복귀한
 }) => {
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: /좋아하는 목소리/ }),
+    page.getByRole('heading', { name: 'Stelody 메인' }),
   ).toBeVisible()
   await page.reload()
   await expect(
-    page.getByRole('heading', { name: /좋아하는 목소리/ }),
+    page.getByRole('heading', { name: 'Stelody 메인' }),
   ).toBeVisible()
   await page.goto('/unknown-page')
   await expect(
@@ -23,14 +23,14 @@ test('직접 접근한 주소와 알 수 없는 경로에서 홈으로 복귀한
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL('/')
   await expect(
-    page.getByRole('heading', { name: /좋아하는 목소리/ }),
+    page.getByRole('heading', { name: 'Stelody 메인' }),
   ).toBeVisible()
 })
 
 test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않는다', async ({
   page,
 }) => {
-  await page.goto('/')
+  await page.goto('/search')
   await page.evaluate(() => document.fonts.ready)
   const mobile = (page.viewportSize()?.width ?? 0) < 768
   const menu = page.getByRole('button', { name: '메뉴 열기' })
@@ -41,7 +41,7 @@ test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않�
     expect(menuBounds?.width).toBe(44)
     expect(menuBounds?.height).toBe(44)
     expect(themeBounds?.x).toBeLessThan(menuBounds!.x)
-    expect((await page.locator('header').boundingBox())?.height).toBe(93)
+    expect((await page.getByRole('banner').boundingBox())?.height).toBe(93)
     await expect(menu).toHaveCSS('border-top-width', '0px')
     await expect(menu).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
     await expect(menu).toHaveText('')
@@ -108,7 +108,7 @@ test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않�
     ),
   ).toBe(true)
   const images = page.locator('header img')
-  await expect(images).toHaveCount(2)
+  await expect(images).toHaveCount(1)
   for (const img of await images.all()) {
     expect(
       await img.evaluate(
@@ -116,7 +116,6 @@ test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않�
       ),
     ).toBe(true)
   }
-  await expect(page.getByRole('button', { name: /모드로 변경$/ })).toBeEnabled()
 })
 
 test('시스템 테마를 따르고 사용자가 선택한 테마는 새로고침 후 유지한다', async ({
@@ -127,12 +126,14 @@ test('시스템 테마를 따르고 사용자가 선택한 테마는 새로고�
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.emulateMedia({ colorScheme: 'light' })
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page
     .getByRole('button', { name: '다크 모드로 변경', exact: true })
     .click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page
     .getByRole('button', { name: '라이트 모드로 변경', exact: true })
     .click()
@@ -166,12 +167,14 @@ test('브라우저 저장소가 차단되어도 테마 전환을 사용할 수 �
   })
   await page.emulateMedia({ colorScheme: 'light' })
   await page.goto('/')
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page
     .getByRole('button', { name: '다크 모드로 변경', exact: true })
     .click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.keyboard.press('Escape')
   await expect(
-    page.getByRole('heading', { name: /좋아하는 목소리/ }),
+    page.getByRole('heading', { name: 'Stelody 메인' }),
   ).toBeVisible()
 })
 

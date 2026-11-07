@@ -7,6 +7,64 @@
   },
   "servers": [{ "url": "/" }],
   "paths": {
+    "/api/v1/songs/upcoming": {
+      "get": {
+        "description": "수집이 활성화된 멤버·그룹 채널에서 YouTube API가 공개 예약으로 확인한 영상만 제공합니다. 제목과 시작 시각은 YouTube 원본이며 시작 시각은 UTC입니다. 일반 예약 방송과 최초공개를 구분하는 필드는 제공되지 않으므로 화면에는 ‘YouTube 공개 예정’으로 표시하고 원본 링크와 출처를 함께 제공합니다. 시작 시각이 지난 항목과 2시간 넘게 갱신되지 않은 항목은 제외합니다. 예약 시작 시각·영상 ID 오름차순 최대 50건이며 대상이 없으면 items는 빈 배열입니다. 요청 시 외부 API를 호출하지 않습니다.\n\n업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "operationId": "get_songs_upcoming",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/com.stelody.schedule.PublicScheduleController.Schedule"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+              }
+            },
+            "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
+          }
+        },
+        "security": [],
+        "summary": "YouTube 공개 예정 영상",
+        "tags": ["공개 카탈로그"]
+      }
+    },
+    "/api/v1/songs/milestones": {
+      "get": {
+        "description": "10만 회부터 10만 회 간격의 목표입니다. approaching은 다음 목표까지 5000회 이하로 남은 공개 대표 영상이며 남은 횟수·곡 ID 순입니다. achievements는 감지 후 24시간 이내 달성 소식입니다. 곡별 가장 최근 달성 한 건을 남기고, 감지 시각이 같으면 가장 높은 목표를 선택합니다. 곡별로 합친 뒤 감지 시각·목표 내림차순으로 최신 10곡을 제공합니다. 최초 관측은 기준점만 만들고 과거 달성은 생성하지 않습니다. 조회수 감소 후 같은 목표를 다시 넘겨도 중복 생성하지 않습니다. 30일간 관측이 없으면 기준점을 폐기하고 다음 관측을 새 기준점으로 사용합니다. 비공개·이용 불가·숨김·대표 영상 교체·수집 제외 채널은 소식에서 제외합니다. 최대 2시간 이내 실제 관측만 제공합니다. DISABLED는 기능 비활성, PENDING은 유효한 관측 없음, READY는 조회 가능 상태이며 두 배열이 비어 있을 수 있습니다. detectedAt은 실제 달성 시각이 아닌 서버 확인 시각입니다. 예상 도달 시각은 내부 조회 주기 조절에만 사용하며 사용자에게 확정 시각으로 제공하지 않습니다. 추가 조회는 임박 영상만 1·10·60분으로 조절하며 API 장애·한도·서버 휴면·유튜브 집계 지연에 따라 늦어질 수 있습니다. 읽기 전용이며 이 GET 요청으로 외부 조회·수집을 실행하지 않습니다. 기존 곡 카드의 viewCount는 정각 수집 기준이고 approaching.viewCount·observedAt은 별도의 최신 확인값입니다.\n\n업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "operationId": "get_songs_milestones",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/com.stelody.milestone.MilestoneDtos.Feed"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ApiProblem" }
+              }
+            },
+            "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
+          }
+        },
+        "security": [],
+        "summary": "조회수 임박·달성 소식",
+        "tags": ["공개 카탈로그"]
+      }
+    },
     "/api/v1/admin/artist-registrations/{requestId}": {
       "get": {
         "description": "등록 전에 보관한 Idempotency-Key UUID로 본인이 접수한 요청만 조회합니다. 로그인한 현재 ADMIN 역할이 필요하며 다른 관리자·미접수 ID는 모두 NOT_PROCESSED이고 등록 정보는 반환하지 않습니다. 읽기 전용이며 등록·재시도·정리를 실행하지 않습니다. NOT_PROCESSED는 본인 접수 기록 없음, PROCESSING은 처리 중(3초 간격 재조회), COMPLETED는 artistId에 생성된 UUID 반환, FAILED는 errorCode로 실패를 안내합니다. NOT_PROCESSED의 createdAt/expiresAt/finishedAt은 null이며 결과 조회 장애·401·403·503과 구분해야 합니다. 완료·실패의 pollAfterSeconds는 null입니다. 결과는 최초 접수부터 24시간이며 조회·재전송으로 연장되지 않고 이후 410 ARTIST_REGISTRATION_RESULT_EXPIRED입니다. 만료 상세 정보는 정리하지만 요청 UUID·본문 해시·소유자·접수/만료 시각의 최소 기록은 유지하므로 동일 ID 재등록도 410입니다. 세션 만료 후에는 같은 관리자 계정으로 로그인해 조회할 수 있습니다. 프론트는 요청 ID와 원래 본문 전체를 보관해 새로고침 후 조회·재전송에 사용하며 오류를 미처리로 바꾸거나 새 ID로 반복 접수하지 않습니다. 중단된 PROCESSING 중 2분이 지난 비활성 요청은 1분 간격 정리에서 FAILED/ARTIST_REGISTRATION_INTERRUPTED로 전환하고 실행 중 잠긴 요청은 건너뜁니다. FAILED는 생성 트랜잭션이 반영되지 않은 상태이며 오류를 수정한 후 새 ID로 별도 요청할 수 있습니다. 저장소 장애는 503이며 결과를 단정할 수 없습니다.\n\n현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
@@ -6919,7 +6977,7 @@
     },
     "/api/v1/songs/trending": {
       "get": {
-        "description": "업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "description": "대표 영상의 최근 24시간 조회수 증가량 순입니다. 공개 24시간 미만인 영상은 24시간 전 비교 기록이 없으면 공개 후 첫 관측과 최신 관측의 증가량을 사용합니다.\n\n업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
         "operationId": "get_songs_trending",
         "parameters": [
           {
@@ -6956,7 +7014,7 @@
           }
         },
         "security": [],
-        "summary": "24시간 조회수 급상승 목록",
+        "summary": "조회수 급상승 목록",
         "tags": ["공개 카탈로그"]
       }
     },
@@ -7170,6 +7228,90 @@
   },
   "components": {
     "schemas": {
+      "com.stelody.schedule.PublicScheduleRepository.Item": {
+        "type": "object",
+        "properties": {
+          "channelName": { "type": "string" },
+          "scheduledStartAt": { "type": "string", "format": "date-time" },
+          "thumbnailUrl": {
+            "type": ["string", "null"],
+            "description": "YouTube 원본 썸네일 URL. 확인된 이미지가 없으면 null."
+          },
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "youtubeId": { "type": "string" }
+        },
+        "required": [
+          "channelName",
+          "scheduledStartAt",
+          "thumbnailUrl",
+          "title",
+          "url",
+          "youtubeId"
+        ]
+      },
+      "com.stelody.schedule.PublicScheduleController.Schedule": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/com.stelody.schedule.PublicScheduleRepository.Item"
+            }
+          }
+        },
+        "required": ["items"]
+      },
+      "com.stelody.milestone.MilestoneDtos.Approaching": {
+        "type": "object",
+        "properties": {
+          "observedAt": { "type": "string", "format": "date-time" },
+          "song": {
+            "$ref": "#/components/schemas/com.stelody.song.dto.SongDtos.Card"
+          },
+          "target": { "type": "integer", "format": "int64" },
+          "viewCount": { "type": "integer", "format": "int64" }
+        },
+        "required": ["observedAt", "song", "target", "viewCount"]
+      },
+      "com.stelody.milestone.MilestoneDtos.Achievement": {
+        "type": "object",
+        "properties": {
+          "detectedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "서버가 목표 돌파를 처음 확인한 시각입니다. 실제 유튜브 달성 시각이 아닙니다."
+          },
+          "song": {
+            "$ref": "#/components/schemas/com.stelody.song.dto.SongDtos.Card"
+          },
+          "target": { "type": "integer", "format": "int64" }
+        },
+        "required": ["detectedAt", "song", "target"]
+      },
+      "com.stelody.milestone.MilestoneDtos.Feed": {
+        "type": "object",
+        "properties": {
+          "achievements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/com.stelody.milestone.MilestoneDtos.Achievement"
+            }
+          },
+          "approaching": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/com.stelody.milestone.MilestoneDtos.Approaching"
+            }
+          },
+          "checkedAt": { "type": "string", "format": "date-time" },
+          "status": {
+            "type": "string",
+            "enum": ["DISABLED", "PENDING", "READY"]
+          }
+        },
+        "required": ["achievements", "approaching", "checkedAt", "status"]
+      },
       "ApiProblem": {
         "type": "object",
         "properties": {
