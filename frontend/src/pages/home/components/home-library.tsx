@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { favoriteListOptions } from '@/features/favorites/queries'
@@ -67,6 +68,18 @@ export function HomeLibrary({ userId }: { userId: string }) {
         item.available && item.song ? [item.song] : [],
       ),
     ) ?? []
+  const needsMoreFavorites =
+    favorites.hasNextPage &&
+    songs.length < Math.min(7, favorites.data?.pages[0]?.availableCount ?? 0)
+  const loadingFavorites =
+    favorites.isPending || (needsMoreFavorites && !favorites.isError)
+  const { fetchNextPage, isFetching, isError, dataUpdatedAt } = favorites
+
+  useEffect(() => {
+    if (needsMoreFavorites && !isFetching && !isError) {
+      void fetchNextPage()
+    }
+  }, [needsMoreFavorites, isFetching, isError, fetchNextPage, dataUpdatedAt])
 
   return (
     <>
@@ -123,9 +136,9 @@ export function HomeLibrary({ userId }: { userId: string }) {
           )}
         </HomeSection>
       )}
-      {(favorites.isPending || favorites.isError || songs.length > 0) && (
-        <HomeSection title="내가 좋아하는 곡" loading={favorites.isPending}>
-          {favorites.isPending ? (
+      {(loadingFavorites || favorites.isError || songs.length > 0) && (
+        <HomeSection title="내가 좋아하는 곡" loading={loadingFavorites}>
+          {loadingFavorites ? (
             <HomeSongSkeleton />
           ) : favorites.isError && !favorites.data ? (
             <StatePanel

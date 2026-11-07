@@ -668,3 +668,126 @@ test('메인 소식과 급상승을 API 값으로 표시하고 로그인 후 보
     fullPage: true,
   })
 })
+
+for (const firstPageAvailable of [0, 1]) {
+  test(`홈 좋아하는 곡은 첫 페이지의 정상 곡이 ${firstPageAvailable}개여도 뒤 페이지를 조회한다`, async ({
+    page,
+  }) => {
+    const songs = [makeSong(101), makeSong(102), makeSong(103)]
+    const cursors: (string | null)[] = []
+    await page.route('**/api/v1/me', (route) =>
+      route.fulfill({
+        json: {
+          id: '00000000-0000-4000-8000-000000000001',
+          role: 'USER',
+          status: 'ACTIVE',
+          email: 'test@example.com',
+        },
+      }),
+    )
+    await page.route('**/api/v1/me/favorites?*', (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor')
+      cursors.push(cursor)
+      const available = cursor
+        ? songs.slice(firstPageAvailable)
+        : songs.slice(0, firstPageAvailable)
+      return route.fulfill({
+        json: {
+          totalCount: 23 - firstPageAvailable,
+          availableCount: 3,
+          hasNext: !cursor,
+          nextCursor: cursor ? null : 'later-favorites',
+          items: [
+            ...available.map((song) => ({
+              songId: song.id,
+              available: true,
+              song,
+            })),
+            ...(cursor
+              ? []
+              : Array.from({ length: 20 - firstPageAvailable }, (_, index) => ({
+                  songId: `unavailable-${index}`,
+                  available: false,
+                  song: null,
+                }))),
+          ],
+        },
+      })
+    })
+    await page.goto('/')
+    const section = page.getByRole('region', { name: '내가 좋아하는 곡' })
+    for (const song of songs) {
+      await expect(
+        section.getByRole('link', {
+          name: `${song.title} 상세 보기`,
+          exact: true,
+        }),
+      ).toBeVisible()
+    }
+    expect(cursors).toEqual([null, 'later-favorites'])
+    await expect(section.getByRole('button', { name: /곡 보기/ })).toHaveCount(
+      0,
+    )
+  })
+}
+
+test('홈 좋아하는 곡은 빈 중간 페이지를 지나 일곱 번째 곡을 찾아 탐색 버튼을 표시한다', async ({
+  page,
+}) => {
+  const songs = Array.from({ length: 7 }, (_, index) => makeSong(index + 201))
+  const cursors: (string | null)[] = []
+  await page.route('**/api/v1/me', (route) =>
+    route.fulfill({
+      json: {
+        id: '00000000-0000-4000-8000-000000000001',
+        role: 'USER',
+        status: 'ACTIVE',
+        email: 'test@example.com',
+      },
+    }),
+  )
+  await page.route('**/api/v1/me/favorites?*', (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    cursors.push(cursor)
+    const available =
+      cursor === 'last' ? songs.slice(6) : cursor ? [] : songs.slice(0, 6)
+    return route.fulfill({
+      json: {
+        totalCount: 41,
+        availableCount: 7,
+        hasNext: cursor !== 'last',
+        nextCursor: cursor === 'last' ? null : cursor ? 'last' : 'middle',
+        items: [
+          ...available.map((song) => ({
+            songId: song.id,
+            available: true,
+            song,
+          })),
+          ...Array.from(
+            { length: cursor === 'last' ? 0 : 20 - available.length },
+            (_, index) => ({
+              songId: `${cursor ?? 'first'}-unavailable-${index}`,
+              available: false,
+              song: null,
+            }),
+          ),
+        ],
+      },
+    })
+  })
+  await page.goto('/')
+  const section = page.getByRole('region', { name: '내가 좋아하는 곡' })
+  const next = section.getByRole('button', {
+    name: '내가 좋아하는 곡 다음 곡 보기',
+  })
+  await expect(next).toBeVisible()
+  expect(cursors).toEqual([null, 'middle', 'last'])
+  await next.click()
+  await expect(
+    section.getByRole('link', {
+      name: `${songs[6]!.title} 상세 보기`,
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(next).toHaveCount(0)
+})
