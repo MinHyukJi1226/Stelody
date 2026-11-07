@@ -5,7 +5,7 @@ import type { SongPage } from '@/shared/api/types'
 export const latestSongsOptions = queryOptions({
   queryKey: ['songs', 'latest', 'preview'],
   queryFn: ({ signal }) =>
-    getSongs({ mode: 'BROWSE', sort: 'LATEST', size: 4 }, signal),
+    getSongs({ mode: 'BROWSE', sort: 'LATEST', size: 20 }, signal),
 })
 
 export const recommendationsOptions = queryOptions({

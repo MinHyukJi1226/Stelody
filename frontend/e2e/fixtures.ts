@@ -51,6 +51,14 @@ export const test = base.extend<{ catalogMocks: void }>({
           await route.fulfill({
             json: { songId: pathname.split('/').at(-1), favorited: false },
           })
+        } else if (pathname === '/api/v1/songs/trending') {
+          await route.fulfill({ json: { status: 'DISABLED', items: [] } })
+        } else if (pathname === '/api/v1/songs/milestones') {
+          await route.fulfill({
+            json: { status: 'PENDING', approaching: [], achievements: [] },
+          })
+        } else if (pathname === '/api/v1/songs/upcoming') {
+          await route.fulfill({ json: { items: [] } })
         } else if (pathname === '/api/v1/songs/recommendations') {
           await route.fulfill({ json: { items: [] } })
         } else if (

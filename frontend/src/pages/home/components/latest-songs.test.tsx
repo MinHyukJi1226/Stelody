@@ -3,12 +3,19 @@ import userEvent from '@testing-library/user-event'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { http, HttpResponse } from 'msw'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { createQueryClient } from '@/app/query-client'
 import { latestSongsOptions } from '@/features/songs/queries'
 import type { Song } from '@/features/songs/api'
 import { server } from '@/test/server'
 import { LatestSongs } from './latest-songs'
+
+vi.mock('./home-scrolling-text', () => ({
+  HomeScrollingText: ({ children }: { children: ReactNode }) => (
+    <span>{children}</span>
+  ),
+}))
 
 const song: Song = {
   id: 'song-1',
