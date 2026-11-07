@@ -550,9 +550,12 @@ test('메인 소식과 급상승을 API 값으로 표시하고 로그인 후 보
   await expect(
     news.getByRole('link', { name: /100,000회를 달성했어요! 축하합니다!/ }),
   ).toBeVisible()
-  const premieres = news.getByRole('group', { name: '최초 공개', exact: true })
+  const premieres = news.getByRole('group', {
+    name: 'YouTube 공개 예정',
+    exact: true,
+  })
   const premiere = premieres.getByRole('link', {
-    name: '오늘 20:00 최초공개 예약 영상 테스트 채널',
+    name: '오늘 20:00 YouTube 공개 예정 예약 영상 테스트 채널',
   })
   await expect(premiere).toHaveAttribute(
     'href',
@@ -564,7 +567,7 @@ test('메인 소식과 급상승을 API 값으로 표시하고 로그인 후 보
   await expect(thumbnail).toHaveCSS('width', `${expectedSize[0]}px`)
   await expect(thumbnail).toHaveCSS('height', `${expectedSize[1]}px`)
   const nextPremiere = premieres.getByRole('link', {
-    name: '11월 7일 19:00 최초공개 다음 예약 영상 다음 채널',
+    name: '11월 7일 19:00 YouTube 공개 예정 다음 예약 영상 다음 채널',
   })
   await expect(nextPremiere).toHaveAttribute(
     'href',

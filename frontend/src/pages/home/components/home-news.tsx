@@ -85,7 +85,9 @@ export function HomeNews() {
       aria-label="최신 소식"
       className={`flex min-w-0 flex-col gap-4 py-2 md:gap-6${showNews ? ' home-section-enter' : ''}`}
     >
-      {schedule.length > 0 && <NewsTicker label="최초 공개" items={schedule} />}
+      {schedule.length > 0 && (
+        <NewsTicker label="YouTube 공개 예정" items={schedule} />
+      )}
       {upcoming.isPending && (
         <div
           aria-hidden="true"
@@ -179,7 +181,7 @@ function PremiereLink({
         dateTime={item.scheduledStartAt}
         className="truncate text-[22px]/[30px] font-bold text-brand md:text-[26px]/9"
       >
-        {day} {kstTime.format(start)} 최초공개
+        {day} {kstTime.format(start)} YouTube 공개 예정
       </time>
       <div className="flex min-w-0 items-center gap-3">
         <Artwork src={item.thumbnailUrl ?? null} className={thumbnailClass} />
