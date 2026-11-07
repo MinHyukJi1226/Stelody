@@ -61,9 +61,9 @@ public final class VideoCollector {
         var now = clock.instant();
         run = repository.begin(token, now.truncatedTo(ChronoUnit.HOURS), now, requestedRun);
         started.accept(run.id());
-        repository.cleanup(token, now);
-        if (run.completed()) return new Result(run.id(), "SKIPPED_COMPLETED", null);
         try {
+          repository.cleanup(token, now);
+          if (run.completed()) return new Result(run.id(), "SKIPPED_COMPLETED", null);
           while (true) {
             budget.remaining();
             var pending = repository.pending(run.id());

@@ -329,7 +329,8 @@ public final class CollectionRepository {
           jdbc.sql("DELETE FROM app.daily_video_view WHERE day < :oldest")
               .param("oldest", LocalDate.ofInstant(now, ZoneId.of("Asia/Seoul")).minusDays(29))
               .update();
-          jdbc.sql("UPDATE app.collection_target SET view_count = NULL WHERE observed_at < :oldest")
+          jdbc.sql(
+                  "UPDATE app.collection_target SET view_count = NULL WHERE observed_at < :oldest AND view_count IS NOT NULL")
               .param("oldest", ts(now.minusSeconds(172800)))
               .update();
           boolean expired =
