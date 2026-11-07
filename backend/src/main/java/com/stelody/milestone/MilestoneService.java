@@ -32,7 +32,7 @@ public class MilestoneService {
 
   private record Entry(UUID song, UUID video, long views, Instant observed, long highest) {}
 
-  private record Event(UUID song, long target, Instant at) {}
+  private record Event(UUID video, long target, Instant at) {}
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public MilestoneDtos.Feed feed() {
@@ -66,7 +66,17 @@ public class MilestoneService {
       return new MilestoneDtos.Feed(MilestoneDtos.Status.PENDING, now, List.of(), List.of());
     var events =
         jdbc.sql(
-                "SELECT video_id,target,detected_at FROM app.view_milestone_event WHERE video_id IN(:videos) AND detected_at>=:oldest AND detected_at<=:now ORDER BY detected_at DESC,target DESC,video_id LIMIT 10")
+                """
+                SELECT video_id, target, detected_at
+                FROM (
+                  SELECT DISTINCT ON (video_id) video_id, target, detected_at
+                  FROM app.view_milestone_event
+                  WHERE video_id IN (:videos) AND detected_at BETWEEN :oldest AND :now
+                  ORDER BY video_id, detected_at DESC, target DESC
+                ) latest
+                ORDER BY detected_at DESC, target DESC, video_id
+                LIMIT 10
+                """)
             .param("videos", entries.stream().map(Entry::video).toList())
             .param("oldest", Timestamp.from(now.minusSeconds(86400)))
             .param("now", Timestamp.from(now))
@@ -84,7 +94,7 @@ public class MilestoneService {
                 MilestonePolicy.approaching(e.views())
                     && MilestonePolicy.next(e.views()) > e.highest())
         .forEach(e -> selected.add(e.song()));
-    events.forEach(e -> selected.add(byVideo.get(e.song())));
+    events.forEach(e -> selected.add(byVideo.get(e.video())));
     var cards = new HashMap<UUID, SongDtos.Card>();
     if (!selected.isEmpty())
       songs
@@ -112,7 +122,7 @@ public class MilestoneService {
             .map(
                 e ->
                     new MilestoneDtos.Achievement(
-                        cards.get(byVideo.get(e.song())), e.target(), e.at()))
+                        cards.get(byVideo.get(e.video())), e.target(), e.at()))
             .toList();
     return new MilestoneDtos.Feed(MilestoneDtos.Status.READY, now, approaching, achievements);
   }
