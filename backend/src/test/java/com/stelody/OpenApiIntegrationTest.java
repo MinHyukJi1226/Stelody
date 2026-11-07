@@ -67,7 +67,16 @@ class OpenApiIntegrationTest {
     var api = contract();
     var op = api.at("/paths/~1api~1v1~1songs~1milestones/get");
     assertThat(op.path("description").asText())
-        .contains("5000", "24시간", "10건", "최초 관측", "실제 달성 시각", "1·10·60분", "읽기 전용");
+        .contains(
+            "5000",
+            "24시간",
+            "곡별 가장 최근 달성",
+            "가장 높은 목표",
+            "10곡",
+            "최초 관측",
+            "실제 달성 시각",
+            "1·10·60분",
+            "읽기 전용");
     assertThat(op.path("parameters").isEmpty()).isTrue();
     assertThat(op.path("security").toString()).doesNotContain("csrf");
     var schema =

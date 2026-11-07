@@ -235,8 +235,9 @@ class MilestoneIntegrationTest {
     observe(1, 90_000, NOW.minusSeconds(200));
     observe(1, 2_000_000, NOW.minusSeconds(100));
     assertThat(events()).isEqualTo(10);
-    assertThat(service.feed().achievements()).hasSize(10);
-    assertThat(service.feed().achievements().getFirst().target()).isEqualTo(2_000_000);
+    assertThat(service.feed().achievements())
+        .extracting(MilestoneDtos.Achievement::target)
+        .containsExactly(2_000_000L);
     writer.execute("UPDATE app.view_milestone_event SET detected_at=detected_at-interval '2 days'");
     assertThat(service.feed().achievements()).isEmpty();
     writer.execute(
@@ -244,6 +245,26 @@ class MilestoneIntegrationTest {
     repo.cleanup(NOW);
     observe(1, 3_000_000, NOW);
     assertThat(events()).isZero();
+  }
+
+  @Test
+  void achievementFeedKeepsLatestPerSongBeforeApplyingTheLimit() {
+    for (int n = 1; n <= 11; n++) {
+      seed(n);
+      observe(n, 90_000, NOW.minusSeconds(200));
+      observe(n, 100_000, NOW.minusSeconds(100 - n));
+    }
+    observe(1, 200_000, NOW.minusSeconds(10));
+    observe(1, 400_000, NOW);
+
+    var achievements = service.feed().achievements();
+    assertThat(achievements)
+        .extracting(achievement -> achievement.song().id())
+        .containsExactly(
+            song(1), song(11), song(10), song(9), song(8), song(7), song(6), song(5), song(4),
+            song(3));
+    assertThat(achievements.getFirst().target()).isEqualTo(400_000);
+    assertThat(achievements.getFirst().detectedAt()).isEqualTo(NOW);
   }
 
   @Test
