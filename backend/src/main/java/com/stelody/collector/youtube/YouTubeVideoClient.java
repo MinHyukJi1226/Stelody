@@ -106,7 +106,9 @@ public final class YouTubeVideoClient {
                 publicVideo ? views : null,
                 broadcast,
                 !liveStreamingDetails.isMissingNode(),
-                scheduledStart));
+                scheduledStart,
+                optionalInstant(liveStreamingDetails, "actualStartTime"),
+                optionalInstant(liveStreamingDetails, "actualEndTime")));
       }
       for (String id : ids) result.putIfAbsent(id, VideoObservation.unavailable(id));
       return Map.copyOf(result);

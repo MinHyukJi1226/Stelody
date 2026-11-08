@@ -1227,6 +1227,165 @@ class DiscoveryCollectorIntegrationTest {
         .refresh(new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(10)));
   }
 
+  void observePremiere(int number, String title, Instant now, boolean ended, boolean enabled) {
+    var video =
+        new com.stelody.collector.domain.VideoObservation(
+            yt(number),
+            YTCHANNEL,
+            ended ? "PUBLIC" : "UNAVAILABLE",
+            title,
+            NOW.minusSeconds(86400),
+            null,
+            210L,
+            true,
+            100L,
+            ended ? "none" : "upcoming",
+            true,
+            ended ? null : now.plusSeconds(120),
+            ended ? now.minusSeconds(240) : null,
+            ended ? now.minusSeconds(1) : null);
+    var rules = new com.stelody.collector.domain.DiscoveryRules();
+    new DiscoveryRepository(source, false, enabled)
+        .saveNotification(
+            UUID.randomUUID(),
+            new DiscoveryRepository.Channel(CHANNEL, YTCHANNEL),
+            Map.of(yt(number), video),
+            Map.of(yt(number), rules.decide(video, true)),
+            now);
+  }
+
+  @Test
+  void completedPremieresPublishCoverAndOriginalOnceAndPreserveModeratorDecisions() {
+    enableAuto();
+    String cover = "노래 / 아오쿠모 린 Cover";
+    String original = "아오쿠모 린 - 신곡 Original";
+    observePremiere(1, cover, NOW, false, true);
+    observePremiere(2, original, NOW, false, true);
+    observePremiere(3, cover, NOW, false, true);
+    writer.update("UPDATE app.review_item SET review_status='IGNORED' WHERE youtube_id=?", yt(3));
+    observePremiere(1, cover, NOW.plusSeconds(360), true, true);
+    observePremiere(2, original, NOW.plusSeconds(360), true, true);
+    observePremiere(3, cover, NOW.plusSeconds(360), true, true);
+    observePremiere(4, cover, NOW.plusSeconds(360), true, true); // no prior schedule evidence
+    observePremiere(1, cover, NOW.plusSeconds(420), true, true);
+    assertThat(count("song_entry")).isEqualTo(2);
+    assertThat(count("premiere_auto_registration")).isEqualTo(2);
+    assertThat(writer.queryForList("SELECT song_type FROM app.song_entry", String.class))
+        .containsExactlyInAnyOrder("COVER", "ORIGINAL");
+    assertThat(writer.queryForList("SELECT visibility FROM app.song_entry", String.class))
+        .containsOnly("PUBLISHED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT review_status FROM app.review_item WHERE youtube_id=?",
+                String.class,
+                yt(3)))
+        .isEqualTo("IGNORED");
+  }
+
+  @Test
+  void monitorPublishesAfterEndWasAlreadyObservedByNotification() {
+    enableAuto();
+    String title = "노래 / 아오쿠모 린 Cover";
+    observePremiere(1, title, NOW, false, false);
+    observePremiere(1, title, NOW.plusSeconds(360), true, false);
+    clearCovers(
+        title,
+        "none",
+        "PT3M30S",
+        "2026-09-01T00:00:00Z",
+        Map.of(
+            "liveStreamingDetails",
+            Map.of(
+                "actualStartTime",
+                NOW.plusSeconds(120).toString(),
+                "actualEndTime",
+                NOW.plusSeconds(359).toString())),
+        1);
+    new com.stelody.collector.service.PublicScheduleRefresh(
+            source,
+            settings(),
+            Clock.fixed(NOW.plusSeconds(500), ZoneOffset.UTC),
+            d -> {},
+            true,
+            true)
+        .refresh(new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(20)));
+    assertThat(count("song_entry")).isEqualTo(1);
+    assertThat(count("premiere_auto_registration")).isEqualTo(1);
+  }
+
+  @Test
+  void overdueUpcomingScheduleSurvivesUntilDelayedCompletion() {
+    enableAuto();
+    String title = "노래 / 아오쿠모 린 Cover";
+    observePremiere(1, title, NOW, false, false);
+    scheduledVideo(1, "public", title, NOW.plusSeconds(120));
+    new com.stelody.collector.service.PublicScheduleRefresh(
+            source,
+            settings(),
+            Clock.fixed(NOW.plusSeconds(300), ZoneOffset.UTC),
+            d -> {},
+            true,
+            true)
+        .refresh(new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(20)));
+    assertThat(count("youtube_public_schedule")).isEqualTo(1);
+    assertThat(count("song_entry")).isZero();
+    observePremiere(1, title, NOW.plusSeconds(600), true, true);
+    assertThat(count("premiere_auto_registration")).isEqualTo(1);
+    assertThat(count("song_entry")).isEqualTo(1);
+  }
+
+  @Test
+  void refreshingPendingCompletedPremiereCannotExtendLifecycleRetention() {
+    String title = "노래 Cover";
+    observePremiere(1, title, NOW, false, false);
+    Instant completion = NOW.plusSeconds(360);
+    observePremiere(1, title, completion, true, false);
+    Instant later = completion.plusSeconds(30L * 86400);
+    observePremiere(1, title, later, true, false);
+    var schedules =
+        new com.stelody.schedule.PublicScheduleRepository(
+            org.springframework.jdbc.core.simple.JdbcClient.create(source));
+    assertThat(schedules.due(later.plusSeconds(60))).isEmpty();
+    schedules.cleanup(later);
+    assertThat(count("youtube_public_schedule")).isZero();
+    assertThat(count("review_item")).isEqualTo(1);
+    // A late notification must not recreate an expired upcoming schedule.
+    scheduledVideo(2, "public", title, NOW.plusSeconds(120));
+    var old =
+        new com.stelody.collector.domain.VideoObservation(
+            yt(2),
+            YTCHANNEL,
+            "UNAVAILABLE",
+            title,
+            NOW,
+            null,
+            null,
+            true,
+            null,
+            "upcoming",
+            true,
+            NOW.plusSeconds(120));
+    schedules.observe(CHANNEL, YTCHANNEL, old, later);
+    assertThat(count("youtube_public_schedule")).isZero();
+  }
+
+  @Test
+  void unclearAndDisabledPremieresRemainPendingAndUnknownSchedulesAreHidden() throws Exception {
+    enableAuto();
+    observePremiere(1, "잡담 예고", Instant.now(), false, true);
+    assertThat(upcoming().size()).isZero();
+    observePremiere(2, "노래 Cover", NOW, false, true);
+    observePremiere(2, "노래 Cover", NOW.plusSeconds(360), true, true);
+    observePremiere(3, "노래 / 아오쿠모 린 Cover", NOW, false, false);
+    observePremiere(3, "노래 / 아오쿠모 린 Cover", NOW.plusSeconds(360), true, false);
+    observePremiere(4, "노래 / 아오쿠모 린 Cover", NOW, false, true);
+    writer.execute("UPDATE app.cover_publication_control SET enabled=false");
+    observePremiere(4, "노래 / 아오쿠모 린 Cover", NOW.plusSeconds(360), true, true);
+    assertThat(count("song_entry")).isZero();
+    assertThat(writer.queryForList("SELECT review_status FROM app.review_item", String.class))
+        .containsOnly("PENDING");
+  }
+
   @Test
   void uploadNotificationAddsPublicScheduleAndRefreshHandlesReschedulingAndCancellation()
       throws Exception {
@@ -1234,14 +1393,14 @@ class DiscoveryCollectorIntegrationTest {
     var observed = now.minusSeconds(3600);
     var first = now.plusSeconds(7200);
     var thumbnail = "https://i.ytimg.com/vi/" + yt(1) + "/hqdefault.jpg";
-    scheduledVideo(1, "public", "Scheduled video", first, thumbnail);
+    scheduledVideo(1, "public", "Scheduled video Cover", first, thumbnail);
     push(pushMvc(observed), pushBody(1, observed.minusSeconds(1)))
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
                 .isNoContent());
     var list = upcoming();
     assertThat(list.size()).isEqualTo(1);
-    assertThat(list.get(0).path("title").asText()).isEqualTo("Scheduled video");
+    assertThat(list.get(0).path("title").asText()).isEqualTo("Scheduled video Cover");
     assertThat(list.get(0).path("scheduledStartAt").asText()).isEqualTo(first.toString());
     assertThat(list.get(0).path("url").asText())
         .isEqualTo("https://www.youtube.com/watch?v=" + yt(1));
@@ -1251,11 +1410,11 @@ class DiscoveryCollectorIntegrationTest {
 
     var rescheduled = first.plusSeconds(3600);
     var updatedThumbnail = thumbnail + "?v=2";
-    scheduledVideo(1, "public", "Updated title", rescheduled, updatedThumbnail);
+    scheduledVideo(1, "public", "Updated title Cover", rescheduled, updatedThumbnail);
     refreshSchedule(now);
     var updated = upcoming().get(0);
     assertThat(updated.path("scheduledStartAt").asText()).isEqualTo(rescheduled.toString());
-    assertThat(updated.path("title").asText()).isEqualTo("Updated title");
+    assertThat(updated.path("title").asText()).isEqualTo("Updated title Cover");
     assertThat(updated.path("thumbnailUrl").asText()).isEqualTo(updatedThumbnail);
     refreshSchedule(now.plusSeconds(5));
     server.verify(2, getRequestedFor(urlPathEqualTo("/videos")));
@@ -1280,7 +1439,7 @@ class DiscoveryCollectorIntegrationTest {
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
                 .isNoContent());
     assertThat(count("youtube_public_schedule")).isZero();
-    scheduledVideo(2, "public", "Public title", now.plusSeconds(7200));
+    scheduledVideo(2, "public", "Public title Original", now.plusSeconds(7200));
     push(pushMvc(observed), pushBody(2, observed.minusSeconds(1)))
         .andExpect(
             org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
