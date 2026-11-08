@@ -1314,6 +1314,62 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   @Test
+  void overdueUpcomingScheduleSurvivesUntilDelayedCompletion() {
+    enableAuto();
+    String title = "노래 / 아오쿠모 린 Cover";
+    observePremiere(1, title, NOW, false, false);
+    scheduledVideo(1, "public", title, NOW.plusSeconds(120));
+    new com.stelody.collector.service.PublicScheduleRefresh(
+            source,
+            settings(),
+            Clock.fixed(NOW.plusSeconds(300), ZoneOffset.UTC),
+            d -> {},
+            true,
+            true)
+        .refresh(new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(20)));
+    assertThat(count("youtube_public_schedule")).isEqualTo(1);
+    assertThat(count("song_entry")).isZero();
+    observePremiere(1, title, NOW.plusSeconds(600), true, true);
+    assertThat(count("premiere_auto_registration")).isEqualTo(1);
+    assertThat(count("song_entry")).isEqualTo(1);
+  }
+
+  @Test
+  void refreshingPendingCompletedPremiereCannotExtendLifecycleRetention() {
+    String title = "노래 Cover";
+    observePremiere(1, title, NOW, false, false);
+    Instant completion = NOW.plusSeconds(360);
+    observePremiere(1, title, completion, true, false);
+    Instant later = completion.plusSeconds(30L * 86400);
+    observePremiere(1, title, later, true, false);
+    var schedules =
+        new com.stelody.schedule.PublicScheduleRepository(
+            org.springframework.jdbc.core.simple.JdbcClient.create(source));
+    assertThat(schedules.due(later.plusSeconds(60))).isEmpty();
+    schedules.cleanup(later);
+    assertThat(count("youtube_public_schedule")).isZero();
+    assertThat(count("review_item")).isEqualTo(1);
+    // A late notification must not recreate an expired upcoming schedule.
+    scheduledVideo(2, "public", title, NOW.plusSeconds(120));
+    var old =
+        new com.stelody.collector.domain.VideoObservation(
+            yt(2),
+            YTCHANNEL,
+            "UNAVAILABLE",
+            title,
+            NOW,
+            null,
+            null,
+            true,
+            null,
+            "upcoming",
+            true,
+            NOW.plusSeconds(120));
+    schedules.observe(CHANNEL, YTCHANNEL, old, later);
+    assertThat(count("youtube_public_schedule")).isZero();
+  }
+
+  @Test
   void unclearAndDisabledPremieresRemainPendingAndUnknownSchedulesAreHidden() throws Exception {
     enableAuto();
     observePremiere(1, "잡담 예고", Instant.now(), false, true);

@@ -92,7 +92,8 @@ public class PublicScheduleRepository {
       jdbc.sql(
               """
           UPDATE app.youtube_public_schedule SET title=:title,thumbnail_url=:thumbnail,
-            observed_at=:now,song_type=:type,actual_start_at=:started,actual_end_at=:ended
+            observed_at=:now,song_type=:type,actual_start_at=COALESCE(actual_start_at,:started),
+            actual_end_at=COALESCE(actual_end_at,:ended)
           WHERE youtube_id=:id AND channel_id=:channel AND observed_at<=:now
           """)
           .param("title", video.title())
@@ -109,7 +110,7 @@ public class PublicScheduleRepository {
       return;
     }
     if (start == null
-        || !start.isAfter(now)
+        || !start.isAfter(now.minusSeconds(30L * 86400))
         || !youtubeChannelId.equals(video.channelId())
         || video.title() == null
         || video.title().isBlank()) {
@@ -155,12 +156,14 @@ public class PublicScheduleRepository {
         FROM app.youtube_public_schedule p JOIN app.channel c ON c.id=p.channel_id
         WHERE c.collection_enabled AND c.channel_type IN ('GROUP','MEMBER')
           AND p.observed_at<=:cutoff
+          AND COALESCE(p.actual_end_at,p.actual_start_at,p.scheduled_start_at)>:oldest
           AND NOT EXISTS (SELECT 1 FROM app.video v WHERE v.youtube_id=p.youtube_id)
           AND NOT EXISTS (SELECT 1 FROM app.review_item r
             WHERE r.youtube_id=p.youtube_id AND r.review_status<>'PENDING')
         ORDER BY p.observed_at,p.scheduled_start_at,p.youtube_id LIMIT 50
         """)
         .param("cutoff", Timestamp.from(now.minusSeconds(60)))
+        .param("oldest", Timestamp.from(now.minusSeconds(30L * 86400)))
         .query((r, n) -> new Target(r.getString(1), r.getObject(2, UUID.class), r.getString(3)))
         .list();
   }
@@ -170,6 +173,7 @@ public class PublicScheduleRepository {
             """
         DELETE FROM app.youtube_public_schedule p
         WHERE p.observed_at<=:oldest
+          OR COALESCE(p.actual_end_at,p.actual_start_at,p.scheduled_start_at)<=:oldest
           OR NOT EXISTS (SELECT 1 FROM app.channel c WHERE c.id=p.channel_id
                          AND c.collection_enabled AND c.channel_type IN ('GROUP','MEMBER'))
         """)
