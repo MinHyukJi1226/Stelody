@@ -3,7 +3,10 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import type { SearchCriteria } from '@/features/songs/search-params'
 import { songSearchOptions } from '@/features/songs/search-queries'
 import { uniqueSongs } from '@/features/songs/queries'
-import { SongGrid, SongGridSkeleton } from '@/features/songs/song-card'
+import { SearchSongGrid, SearchSongSkeleton } from './search-song-grid'
+import { PageState } from '@/shared/ui/page-state'
+import { loginPath } from '@/features/auth/return-path'
+import { searchParams } from '@/features/songs/search-params'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { Button } from '@/shared/ui/button'
 import { ApiError } from '@/shared/api/errors'
@@ -22,13 +25,7 @@ const dateErrorMessages: Record<string, string> = {
   CONFLICTING_FILTER: '연도와 날짜 범위를 함께 지정할 수 없습니다.',
 }
 
-export function SearchResults({
-  criteria,
-  onSort,
-}: {
-  criteria: SearchCriteria
-  onSort: (sort: SearchCriteria['sort']) => void
-}) {
+export function SearchResults({ criteria }: { criteria: SearchCriteria }) {
   const queryClient = useQueryClient()
   const options = songSearchOptions(criteria)
   const query = useInfiniteQuery(options)
@@ -67,52 +64,63 @@ export function SearchResults({
   }
   const fieldErrors =
     query.error instanceof ApiError ? query.error.fieldErrors : []
+  const denied = query.error instanceof ApiError && query.error.status === 403
   return (
     <section
-      aria-labelledby="search-results-title"
-      className="flex min-w-0 flex-col gap-8"
+      aria-label="검색 결과"
+      className={`flex min-w-0 flex-col gap-4${query.isPending ? '' : ' home-section-enter'}`}
     >
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <h2
+      {query.isPending ? (
+        <div
+          aria-hidden="true"
+          className="h-[27px] w-full max-w-[340px] rounded-lg bg-line"
+        />
+      ) : query.data && songs.length > 0 ? (
+        <h1
           id="search-results-title"
-          className="text-2xl font-bold leading-[1.5]"
+          className="text-lg font-bold leading-[1.5] md:text-2xl"
           aria-live="polite"
         >
-          검색 결과
+          {criteria.q ? `'${criteria.q}' 검색결과` : '검색결과'}
           {query.data &&
-            ` ${query.data.pages[0]!.totalCount.toLocaleString('ko-KR')}곡`}
-        </h2>
-        <div className="shrink-0">
-          <label htmlFor="search-sort" className="sr-only">
-            검색 결과 정렬
-          </label>
-          <select
-            id="search-sort"
-            value={criteria.sort}
-            onChange={(e) => onSort(e.target.value as SearchCriteria['sort'])}
-            className="min-h-[53px] rounded-xl bg-surface p-4 text-sm text-ink"
-          >
-            <option value="RELEVANCE">관련도순</option>
-            <option value="LATEST">최신순</option>
-            <option value="VIEWS">조회수순</option>
-          </select>
-        </div>
-      </div>
+            ` ${query.data.pages[0]!.totalCount.toLocaleString('ko-KR')}건`}
+        </h1>
+      ) : null}
       {query.isPending ? (
-        <SongGridSkeleton />
+        <SearchSongSkeleton />
       ) : !query.data && query.isError ? (
-        <StatePanel
-          title="검색 결과를 불러오지 못했습니다"
-          description="잠시 후 다시 시도해 주세요."
-          onRetry={retry}
-        />
+        <div className="flex min-h-[480px] items-center md:min-h-[600px]">
+          <PageState
+            kind={denied ? 'unavailable' : 'error'}
+            title={
+              denied
+                ? '이 화면에 접근할 수 없습니다'
+                : '검색 결과를 불러오지 못했습니다'
+            }
+            description={
+              denied
+                ? '본인의 계정과 접근 권한을 확인해 주세요.'
+                : '잠시 후 다시 시도해 주세요.'
+            }
+            detail={`검색어 '${criteria.q}'는 유지됩니다.`}
+            {...(!denied ? { onRetry: retry } : {})}
+            action={{
+              to: loginPath(`/search?${searchParams(criteria)}`),
+              label: '로그인',
+            }}
+          />
+        </div>
       ) : songs.length === 0 ? (
-        <StatePanel
-          title="찾은 노래가 없습니다"
-          description="검색어를 바꾸거나 필터를 줄여보세요."
-        />
+        <div role="status" className="flex flex-col gap-2">
+          <h1 className="text-lg font-bold leading-[1.5]">
+            검색결과가 없습니다.
+          </h1>
+          <p className="text-sm leading-[1.5] text-muted">
+            다른 검색어로 다시 찾아보세요
+          </p>
+        </div>
       ) : (
-        <SongGrid songs={songs} />
+        <SearchSongGrid songs={songs} />
       )}
       {query.isError && fieldErrors.length > 0 && (
         <ul
@@ -144,6 +152,7 @@ export function SearchResults({
         />
       )}
       <div ref={sentinel}>
+        {query.isFetchingNextPage && <SearchSongSkeleton />}
         {query.hasNextPage && !query.isError && (
           <Button
             disabled={query.isFetching}
@@ -153,7 +162,7 @@ export function SearchResults({
           </Button>
         )}
         {!query.hasNextPage && songs.length > 0 && (
-          <p role="status" className="text-sm text-muted">
+          <p role="status" className="sr-only">
             모든 검색 결과를 불러왔습니다.
           </p>
         )}
