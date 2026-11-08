@@ -1038,16 +1038,17 @@ class PublicCatalogIntegrationTest {
     song(id(203), "Again", "COVER", otherWork, "2026-01-07T00:00:00Z", M2);
     var all = request("/api/v1/songs/groups?groupBy=ORIGINAL_ARTIST&songSize=20");
     var items = all.path("items");
-    assertThat(items.size()).isEqualTo(3);
-    assertThat(items.get(0).path("id").asText()).isEqualTo(A1.toString());
-    assertThat(items.get(1).path("id").asText()).isEqualTo(sameName.toString());
-    assertThat(items.get(0).path("name").asText()).isEqualTo(items.get(1).path("name").asText());
-    assertThat(items.get(0).at("/songs/totalCount").asLong()).isEqualTo(3);
-    assertThat(items.get(2).path("id").asText()).isEqualTo("OTHERS");
-    assertThat(items.get(2).at("/songs/totalCount").asLong()).isEqualTo(3);
+    assertThat(items.size()).isEqualTo(4);
+    assertThat(items.get(0).path("id").asText()).isEqualTo("ORIGINAL");
+    assertThat(items.get(1).path("id").asText()).isEqualTo(A1.toString());
+    assertThat(items.get(2).path("id").asText()).isEqualTo(sameName.toString());
+    assertThat(items.get(1).path("name").asText()).isEqualTo(items.get(2).path("name").asText());
+    assertThat(items.get(1).at("/songs/totalCount").asLong()).isEqualTo(3);
+    assertThat(items.get(3).path("id").asText()).isEqualTo("OTHERS");
+    assertThat(items.get(3).at("/songs/totalCount").asLong()).isEqualTo(2);
     var otherIds = new ArrayList<String>();
-    items.get(2).at("/songs/items").forEach(item -> otherIds.add(item.path("id").asText()));
-    assertThat(otherIds).containsExactly(shared.toString(), S4.toString(), S3.toString());
+    items.get(3).at("/songs/items").forEach(item -> otherIds.add(item.path("id").asText()));
+    assertThat(otherIds).containsExactly(shared.toString(), S4.toString());
     mvc.perform(
             get("/api/v1/songs/groups/" + second + "/songs").param("groupBy", "ORIGINAL_ARTIST"))
         .andExpect(status().isNotFound());
@@ -1066,7 +1067,110 @@ class PublicCatalogIntegrationTest {
       response.path("items").forEach(item -> ids.add(item.path("id").asText()));
       cursor = response.path("nextCursor").isNull() ? null : response.path("nextCursor").asText();
     } while (cursor != null);
-    assertThat(ids).containsExactly(A1.toString(), sameName.toString(), "OTHERS");
+    assertThat(ids).containsExactly("ORIGINAL", A1.toString(), sameName.toString(), "OTHERS");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"LATEST", "OLDEST", "VIEWS"})
+  void artistGroupingSeparatesOriginalsAndCountsOnlyCoversWithIndependentCursors(String sort)
+      throws Exception {
+    UUID artist = id(411), work = id(412), secondOriginal = id(413), cover = id(414);
+    writer.update("INSERT INTO app.artist(id,name,search_name) VALUES(?,'한곡 가수','single')", artist);
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'work','work')", work);
+    writer.update("INSERT INTO app.work_artist VALUES(?,?,0)", work, artist);
+    writer.update("UPDATE app.song_entry SET work_id=? WHERE id=?", work, S3);
+    song(secondOriginal, "Second original", "ORIGINAL", W1, "2026-01-06T00:00:00Z", M1);
+    song(cover, "Single cover", "COVER", work, "2026-01-05T00:00:00Z", M1);
+    publish(100L, 50L, 10L, null);
+    var first =
+        request("/api/v1/songs/groups?groupBy=ORIGINAL_ARTIST&sort=" + sort + "&size=1&songSize=1");
+    assertThat(first.at("/items/0/id").asText()).isEqualTo("ORIGINAL");
+    assertThat(first.at("/items/0/name").asText()).isEqualTo("오리지널");
+    assertThat(first.at("/items/0/songs/totalCount").asLong()).isEqualTo(2);
+    String firstId = sort.equals("LATEST") ? secondOriginal.toString() : S3.toString();
+    String lastId = sort.equals("LATEST") ? S3.toString() : secondOriginal.toString();
+    assertThat(first.at("/items/0/songs/items/0/id").asText()).isEqualTo(firstId);
+    String songCursor = first.at("/items/0/songs/nextCursor").asText();
+    var next =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs/groups/ORIGINAL/songs")
+                        .param("groupBy", "ORIGINAL_ARTIST")
+                        .param("sort", sort)
+                        .param("size", "1")
+                        .param("cursor", songCursor))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(next.at("/items/0/id").asText()).isEqualTo(lastId);
+    assertThat(next.path("hasNext").asBoolean()).isFalse();
+    var artists =
+        mapper
+            .readTree(
+                mvc.perform(
+                        get("/api/v1/songs/groups")
+                            .param("groupBy", "ORIGINAL_ARTIST")
+                            .param("sort", sort)
+                            .param("size", "10")
+                            .param("songSize", "20")
+                            .param("cursor", first.path("nextCursor").asText()))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+            .path("items");
+    assertThat(artists.size()).isEqualTo(2);
+    assertThat(artists.get(0).path("id").asText()).isEqualTo(A1.toString());
+    assertThat(artists.get(0).at("/songs/totalCount").asLong()).isEqualTo(2);
+    assertThat(artists.get(1).path("id").asText()).isEqualTo("OTHERS");
+    assertThat(artists.get(1).at("/songs/totalCount").asLong()).isEqualTo(2);
+    for (var group : artists)
+      for (var item : group.at("/songs/items"))
+        assertThat(item.path("type").asText()).isEqualTo("COVER");
+    mvc.perform(
+            get("/api/v1/songs/groups/" + artist + "/songs").param("groupBy", "ORIGINAL_ARTIST"))
+        .andExpect(status().isNotFound());
+    var artistPage =
+        request(
+            "/api/v1/songs/groups/"
+                + A1
+                + "/songs?groupBy=ORIGINAL_ARTIST&sort="
+                + sort
+                + "&size=1");
+    mvc.perform(
+            get("/api/v1/songs/groups/OTHERS/songs")
+                .param("groupBy", "ORIGINAL_ARTIST")
+                .param("sort", sort)
+                .param("cursor", artistPage.path("nextCursor").asText()))
+        .andExpect(status().isBadRequest());
+    var legacy =
+        (tools.jackson.databind.node.ObjectNode)
+            mapper.readTree(java.util.Base64.getUrlDecoder().decode(songCursor));
+    legacy.put("version", 1);
+    mvc.perform(
+            get("/api/v1/songs/groups/ORIGINAL/songs")
+                .param("groupBy", "ORIGINAL_ARTIST")
+                .param("sort", sort)
+                .param(
+                    "cursor",
+                    java.util.Base64.getUrlEncoder()
+                        .withoutPadding()
+                        .encodeToString(mapper.writeValueAsBytes(legacy))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"));
+  }
+
+  @Test
+  void artistGroupingOmitsOriginalGroupWhenNoPublicOriginalsExist() throws Exception {
+    writer.update("UPDATE app.song_entry SET visibility='HIDDEN' WHERE id=?", S3);
+    var groups = request("/api/v1/songs/groups?groupBy=ORIGINAL_ARTIST").path("items");
+    assertThat(groups.size()).isEqualTo(2);
+    assertThat(groups.get(0).path("id").asText()).isEqualTo(A1.toString());
+    assertThat(groups.get(1).path("id").asText()).isEqualTo("OTHERS");
+    mvc.perform(get("/api/v1/songs/groups/ORIGINAL/songs").param("groupBy", "ORIGINAL_ARTIST"))
+        .andExpect(status().isNotFound());
   }
 
   @Test

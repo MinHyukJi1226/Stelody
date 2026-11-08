@@ -144,11 +144,13 @@ final class SongSqlQueries {
           params.put("groupId", UUID.fromString(groupId));
         }
         case "ORIGINAL_ARTIST" -> {
-          if (groupId.equals("OTHERS")) {
+          if (groupId.equals("ORIGINAL")) {
+            sql.append(" AND s.song_type='ORIGINAL'");
+          } else if (groupId.equals("OTHERS")) {
             sql.append(" AND ").append(SongGroupRepository.OTHER_ARTISTS);
           } else {
             sql.append(
-                " AND EXISTS (SELECT 1 FROM app.work_artist wa WHERE wa.work_id=s.work_id AND wa.artist_id=:groupId AND EXISTS (SELECT 1 FROM artist_counts ac WHERE ac.artist_id=wa.artist_id AND ac.total>=2))");
+                " AND s.song_type='COVER' AND EXISTS (SELECT 1 FROM app.work_artist wa WHERE wa.work_id=s.work_id AND wa.artist_id=:groupId AND EXISTS (SELECT 1 FROM artist_counts ac WHERE ac.artist_id=wa.artist_id AND ac.total>=2))");
             params.put("groupId", UUID.fromString(groupId));
           }
         }

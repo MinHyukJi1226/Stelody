@@ -121,7 +121,7 @@ public class SongGroupService {
       if (!List.of("ORIGINAL", "COVER").contains(id)) throw CatalogException.invalid();
       return id;
     }
-    if (groupBy.equals("ORIGINAL_ARTIST") && id.equals("OTHERS")) return id;
+    if (groupBy.equals("ORIGINAL_ARTIST") && List.of("ORIGINAL", "OTHERS").contains(id)) return id;
     try {
       return UUID.fromString(id).toString();
     } catch (IllegalArgumentException e) {
