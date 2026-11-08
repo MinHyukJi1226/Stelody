@@ -7,12 +7,15 @@ import { FavoriteResume } from '@/features/favorites/favorite-resume'
 
 export function SiteLayout() {
   const { theme, toggleTheme } = useTheme()
-  const home = useLocation().pathname === '/'
+  const pathname = useLocation().pathname
+  const home = pathname === '/'
+  const search = pathname === '/search'
+  const compact = home || search
   return (
     <PageActionProvider>
       <div
         className={
-          home
+          compact
             ? `flex min-h-dvh flex-col ${theme === 'dark' ? 'bg-bg' : 'bg-surface'}`
             : 'flex min-h-dvh flex-col'
         }
@@ -23,7 +26,7 @@ export function SiteLayout() {
         >
           본문으로 건너뛰기
         </a>
-        {home ? (
+        {compact ? (
           <HomeHeader theme={theme} toggleTheme={toggleTheme} />
         ) : (
           <SiteHeader theme={theme} toggleTheme={toggleTheme} />
@@ -31,7 +34,13 @@ export function SiteLayout() {
         <main
           id="main-content"
           tabIndex={-1}
-          className={home ? 'w-full flex-1 px-5 pt-3 md:px-10' : 'page-content'}
+          className={
+            home
+              ? 'w-full flex-1 px-5 pt-3 md:px-10'
+              : search
+                ? 'flex w-full flex-1 flex-col'
+                : 'page-content'
+          }
         >
           <Outlet />
         </main>

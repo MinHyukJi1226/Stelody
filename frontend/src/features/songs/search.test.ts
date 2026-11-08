@@ -116,7 +116,7 @@ it.each(['', '   ', '\t'])(
     expect(options.enabled).toBe(false)
     const parsed = readSearchParams(new URLSearchParams({ q, sort: 'VIEWS' }))
     expect(parsed.active).toBe(false)
-    expect(parsed.error).toBe('검색어를 입력하거나 필터를 선택해 주세요.')
+    expect(parsed.error).toBe('검색어를 입력해 주세요.')
   },
 )
 

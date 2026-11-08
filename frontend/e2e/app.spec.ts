@@ -30,7 +30,7 @@ test('직접 접근한 주소와 알 수 없는 경로에서 홈으로 복귀한
 test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않는다', async ({
   page,
 }) => {
-  await page.goto('/search')
+  await page.goto('/members')
   await page.evaluate(() => document.fonts.ready)
   const mobile = (page.viewportSize()?.width ?? 0) < 768
   const menu = page.getByRole('button', { name: '메뉴 열기' })
@@ -59,7 +59,7 @@ test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않�
     name: mobile ? '모바일 주 메뉴' : '주 메뉴',
     exact: true,
   })
-  for (const label of ['검색', '멤버', '내 보관함', '로그인']) {
+  for (const label of ['멤버', '내 보관함', '로그인']) {
     if (mobile) await menu.click()
     const link = navigation.getByRole('link', { name: label, exact: true })
     await link.click()

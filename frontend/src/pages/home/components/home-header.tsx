@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Form, Link } from 'react-router'
+import { Form, Link, useLocation } from 'react-router'
 import { MenuIcon } from '@/app/layout/menu-icon'
 import { accountPath } from '@/features/account/api'
 import { AdminLink } from '@/features/admin/admin-link'
@@ -20,6 +20,11 @@ export function HomeHeader({
   theme: Theme
   toggleTheme: () => void
 }) {
+  const location = useLocation()
+  const search = location.pathname === '/search'
+  const query = search
+    ? (new URLSearchParams(location.search).get('q') ?? '')
+    : ''
   const session = useQuery(sessionOptions)
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
@@ -27,7 +32,9 @@ export function HomeHeader({
     theme === 'dark' ? '라이트 모드로 변경' : '다크 모드로 변경'
 
   return (
-    <header className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 md:px-10">
+    <header
+      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
+    >
       <Link
         to="/"
         aria-label="Stelody 홈"
@@ -43,6 +50,7 @@ export function HomeHeader({
         Stelody
       </Link>
       <Form
+        key={location.pathname + location.search}
         action="/search"
         role="search"
         aria-label="노래 검색"
@@ -54,6 +62,7 @@ export function HomeHeader({
         <Input
           id="home-search"
           name="q"
+          defaultValue={query}
           type="search"
           maxLength={200}
           placeholder="곡명, 원곡, 멤버 검색"
@@ -75,7 +84,13 @@ export function HomeHeader({
         </Button>
       ) : (
         <Button asChild className="h-11 min-h-11 px-3 py-0">
-          <Link to={session.data ? accountPath : loginPath('/')}>
+          <Link
+            to={
+              session.data
+                ? accountPath
+                : loginPath(location.pathname + location.search)
+            }
+          >
             {session.data ? '내 계정' : '로그인'}
           </Link>
         </Button>

@@ -79,11 +79,11 @@ export function readSearchParams(params: URLSearchParams) {
     criteria: result.success ? result.data : null,
     error: result.success
       ? hasConditions && !hasSearchConditions(result.data)
-        ? '검색어를 입력하거나 필터를 선택해 주세요.'
+        ? '검색어를 입력해 주세요.'
         : null
       : ['q', 'startDate', 'endDate'].includes(String(issue?.path[0]))
         ? issue!.message
-        : '검색 조건이 올바르지 않습니다. 초기화 후 다시 검색해 주세요.',
+        : '검색 조건이 올바르지 않습니다. 검색어를 다시 입력해 주세요.',
     active: result.success && hasSearchConditions(result.data),
   }
 }
