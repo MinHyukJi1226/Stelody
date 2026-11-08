@@ -88,7 +88,7 @@ export function HomeHeader({
             to={
               session.data
                 ? accountPath
-                : loginPath(location.pathname + location.search)
+                : loginPath(location.pathname + location.search + location.hash)
             }
           >
             {session.data ? '내 계정' : '로그인'}

@@ -9,6 +9,21 @@ const user = {
 }
 
 async function accountMenu(page: Page) {
+  if (new URL(page.url()).pathname === '/search') {
+    const account = page
+      .getByRole('banner')
+      .getByRole('link', { name: /^(로그인|내 계정)$/ })
+    await expect(account).toBeVisible()
+    if (
+      await page
+        .getByRole('banner')
+        .getByRole('link', { name: '내 계정', exact: true })
+        .count()
+    ) {
+      await page.getByRole('button', { name: '메뉴 열기' }).click()
+    }
+    return
+  }
   if ((page.viewportSize()?.width ?? 0) < 768) {
     await page.getByRole('button', { name: '메뉴 열기' }).click()
   }
@@ -278,7 +293,7 @@ test('로그아웃 403은 자동 재전송하지 않고 다음 사용자 재시�
   await expect(
     page.getByRole('button', { name: '로그아웃', exact: true }),
   ).toHaveCount(0)
-  expect(tokens).toEqual(['fresh-1', 'fresh-2'])
+  await expect.poll(() => tokens).toEqual(['fresh-1', 'fresh-2'])
 })
 
 test('다시 활성화한 화면에서 만료된 세션을 확인하면 보호 화면을 닫는다', async ({

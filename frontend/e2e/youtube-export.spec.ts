@@ -372,7 +372,9 @@ test('활성 작업 조회가 늦게 도착해도 떠나는 화면을 되돌리�
   await page.getByRole('link', { name: '검색', exact: true }).first().click()
   release()
   await expect(page).toHaveURL(/\/search$/)
-  await expect(page.getByRole('heading', { name: '노래 검색' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: '검색어를 입력해 주세요' }),
+  ).toBeVisible()
   expect(s.created).toHaveLength(0)
 })
 
@@ -817,7 +819,9 @@ test('늦게 도착한 접수 응답이 떠난 화면을 다시 열지 않는다
   await page.getByRole('link', { name: '검색', exact: true }).first().click()
   release()
   await expect(page).toHaveURL(/\/search$/)
-  await expect(page.getByRole('heading', { name: '노래 검색' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: '검색어를 입력해 주세요' }),
+  ).toBeVisible()
   expect(s.created).toHaveLength(1)
 })
 for (const code of ['PLAYLIST_CHANGED', 'YOUTUBE_CONNECTION_REQUIRED'])
@@ -836,7 +840,9 @@ for (const code of ['PLAYLIST_CHANGED', 'YOUTUBE_CONNECTION_REQUIRED'])
     await page.getByRole('link', { name: '검색', exact: true }).first().click()
     release()
     await expect(page).toHaveURL(/\/search$/)
-    await expect(page.getByRole('heading', { name: '노래 검색' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: '검색어를 입력해 주세요' }),
+    ).toBeVisible()
     expect(s.created).toHaveLength(1)
   })
 for (const query of [

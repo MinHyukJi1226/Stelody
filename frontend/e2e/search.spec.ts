@@ -31,6 +31,22 @@ test('통합 헤더에서 검색하고 결과 카드·새로고침·뒤로 가�
   expect(calls.at(-1)?.get('sort')).toBe('RELEVANCE')
   await expect(page.getByRole('article')).toHaveCount(3)
   await expect(page.getByRole('article').first()).toContainText('커버')
+  await expect
+    .poll(() =>
+      page
+        .getByRole('region', { name: '검색 결과', exact: true })
+        .evaluate(
+          (el) =>
+            el
+              .getAnimations({ subtree: true })
+              .filter(
+                (a) =>
+                  a.playState === 'running' &&
+                  a.effect?.getTiming().iterations !== Infinity,
+              ).length,
+        ),
+    )
+    .toBe(0)
   const first = await page.getByRole('article').nth(0).boundingBox()
   const second = await page.getByRole('article').nth(1).boundingBox()
   const third = await page.getByRole('article').nth(2).boundingBox()
