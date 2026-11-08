@@ -936,6 +936,231 @@ class PublicCatalogIntegrationTest {
         .containsExactly(S2.toString());
   }
 
+  @Test
+  void typeGroupsAndEachSongCursorPageIndependentlyWithoutDuplicates() throws Exception {
+    var first = request("/api/v1/songs/groups?groupBy=TYPE&size=1&songSize=1");
+    assertThat(first.path("items").size()).isEqualTo(1);
+    assertThat(first.at("/items/0/id").asText()).isEqualTo("ORIGINAL");
+    assertThat(first.at("/items/0/songs/items/0/id").asText()).isEqualTo(S3.toString());
+    var second =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs/groups")
+                        .param("groupBy", "TYPE")
+                        .param("size", "1")
+                        .param("songSize", "1")
+                        .param("cursor", first.path("nextCursor").asText()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(second.at("/items/0/id").asText()).isEqualTo("COVER");
+    assertThat(second.path("hasNext").asBoolean()).isFalse();
+    assertThat(second.at("/items/0/songs/totalCount").asLong()).isEqualTo(3);
+    String cursor = second.at("/items/0/songs/nextCursor").asText();
+    var page =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs/groups/COVER/songs")
+                        .param("groupBy", "TYPE")
+                        .param("size", "50")
+                        .param("cursor", cursor))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(page.at("/items/0/id").asText()).isEqualTo(S2.toString());
+    assertThat(page.at("/items/1/id").asText()).isEqualTo(S1.toString());
+    assertThat(page.path("items").size()).isEqualTo(2);
+    assertThat(page.path("hasNext").asBoolean()).isFalse();
+    for (var req :
+        List.of(
+            get("/api/v1/songs/groups/ORIGINAL/songs")
+                .param("groupBy", "TYPE")
+                .param("cursor", cursor),
+            get("/api/v1/songs/groups/COVER/songs")
+                .param("groupBy", "TYPE")
+                .param("sort", "OLDEST")
+                .param("cursor", cursor),
+            get("/api/v1/songs/groups/COVER/songs")
+                .param("groupBy", "TYPE")
+                .param("cursor", first.path("nextCursor").asText()),
+            get("/api/v1/songs/groups").param("groupBy", "TYPE").param("cursor", cursor),
+            get("/api/v1/songs/groups")
+                .param("groupBy", "MEMBER")
+                .param("cursor", first.path("nextCursor").asText()))) {
+      mvc.perform(req).andExpect(status().isBadRequest());
+    }
+  }
+
+  @Test
+  void memberGroupsUsePublicConfirmedMembershipAndHideEmptyMembers() throws Exception {
+    writer.update("UPDATE app.member SET generation=1,display_order=1 WHERE id=?", M1);
+    var groups =
+        request("/api/v1/songs/groups?groupBy=MEMBER&sort=OLDEST&songSize=20").path("items");
+    assertThat(groups.size()).isEqualTo(2);
+    assertThat(groups.get(0).path("id").asText()).isEqualTo(M1.toString());
+    assertThat(groups.get(1).path("id").asText()).isEqualTo(M2.toString());
+    assertThat(groups.get(0).at("/songs/items/0/id").asText()).isEqualTo(S1.toString());
+    assertThat(groups.get(1).at("/songs/items/0/id").asText()).isEqualTo(S1.toString());
+    assertThat(groups.get(0).at("/songs/totalCount").asLong()).isEqualTo(2);
+    assertThat(groups.get(1).at("/songs/totalCount").asLong()).isEqualTo(3);
+    mvc.perform(get("/api/v1/songs/groups/" + M3 + "/songs").param("groupBy", "MEMBER"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void artistGroupsUseDistinctPublicSongThresholdIdsAndOtherMembership() throws Exception {
+    UUID second = id(401), sameName = id(402), work = id(403), otherWork = id(404);
+    String name = writer.queryForObject("SELECT name FROM app.artist WHERE id=?", String.class, A1);
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,?,'single')", second, "한곡 가수");
+    writer.update(
+        "INSERT INTO app.artist(id,name,search_name) VALUES(?,?,?)",
+        sameName,
+        name,
+        SearchText.normalize(name));
+    writer.update(
+        "INSERT INTO app.musical_work(id,title,search_title) VALUES(?,'new','new'),(?,'other','other')",
+        work,
+        otherWork);
+    writer.update(
+        "INSERT INTO app.work_artist VALUES(?,?,0),(?,?,1),(?,?,0)",
+        work,
+        A1,
+        work,
+        second,
+        otherWork,
+        sameName);
+    UUID shared = id(201);
+    song(shared, "Shared", "COVER", work, "2026-01-05T00:00:00Z", M1);
+    song(id(202), "Another", "COVER", otherWork, "2026-01-06T00:00:00Z", M1);
+    song(id(203), "Again", "COVER", otherWork, "2026-01-07T00:00:00Z", M2);
+    var all = request("/api/v1/songs/groups?groupBy=ORIGINAL_ARTIST&songSize=20");
+    var items = all.path("items");
+    assertThat(items.size()).isEqualTo(3);
+    assertThat(items.get(0).path("id").asText()).isEqualTo(A1.toString());
+    assertThat(items.get(1).path("id").asText()).isEqualTo(sameName.toString());
+    assertThat(items.get(0).path("name").asText()).isEqualTo(items.get(1).path("name").asText());
+    assertThat(items.get(0).at("/songs/totalCount").asLong()).isEqualTo(3);
+    assertThat(items.get(2).path("id").asText()).isEqualTo("OTHERS");
+    assertThat(items.get(2).at("/songs/totalCount").asLong()).isEqualTo(3);
+    var otherIds = new ArrayList<String>();
+    items.get(2).at("/songs/items").forEach(item -> otherIds.add(item.path("id").asText()));
+    assertThat(otherIds).containsExactly(shared.toString(), S4.toString(), S3.toString());
+    mvc.perform(
+            get("/api/v1/songs/groups/" + second + "/songs").param("groupBy", "ORIGINAL_ARTIST"))
+        .andExpect(status().isNotFound());
+    var ids = new ArrayList<String>();
+    String cursor = null;
+    do {
+      var req = get("/api/v1/songs/groups").param("groupBy", "ORIGINAL_ARTIST").param("size", "1");
+      if (cursor != null) req.param("cursor", cursor);
+      var response =
+          mapper.readTree(
+              mvc.perform(req)
+                  .andExpect(status().isOk())
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString());
+      response.path("items").forEach(item -> ids.add(item.path("id").asText()));
+      cursor = response.path("nextCursor").isNull() ? null : response.path("nextCursor").asText();
+    } while (cursor != null);
+    assertThat(ids).containsExactly(A1.toString(), sameName.toString(), "OTHERS");
+  }
+
+  @Test
+  void groupViewsOrderNullsLastAndRejectReplacedPublications() throws Exception {
+    publish(10L, 10L, 0L, null);
+    var groups = request("/api/v1/songs/groups?groupBy=TYPE&sort=VIEWS&songSize=1&size=1");
+    var cover = request("/api/v1/songs/groups/COVER/songs?groupBy=TYPE&sort=VIEWS&size=1");
+    assertThat(cover.at("/items/0/id").asText()).isEqualTo(S2.toString());
+    String cursor = cover.path("nextCursor").asText();
+    var rest =
+        mapper.readTree(
+            mvc.perform(
+                    get("/api/v1/songs/groups/COVER/songs")
+                        .param("groupBy", "TYPE")
+                        .param("sort", "VIEWS")
+                        .param("cursor", cursor))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(rest.at("/items/0/id").asText()).isEqualTo(S1.toString());
+    assertThat(rest.at("/items/1/id").asText()).isEqualTo(S4.toString());
+    publish(11L, 11L, 0L, null);
+    mvc.perform(
+            get("/api/v1/songs/groups/COVER/songs")
+                .param("groupBy", "TYPE")
+                .param("sort", "VIEWS")
+                .param("cursor", cursor))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("VIEW_PUBLICATION_CHANGED"));
+    mvc.perform(
+            get("/api/v1/songs/groups")
+                .param("groupBy", "TYPE")
+                .param("sort", "VIEWS")
+                .param("cursor", groups.path("nextCursor").asText()))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void groupLimitsAndInvalidIdentitiesAreRejected() throws Exception {
+    for (String path :
+        List.of(
+            "/api/v1/songs/groups",
+            "/api/v1/songs/groups?groupBy=NONE",
+            "/api/v1/songs/groups?groupBy=TYPE&size=11",
+            "/api/v1/songs/groups?groupBy=TYPE&songSize=21",
+            "/api/v1/songs/groups?groupBy=TYPE&songSize=0",
+            "/api/v1/songs/groups?groupBy=TYPE&sort=RELEVANCE",
+            "/api/v1/songs/groups?groupBy=TYPE&cursor=bad",
+            "/api/v1/songs/groups/bad/songs?groupBy=MEMBER",
+            "/api/v1/songs/groups/OTHERS/songs?groupBy=MEMBER",
+            "/api/v1/songs/groups/COVER/songs?groupBy=TYPE&size=51")) {
+      mvc.perform(get(path)).andExpect(status().isBadRequest());
+    }
+  }
+
+  @Test
+  void missingGroupingUsesCatalogErrorAndEmptyGroupsStayEmpty() throws Exception {
+    mvc.perform(get("/api/v1/songs/groups"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"));
+    writer.execute("UPDATE app.song_entry SET visibility='HIDDEN'");
+    for (String grouping : List.of("TYPE", "MEMBER", "ORIGINAL_ARTIST")) {
+      var page = request("/api/v1/songs/groups?groupBy=" + grouping);
+      assertThat(page.path("items").size()).isZero();
+      assertThat(page.path("hasNext").asBoolean()).isFalse();
+      assertThat(page.path("nextCursor").isNull()).isTrue();
+    }
+  }
+
+  @Test
+  void oldestSortTraversesEverySongOnceInPublishedDateAndIdOrder() throws Exception {
+    var expected = request("/api/v1/songs?sort=LATEST&size=50").path("items");
+    var reversed = new ArrayList<String>();
+    expected.forEach(item -> reversed.add(item.path("id").asText()));
+    java.util.Collections.reverse(reversed);
+    var actual = new ArrayList<String>();
+    String cursor = null;
+    do {
+      var req = get("/api/v1/songs").param("sort", "OLDEST").param("size", "1");
+      if (cursor != null) req.param("cursor", cursor);
+      var result =
+          mapper.readTree(
+              mvc.perform(req)
+                  .andExpect(status().isOk())
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString());
+      result.path("items").forEach(item -> actual.add(item.path("id").asText()));
+      cursor = result.path("nextCursor").isNull() ? null : result.path("nextCursor").asText();
+    } while (cursor != null);
+    assertThat(actual).containsExactlyElementsOf(reversed);
+  }
+
   UUID publish(Long s1, Long s2, Long s3, Long s4) {
     var generation = UUID.randomUUID();
     writer.update("INSERT INTO app.view_publication VALUES (?, current_timestamp)", generation);

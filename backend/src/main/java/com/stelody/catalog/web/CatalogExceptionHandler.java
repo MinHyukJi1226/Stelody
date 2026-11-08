@@ -29,7 +29,10 @@ public class CatalogExceptionHandler {
         exception.fieldErrors());
   }
 
-  @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+  @ExceptionHandler({
+    MethodArgumentTypeMismatchException.class,
+    org.springframework.web.bind.MissingServletRequestParameterException.class
+  })
   void invalid(Exception error, HttpServletRequest request, HttpServletResponse response)
       throws IOException {
     var invalid = CatalogException.invalid();

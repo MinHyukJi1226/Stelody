@@ -140,6 +140,8 @@ public class SecurityConfiguration {
                         "/api/v1/songs/upcoming",
                         "/api/v1/songs/recommendations",
                         "/api/v1/songs/years",
+                        "/api/v1/songs/groups",
+                        "/api/v1/songs/groups/{groupId}/songs",
                         "/api/v1/songs/{id}",
                         "/api/v1/songs/{id}/views",
                         "/api/v1/members",

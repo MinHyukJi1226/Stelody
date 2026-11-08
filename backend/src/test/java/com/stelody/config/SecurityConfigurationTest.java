@@ -36,6 +36,9 @@ class SecurityConfigurationTest {
   com.stelody.song.service.SongService songs;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
+  com.stelody.song.service.SongGroupService songGroups;
+
+  @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.member.service.MemberService members;
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -103,6 +106,16 @@ class SecurityConfigurationTest {
 
   @org.springframework.test.context.bean.override.mockito.MockitoBean
   com.stelody.user.service.WithdrawalResults withdrawalResults;
+
+  @Test
+  void catalogGroupReadsArePublicAndNotCached() throws Exception {
+    mvc.perform(get("/api/v1/songs/groups").param("groupBy", "TYPE"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"));
+    mvc.perform(get("/api/v1/songs/groups/COVER/songs").param("groupBy", "TYPE"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Cache-Control", "no-store"));
+  }
 
   @Test
   void disabledPushCallbacksUseNoBrowserSessionAndDoNotRequireCsrf() throws Exception {
