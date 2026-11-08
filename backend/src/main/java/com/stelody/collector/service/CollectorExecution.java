@@ -122,7 +122,12 @@ public final class CollectorExecution {
           && result.status().equals("SUCCEEDED")
           && environment.getProperty("DISCOVERY_ENABLED", Boolean.class, false)) {
         new PublicScheduleRefresh(
-                source, settings, Clock.systemUTC(), duration -> Thread.sleep(duration))
+                source,
+                settings,
+                Clock.systemUTC(),
+                duration -> Thread.sleep(duration),
+                environment.getProperty("DISCOVERY_CLASSIFICATION_ALLOWED", Boolean.class, false),
+                environment.getProperty("PREMIERE_AUTO_PUBLICATION_ENABLED", Boolean.class, false))
             .refresh(budget);
       }
     } catch (RuntimeException exception) {

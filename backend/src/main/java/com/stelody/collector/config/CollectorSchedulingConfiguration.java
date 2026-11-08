@@ -3,6 +3,7 @@ package com.stelody.collector.config;
 import com.stelody.collector.scheduling.CollectionScheduleState;
 import com.stelody.collector.scheduling.ScheduledCollector;
 import com.stelody.collector.service.CollectorExecution;
+import com.stelody.collector.service.PremiereMonitor;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -27,6 +28,15 @@ public class CollectorSchedulingConfiguration {
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("collector-");
     return scheduler;
+  }
+
+  @Bean(destroyMethod = "close")
+  PremiereMonitor premiereMonitor(Environment environment) {
+    return new PremiereMonitor(
+        CollectorSettings.from(environment),
+        environment.getProperty("DISCOVERY_ENABLED", Boolean.class, false),
+        environment.getProperty("DISCOVERY_CLASSIFICATION_ALLOWED", Boolean.class, false),
+        environment.getProperty("PREMIERE_AUTO_PUBLICATION_ENABLED", Boolean.class, false));
   }
 
   @Bean(destroyMethod = "close")

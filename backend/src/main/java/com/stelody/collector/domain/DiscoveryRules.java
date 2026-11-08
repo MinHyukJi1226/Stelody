@@ -20,10 +20,14 @@ public final class DiscoveryRules {
   }
 
   public Decision decide(VideoObservation video, boolean classificationAllowed) {
-    if (!video.availability().equals("PUBLIC"))
+    if (!video.availability().equals("PUBLIC") && video.publicScheduledStartAt() == null)
       return decision("DEFERRED", "UNKNOWN", "NOT_PUBLIC");
+    return classifyTitle(video.title(), classificationAllowed);
+  }
+
+  public Decision classifyTitle(String sourceTitle, boolean classificationAllowed) {
     if (!classificationAllowed) return decision("REVIEW", "UNKNOWN", "CLASSIFICATION_DISABLED");
-    String title = SearchText.normalize(video.title() == null ? "" : video.title());
+    String title = SearchText.normalize(sourceTitle == null ? "" : sourceTitle);
     if (RuleConfiguration.matches(configuration.exclude(), title))
       return decision("EXCLUDED", "UNKNOWN", "EXPLICIT_EXCLUSION_MARKER");
     if (RuleConfiguration.matches(configuration.cover(), title))

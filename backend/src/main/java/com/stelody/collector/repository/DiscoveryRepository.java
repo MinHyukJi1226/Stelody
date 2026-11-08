@@ -4,6 +4,7 @@ import com.stelody.catalog.domain.SearchText;
 import com.stelody.collector.domain.CollectionFailure;
 import com.stelody.collector.domain.CoverPublicationRules;
 import com.stelody.collector.domain.DiscoveryRules.Decision;
+import com.stelody.collector.domain.PremierePublicationRules;
 import com.stelody.collector.domain.VideoObservation;
 import com.stelody.schedule.PublicScheduleRepository;
 import java.sql.Timestamp;
@@ -33,15 +34,22 @@ public final class DiscoveryRepository {
   private final PublicScheduleRepository publicSchedules;
   private final TransactionTemplate transactions;
   private final boolean autoPublicationAllowed;
+  private final boolean premierePublicationAllowed;
 
   public DiscoveryRepository(DataSource source) {
     this(source, false);
   }
 
   public DiscoveryRepository(DataSource source, boolean autoPublicationAllowed) {
+    this(source, autoPublicationAllowed, false);
+  }
+
+  public DiscoveryRepository(
+      DataSource source, boolean autoPublicationAllowed, boolean premierePublicationAllowed) {
     jdbc = JdbcClient.create(source);
     publicSchedules = new PublicScheduleRepository(jdbc);
     this.autoPublicationAllowed = autoPublicationAllowed;
+    this.premierePublicationAllowed = premierePublicationAllowed;
     transactions = new TransactionTemplate(new JdbcTransactionManager(source));
     transactions.setTimeout(10);
   }
@@ -263,7 +271,7 @@ public final class DiscoveryRepository {
     }
     // The publication function rechecks and locks the stop control before writing.
     boolean publish =
-        autoPublicationAllowed
+        (autoPublicationAllowed || premierePublicationAllowed)
             && jdbc.sql("SELECT enabled FROM app.cover_publication_control WHERE singleton")
                 .query(Boolean.class)
                 .single();
@@ -271,10 +279,21 @@ public final class DiscoveryRepository {
     var publicationRules = new CoverPublicationRules();
     int changed = 0;
     for (var video : observations.values()) {
-      publicSchedules.observe(channel.id(), channel.youtubeId(), video, now);
       var decision = decisions.get(video.youtubeId());
+      publicSchedules.observe(channel.id(), channel.youtubeId(), video, decision, now);
       CoverPublicationRules.Result eligibility = null;
-      if (publish) {
+      boolean completedPremiere =
+          publish && premierePublicationAllowed && video.actualEndAt() != null;
+      if (completedPremiere) {
+        eligibility = new PremierePublicationRules().decide(video, decision, members, now);
+        if (eligibility.eligible())
+          decision =
+              new Decision(
+                  "REVIEW",
+                  decision.suggestedType(),
+                  "EXPLICIT_PREMIERE_CREDIT",
+                  decision.version());
+      } else if (publish && autoPublicationAllowed) {
         eligibility = publicationRules.decide(video, decision, members, now);
         if (decision.disposition().equals("REVIEW") && decision.suggestedType().equals("COVER")) {
           decision =
@@ -319,17 +338,24 @@ public final class DiscoveryRepository {
       changed += updated;
       if (updated == 1 && eligibility != null && eligibility.eligible()) {
         var member = eligibility.member();
+        String function =
+            completedPremiere ? "app.publish_completed_premiere" : "app.publish_discovered_cover";
         jdbc.sql(
                 """
-            SELECT app.publish_discovered_cover(id,:now,:member,:version,:title,:embed,:rule,:token)
+            SELECT %s(id,:now,:member,:version,:title,:embed,:rule,:token)
             FROM app.review_item WHERE youtube_id=:youtube AND channel_id=:channel
-            """)
+            """
+                    .formatted(function))
             .param("now", ts(now))
             .param("member", member.id())
             .param("version", member.version())
             .param("title", SearchText.normalize(video.title()))
             .param("embed", video.embeddable())
-            .param("rule", CoverPublicationRules.VERSION)
+            .param(
+                "rule",
+                completedPremiere
+                    ? PremierePublicationRules.VERSION
+                    : CoverPublicationRules.VERSION)
             .param("token", token)
             .param("youtube", video.youtubeId())
             .param("channel", channel.id())
