@@ -477,12 +477,17 @@ public class ApiDocumentationConfiguration {
           "CANDIDATE_REQUIRES_REFRESH",
           "VIDEO_ALREADY_REGISTERED");
     }
-    boolean songPage = path.equals("/api/v1/songs") || path.equals("/api/v1/members/{id}/songs");
+    boolean songPage =
+        path.equals("/api/v1/songs")
+            || path.equals("/api/v1/members/{id}/songs")
+            || path.contains("/songs/groups");
     if (songPage) {
       errorCodes(
           operation,
           "400",
-          "검색 조건·커서를 확인합니다. 여러 명 참여 필터는 multipleParticipants입니다. 이전 collaboration도 호환용으로 같은 조건으로 해석하며 두 값이 다르면 400 INVALID_CATALOG_QUERY 및 양쪽 fieldErrors[].code=CONFLICTING_FILTER입니다.",
+          path.contains("/songs/groups")
+              ? "분류·정렬·개수·그룹 ID·커서 및 페이지 종류를 확인합니다. 분류·정렬·그룹이 바뀌면 기존 커서를 사용할 수 없습니다."
+              : "검색 조건·커서를 확인합니다. 여러 명 참여 필터는 multipleParticipants입니다. 이전 collaboration도 호환용으로 같은 조건으로 해석하며 두 값이 다르면 400 INVALID_CATALOG_QUERY 및 양쪽 fieldErrors[].code=CONFLICTING_FILTER입니다.",
           "INVALID_CATALOG_QUERY");
       if (path.equals("/api/v1/songs"))
         errorCodes(
@@ -496,6 +501,8 @@ public class ApiDocumentationConfiguration {
           "VIEWS 정렬의 커서가 이전 조회수 집계를 가리킵니다. 커서를 버리고 첫 페이지부터 다시 조회합니다.",
           "VIEW_PUBLICATION_CHANGED");
     }
+    if (path.equals("/api/v1/songs/groups/{groupId}/songs"))
+      errorCodes(operation, "404", "공개 곡이 없는 그룹이거나 2곡 미만인 개별 원곡 가수 그룹입니다.", "CATALOG_NOT_FOUND");
     if (path.startsWith("/api/v1/me/favorites")) {
       errorCodes(operation, "400", "곡 ID·페이지 크기·커서를 확인합니다.", "INVALID_FAVORITE_QUERY");
       if (verb.equals("PUT")) {
@@ -806,7 +813,11 @@ public class ApiDocumentationConfiguration {
     switch (parameter.getName()) {
       case "size" -> {
         schema.setMinimum(BigDecimal.ONE);
-        schema.setMaximum(BigDecimal.valueOf(path.endsWith("/recommendations") ? 20 : 50));
+        schema.setMaximum(
+            BigDecimal.valueOf(
+                path.equals("/api/v1/songs/groups")
+                    ? 10
+                    : path.endsWith("/recommendations") ? 20 : 50));
       }
       case "page" -> {
         schema.setMinimum(BigDecimal.ZERO);
@@ -820,6 +831,9 @@ public class ApiDocumentationConfiguration {
         else if (path.equals("/api/v1/me/playlists/{id}/items"))
           parameter.setDescription(
               "직전 응답의 nextCursor를 그대로 전달합니다. 현재 계정·목록·version에 묶이며 size는 변경할 수 있습니다. 목록 변경 시 409 PLAYLIST_CHANGED이므로 첫 페이지부터 다시 조회합니다.");
+        else if (path.contains("/songs/groups"))
+          parameter.setDescription(
+              "직전 응답의 nextCursor를 그대로 전달합니다. 그룹 목록 커서와 그룹 내부 곡 커서는 서로 바꿀 수 없고 분류·정렬·그룹을 바꾸면 400 INVALID_CATALOG_QUERY입니다. size 변경은 가능합니다. VIEWS 정렬은 조회수 집계 교체 시 409 VIEW_PUBLICATION_CHANGED로 처음부터 재조회합니다.");
         else parameter.setDescription("직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.");
       }
       case "multipleParticipants" -> {
@@ -855,8 +869,12 @@ public class ApiDocumentationConfiguration {
         if (!path.contains("/admin/")) schema.setEnum(List.of("ALL", "COVER", "ORIGINAL"));
       }
       case "sort" -> {
-        schema.setEnum(List.of("LATEST", "RELEVANCE", "VIEWS"));
-        parameter.setDescription("생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다.");
+        schema.setEnum(
+            path.contains("/songs/groups")
+                ? List.of("LATEST", "OLDEST", "VIEWS")
+                : List.of("LATEST", "OLDEST", "RELEVANCE", "VIEWS"));
+        parameter.setDescription(
+            "LATEST는 대표 영상 공개일·곡 ID 내림차순, OLDEST는 공개일·곡 ID 오름차순, VIEWS는 조회수 내림차순(NULL은 마지막)·공개일·곡 ID 내림차순입니다. 기존 곡 검색은 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST이고 분류 API는 항상 LATEST가 기본입니다.");
       }
       case "mode" -> {
         schema.setEnum(List.of("BROWSE", "SEARCH"));

@@ -617,6 +617,35 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void catalogGroupsDocumentSeparateCursorPagesSortsAndErrors() throws Exception {
+    var api = contract();
+    for (String path :
+        java.util.List.of("/api/v1/songs/groups", "/api/v1/songs/groups/{groupId}/songs")) {
+      var operation = api.path("paths").path(path).path("get");
+      for (var parameter : operation.path("parameters")) {
+        var schema = parameter.path("schema");
+        switch (parameter.path("name").asText()) {
+          case "sort" -> assertParameterEnum(schema, "LATEST", "OLDEST", "VIEWS");
+          case "groupBy" -> assertParameterEnum(schema, "TYPE", "MEMBER", "ORIGINAL_ARTIST");
+          case "size" ->
+              assertThat(schema.path("maximum").asInt())
+                  .isEqualTo(path.endsWith("/groups") ? 10 : 50);
+          case "cursor" -> assertThat(schema.has("enum")).isFalse();
+          default -> {}
+        }
+      }
+      var response = operation.at("/responses/200/content/application~1json/schema/$ref");
+      var page = api.at(response.asText().substring(1));
+      assertThat(page.path("required").toString()).contains("items", "nextCursor", "hasNext");
+      assertThat(operation.path("responses").has("400")).isTrue();
+      assertThat(operation.path("responses").has("409")).isTrue();
+      assertThat(operation.path("security").size()).isZero();
+    }
+    assertThat(api.at("/paths/~1api~1v1~1songs~1groups~1{groupId}~1songs/get/responses").has("404"))
+        .isTrue();
+  }
+
+  @Test
   void parameterConstraintsStayIsolated() throws Exception {
     var api = contract();
     for (var path : new String[] {"/api/v1/songs", "/api/v1/members/{id}/songs"}) {
@@ -631,7 +660,7 @@ class OpenApiIntegrationTest {
             assertThat(schema.path("maxLength").asInt()).isEqualTo(200);
           }
           case "type" -> assertParameterEnum(schema, "ALL", "COVER", "ORIGINAL");
-          case "sort" -> assertParameterEnum(schema, "LATEST", "RELEVANCE", "VIEWS");
+          case "sort" -> assertParameterEnum(schema, "LATEST", "OLDEST", "RELEVANCE", "VIEWS");
           case "mode" -> assertParameterEnum(schema, "BROWSE", "SEARCH");
           default -> {}
         }

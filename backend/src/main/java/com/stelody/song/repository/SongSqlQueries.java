@@ -99,7 +99,12 @@ final class SongSqlQueries {
       "(s.published_at < :date OR (s.published_at = :date AND s.id < :id))";
 
   static Statement list(SongQuery query, UUID publication, Position cursor) {
-    var filtered = filtered(query, publication, "*");
+    return list(query, publication, cursor, null, null);
+  }
+
+  static Statement list(
+      SongQuery query, UUID publication, Position cursor, String groupBy, String groupId) {
+    var filtered = filtered(query, publication, "*", groupBy, groupId);
     var sql = new StringBuilder(filtered.sql());
     var params = filtered.parameters();
     appendCursor(sql, params, query.sort(), cursor);
@@ -110,17 +115,46 @@ final class SongSqlQueries {
 
   static Statement count(SongQuery query, UUID publication) {
     // public_songs has one representative video per song; all relationship filters use EXISTS.
-    return filtered(query, publication, "count(*)");
+    return count(query, publication, null, null);
   }
 
-  private static Statement filtered(SongQuery query, UUID publication, String selection) {
+  static Statement count(SongQuery query, UUID publication, String groupBy, String groupId) {
+    return filtered(query, publication, "count(*)", groupBy, groupId);
+  }
+
+  private static Statement filtered(
+      SongQuery query, UUID publication, String selection, String groupBy, String groupId) {
     var sql =
         new StringBuilder(RANKED_CTE)
+            .append("ORIGINAL_ARTIST".equals(groupBy) ? SongGroupRepository.ARTIST_COUNTS : "")
             .append("SELECT ")
             .append(selection)
             .append(" FROM ranked s WHERE true");
     var params = baseParameters(query.text(), publication);
     appendFilters(sql, params, query);
+    if (groupBy != null) {
+      switch (groupBy) {
+        case "TYPE" -> {
+          sql.append(" AND s.song_type = :groupId");
+          params.put("groupId", groupId);
+        }
+        case "MEMBER" -> {
+          sql.append(
+              " AND EXISTS (SELECT 1 FROM app.song_member sm WHERE sm.song_id=s.id AND sm.confirmed AND sm.member_id=:groupId)");
+          params.put("groupId", UUID.fromString(groupId));
+        }
+        case "ORIGINAL_ARTIST" -> {
+          if (groupId.equals("OTHERS")) {
+            sql.append(" AND ").append(SongGroupRepository.OTHER_ARTISTS);
+          } else {
+            sql.append(
+                " AND EXISTS (SELECT 1 FROM app.work_artist wa WHERE wa.work_id=s.work_id AND wa.artist_id=:groupId AND EXISTS (SELECT 1 FROM artist_counts ac WHERE ac.artist_id=wa.artist_id AND ac.total>=2))");
+            params.put("groupId", UUID.fromString(groupId));
+          }
+        }
+        default -> throw new IllegalArgumentException("Invalid group");
+      }
+    }
     return new Statement(sql.toString(), params);
   }
 
@@ -214,6 +248,7 @@ final class SongSqlQueries {
 
   private static String cursorBoundary(String sort, Position cursor) {
     return switch (sort) {
+      case "OLDEST" -> "(s.published_at > :date OR (s.published_at = :date AND s.id > :id))";
       case "RELEVANCE" ->
           "(s.search_rank > :rank OR (s.search_rank = :rank AND " + DATE_BOUNDARY + "))";
       case "VIEWS" ->
@@ -233,6 +268,8 @@ final class SongSqlQueries {
           case "VIEWS" -> "s.view_count DESC NULLS LAST, ";
           default -> "";
         };
-    return primary + "s.published_at DESC, s.id DESC";
+    return sort.equals("OLDEST")
+        ? "s.published_at ASC, s.id ASC"
+        : primary + "s.published_at DESC, s.id DESC";
   }
 }

@@ -80,6 +80,17 @@ public class SongRepository {
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).list();
   }
 
+  public List<Row> groupSongs(
+      SongQuery query, UUID publication, Position cursor, String groupBy, String groupId) {
+    var statement = SongSqlQueries.list(query, publication, cursor, groupBy, groupId);
+    return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).list();
+  }
+
+  public long groupCount(SongQuery query, UUID publication, String groupBy, String groupId) {
+    var statement = SongSqlQueries.count(query, publication, groupBy, groupId);
+    return jdbc.sql(statement.sql()).params(statement.parameters()).query(Long.class).single();
+  }
+
   public long count(SongQuery query, UUID publication) {
     var statement = SongSqlQueries.count(query, publication);
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(Long.class).single();

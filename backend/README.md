@@ -374,3 +374,31 @@ python3 infra/backup/database.py restore \
 PREMIERE_AUTO_PUBLICATION_ENABLED=true·DISCOVERY_CLASSIFICATION_ALLOWED=true 및 기존 자동 공개 관리 설정이 모두 켜졌을 때 종료 후 자동 공개합니다. V32 운영 적용 후 활성화해야 합니다. 제목 분류 결과와 명시된 단일 멤버 크레딧을 사용하며 채널 소유자만으로 참여자를 정하지 않습니다. 커버는 기존 솔로 커버 크레딧 형식을 따르고 오리지널은 제목에 확인된 멤버가 한 명이며 공동 참여 표식이 없어야 합니다. 불명확한 유형·참여자는 PENDING 검토 후보로 남깁니다. 오리지널 영상 종류는 OTHER 초안값을 사용하고 원곡 등 미확정 정보는 관리자에서 보완합니다.
 
 등록은 예약 이력·최신 관측·활성 채널·멤버 버전·관리자 처리 상태를 DB에서 재검사하고 곡·영상·참여자·자동 등록 이력을 한 트랜잭션으로 저장합니다. 동일 영상의 재처리는 중복 곡을 생성하지 않습니다. 예약 캐시는 종료 시각·실제 시작 시각·예약 시각 순으로 확인되는 수명 기준 시각부터 30일 보관·백업 제외이며 등록 이력은 백업에 보존합니다. 프론트 응답 필드는 기존과 같습니다.
+
+### 전체곡 분류·정렬 API
+
+미분류 목록은 기존 GET `/api/v1/songs?sort=LATEST|OLDEST|VIEWS&size=20`을 사용합니다. 분류를 해제하면 이 목록을 첫 페이지부터 조회합니다. 최신순은 대표 영상 공개일·곡 ID 내림차순, 오래된순은 공개일·곡 ID 오름차순입니다. 인기순은 기존 공개 조회수 집계의 조회수 내림차순이며 미수집 `null`은 마지막, 동률은 공개일·곡 ID 내림차순입니다. 0회는 수집된 값으로 취급합니다.
+
+GET `/api/v1/songs/groups`는 `groupBy=TYPE|MEMBER|ORIGINAL_ARTIST` 하나와 `sort=LATEST|OLDEST|VIEWS`(기본 LATEST)를 받습니다. 그룹 `size`는 1~10(기본 10), 그룹별 첫 곡 수 `songSize`는 1~20(기본 6)입니다. 응답의 `items[]`는 `{id,name,songs}`이며 `songs`는 기존 곡 페이지 `{items,nextCursor,hasNext,totalCount}`입니다. 최상위 `nextCursor/hasNext`는 다음 그룹을 조회합니다. 한 요청에서 모든 곡을 반환하지 않으며 최대 10그룹·그룹별 20곡으로 제한합니다.
+
+각 섹션은 GET `/api/v1/songs/groups/{groupId}/songs`로 추가 조회합니다. 같은 `groupBy/sort`와 해당 그룹의 `songs.nextCursor`를 보내며 `size`는 1~50(기본 20)입니다. 최상위 그룹 커서와 섹션의 곡 커서는 서로 바꿀 수 없습니다. 각 그룹의 커서를 별도로 보관합니다.
+
+- TYPE의 ID는 ORIGINAL/COVER이며 오리지널, 커버 순입니다.
+- MEMBER의 ID는 멤버 UUID이며 확정된 각 멤버 그룹에 포함합니다. 기존 멤버 목록과 같은 활동 상태·기수·표시 순서·데뷔일·정규화 이름(C 정렬)·ID 순입니다. 외부 참여자는 멤버 그룹으로 만들지 않습니다.
+- ORIGINAL_ARTIST의 ID는 아티스트 UUID입니다. 기존 공개 조건을 만족하는 고유 곡이 2곡 이상인 원곡 가수만 개별 그룹으로 만듭니다. 정규화 이름(C 정렬)·ID 순이며 동명이인도 ID로 구분합니다.
+- 원곡 가수당 곡이 1곡이거나 원곡·가수 연결이 없는 곡(오리지널 포함)은 OTHERS(기타) 그룹으로 묶어 마지막에 제공합니다. 복수 원곡 가수 중 개별 그룹 대상과 1곡 가수가 함께 있으면 그 곡은 개별 그룹과 기타 양쪽에 포함합니다.
+- 복수 멤버·원곡 가수 곡은 각 해당 그룹에 포함하며 같은 그룹 안에서는 곡 ID로 한 번만 반환합니다. 빈 그룹은 반환하지 않습니다. 그룹 내부 정렬에는 그룹 표시 순서가 영향을 주지 않습니다.
+
+요청 예시는 다음과 같습니다.
+
+```http
+GET /api/v1/songs?sort=OLDEST&size=20
+GET /api/v1/songs/groups?groupBy=TYPE&sort=LATEST&size=2&songSize=6
+GET /api/v1/songs/groups?groupBy=MEMBER&sort=VIEWS&size=5&songSize=6
+GET /api/v1/songs/groups?groupBy=ORIGINAL_ARTIST&sort=OLDEST&size=10&songSize=6
+GET /api/v1/songs/groups/OTHERS/songs?groupBy=ORIGINAL_ARTIST&sort=OLDEST&size=20
+```
+
+추가 조회에서는 직전 응답의 커서를 URL 인코딩해 그대로 전달합니다. 잘못된 분류·정렬·그룹 ID 형식·개수·커서 또는 다른 분류·정렬·그룹·페이지 종류의 커서는 400 INVALID_CATALOG_QUERY입니다. 조회수 인기순은 집계 교체 시 그룹·곡 커서 모두 409 VIEW_PUBLICATION_CHANGED이며 해당 분류를 첫 페이지부터 재조회합니다. 유효한 그룹 ID여도 공개 곡이 없거나 2곡 미만인 개별 가수는 404 CATALOG_NOT_FOUND입니다. 그룹 목록 자체가 비면 200과 빈 items입니다. size는 커서 조회 사이에 변경할 수 있습니다.
+
+그룹 기준은 요청마다 현재 공개 카탈로그로 계산합니다. 곡 공개·연결·이름·멤버 표시 순서 변경이 요청 사이에 발생하면 그룹 구성·위치와 곡 수가 달라질 수 있으므로 분류를 다시 선택할 때는 커서를 버리고 새로 조회합니다. 같은 응답의 그룹·곡·totalCount·조회수 집계는 한 DB 스냅샷을 사용합니다. 익명 조회이며 공개 GET에 CSRF는 필요하지 않습니다. OpenAPI 검증 산출물은 backend/build/openapi/stelody-openapi.json입니다.

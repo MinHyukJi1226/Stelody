@@ -78,7 +78,7 @@ public record SongQuery(
         || (year != null && (year < 1900 || year > 2100))
         || !List.of("BROWSE", "SEARCH").contains(actualMode)
         || !List.of("ALL", "COVER", "ORIGINAL").contains(actualType)
-        || !List.of("LATEST", "RELEVANCE", "VIEWS").contains(actualSort)
+        || !List.of("LATEST", "OLDEST", "RELEVANCE", "VIEWS").contains(actualSort)
         || (actualMode.equals("BROWSE") && !normalized.isEmpty())) throw CatalogException.invalid();
     return new SongQuery(
         normalized,
