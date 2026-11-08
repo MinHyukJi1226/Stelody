@@ -1430,7 +1430,7 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   @Test
-  void scheduleFeedOmitsPrivateExpiredStaleAndDisabledChannelItems() throws Exception {
+  void scheduleFeedKeepsDayOldReservationsAndOmitsPrivateExpiredOrDisabledItems() throws Exception {
     var now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
     var observed = now.minusSeconds(3600);
     scheduledVideo(1, "private", "Private title", now.plusSeconds(7200));
@@ -1450,8 +1450,8 @@ class DiscoveryCollectorIntegrationTest {
     writer.update("UPDATE app.channel SET collection_enabled=false WHERE id=?", CHANNEL);
     assertThat(upcoming().size()).isZero();
     writer.update("UPDATE app.channel SET collection_enabled=true WHERE id=?", CHANNEL);
-    writer.execute("UPDATE app.youtube_public_schedule SET observed_at=now()-interval '3 hours'");
-    assertThat(upcoming().size()).isZero();
+    writer.execute("UPDATE app.youtube_public_schedule SET observed_at=now()-interval '1 day'");
+    assertThat(upcoming().size()).isEqualTo(1);
     writer.execute(
         "UPDATE app.youtube_public_schedule SET observed_at=now()-interval '1 hour',scheduled_start_at=now()-interval '1 minute'");
     assertThat(upcoming().size()).isZero();

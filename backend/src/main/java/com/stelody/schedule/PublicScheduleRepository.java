@@ -49,7 +49,7 @@ public class PublicScheduleRepository {
           AND NOT EXISTS (SELECT 1 FROM app.review_item r
             WHERE r.youtube_id=p.youtube_id AND r.review_status<>'PENDING')
           AND p.scheduled_start_at>CURRENT_TIMESTAMP
-          AND p.observed_at BETWEEN CURRENT_TIMESTAMP-interval '2 hours' AND CURRENT_TIMESTAMP
+          AND p.observed_at<=CURRENT_TIMESTAMP
         ORDER BY p.scheduled_start_at,p.youtube_id LIMIT 50
         """)
         .query(
