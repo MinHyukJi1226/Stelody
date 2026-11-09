@@ -44,7 +44,10 @@ test('홈의 간결한 곡 카드를 표시하고 최신곡 전체 목록으로 
   ).toContainText('준비 중입니다.')
   await page.getByRole('link', { name: '최신곡 전체 보기' }).click()
   await expect(page).toHaveURL('/songs')
-  await expect(page.getByText('공개일 최신순 · 총 2곡')).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: '정렬 선택: 최신순' }),
+  ).toBeVisible()
+  await expect(page.getByRole('article')).toHaveCount(2)
   await page.reload()
   await expect(
     page.getByRole('heading', { name: '전체곡', exact: true }),
@@ -177,7 +180,10 @@ test('추가 페이지 실패 후 기존 목록을 보존하고 같은 커서로
   fail = false
   await page.getByRole('button', { name: '다시 시도' }).click()
   await expect(page.getByRole('article')).toHaveCount(21)
-  await expect(page.getByText('모든 노래를 불러왔습니다.')).toBeVisible()
+  await expect(page.getByText('모든 노래를 불러왔습니다.')).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: '노래 더 보기', exact: true }),
+  ).toHaveCount(0)
   expect(cursors[0]).toBe(null)
   expect(cursors.slice(1).every((cursor) => cursor === 'opaque+/=')).toBe(true)
 })

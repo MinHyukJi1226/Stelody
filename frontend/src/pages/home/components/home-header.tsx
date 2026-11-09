@@ -22,6 +22,7 @@ export function HomeHeader({
 }) {
   const location = useLocation()
   const search = location.pathname === '/search'
+  const catalog = location.pathname === '/songs'
   const query = search
     ? (new URLSearchParams(location.search).get('q') ?? '')
     : ''
@@ -33,7 +34,7 @@ export function HomeHeader({
 
   return (
     <header
-      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
+      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search || catalog ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
     >
       <Link
         to="/"

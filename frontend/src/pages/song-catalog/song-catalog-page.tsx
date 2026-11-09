@@ -1,80 +1,108 @@
-import { useEffect, useRef } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { songCatalogOptions, uniqueSongs } from '@/features/songs/queries'
-import { SongGrid, SongGridSkeleton } from '@/features/songs/song-card'
+import { useQueryClient } from '@tanstack/react-query'
+import { catalogOptions, groupKey, groupSongsKey } from './catalog-api'
+import { useSearchParams } from 'react-router'
 import { Button } from '@/shared/ui/button'
 import { StatePanel } from '@/shared/ui/state-panel'
+import { FlatCatalog } from './catalog-list'
+import { GroupedCatalog } from './catalog-groups'
+import { CatalogSortMenu } from './catalog-sort'
+import type { CatalogGrouping, CatalogSort } from './catalog-api'
 
+const groups: { value: CatalogGrouping; label: string }[] = [
+  { value: 'TYPE', label: '오리지널 / 커버' },
+  { value: 'MEMBER', label: '멤버별' },
+  { value: 'ORIGINAL_ARTIST', label: '원곡 가수별' },
+]
 export function SongCatalogPage() {
-  const query = useInfiniteQuery(songCatalogOptions)
-  const sentinel = useRef<HTMLDivElement>(null)
-  const { hasNextPage, isFetching, isError, fetchNextPage } = query
-  useEffect(() => {
-    const element = sentinel.current
-    if (
-      !element ||
-      !hasNextPage ||
-      isFetching ||
-      isError ||
-      !('IntersectionObserver' in window)
-    )
-      return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) void fetchNextPage()
-      },
-      { rootMargin: '200px' },
-    )
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [hasNextPage, isFetching, isError, fetchNextPage])
-
-  const songs = uniqueSongs(query.data?.pages ?? [])
-  const retry = () =>
-    void (query.isFetchNextPageError ? query.fetchNextPage() : query.refetch())
+  const client = useQueryClient()
+  const [params, setParams] = useSearchParams()
+  const grouping = params.get('groupBy')
+  const sorting = params.get('sort') ?? 'LATEST'
+  const validGrouping =
+    grouping === null || groups.some((item) => item.value === grouping)
+  const validSort = ['LATEST', 'OLDEST', 'VIEWS'].includes(sorting)
+  const groupBy = grouping as CatalogGrouping | null
+  const sort = sorting as CatalogSort
+  function change(nextGroup: CatalogGrouping | null, nextSort: CatalogSort) {
+    if (nextGroup === groupBy && nextSort === sort) return
+    if (nextGroup) {
+      client.removeQueries({
+        queryKey: groupKey(nextGroup, nextSort),
+        exact: true,
+      })
+      client.removeQueries({ queryKey: groupSongsKey(nextGroup, nextSort) })
+    } else {
+      client.removeQueries({
+        queryKey: catalogOptions(nextSort).queryKey,
+        exact: true,
+      })
+    }
+    const next = new URLSearchParams()
+    if (nextGroup) next.set('groupBy', nextGroup)
+    if (nextSort !== 'LATEST') next.set('sort', nextSort)
+    setParams(next, { preventScrollReset: true })
+  }
   return (
-    <section aria-labelledby="catalog-title" className="flex flex-col gap-8">
-      <div>
-        <h1 id="catalog-title" className="text-[32px] font-bold leading-[1.5]">
-          전체곡
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          공개일 최신순
-          {query.data &&
-            ` · 총 ${query.data.pages[0]!.totalCount.toLocaleString('ko-KR')}곡`}
-        </p>
-      </div>
-      {query.isPending ? (
-        <SongGridSkeleton count={8} />
-      ) : !query.data && query.isError ? (
-        <StatePanel title="노래를 불러오지 못했습니다" onRetry={retry} />
-      ) : songs.length === 0 ? (
-        <StatePanel title="아직 공개된 노래가 없습니다" />
-      ) : (
-        <SongGrid songs={songs} />
-      )}
-      {query.isError && query.data && (
-        <StatePanel
-          title="노래를 더 불러오지 못했습니다"
-          description="이미 불러온 목록은 유지됩니다."
-          onRetry={retry}
-        />
-      )}
-      <div ref={sentinel}>
-        {query.hasNextPage && !query.isError && (
-          <Button
-            disabled={query.isFetching}
-            onClick={() => void query.fetchNextPage()}
+    <div className="flex min-w-0 flex-1 flex-col">
+      <section
+        aria-labelledby="catalog-title"
+        className="flex min-w-0 flex-1 flex-col gap-8 px-5 py-8 md:px-8"
+      >
+        <div className="home-section-enter flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <h1 id="catalog-title" className="text-2xl font-bold leading-[1.5]">
+              전체곡
+            </h1>
+            <CatalogSortMenu
+              sort={validSort ? sort : 'LATEST'}
+              onChange={(value) =>
+                change(validGrouping ? groupBy : null, value)
+              }
+            />
+          </div>
+          <div
+            role="group"
+            aria-label="곡 분류"
+            className="flex flex-wrap gap-2"
           >
-            {query.isFetchingNextPage ? '노래 더 불러오는 중…' : '노래 더 보기'}
-          </Button>
+            {groups.map(({ value, label }) => (
+              <Button
+                key={value}
+                aria-pressed={groupBy === value}
+                variant={groupBy === value ? 'primary' : 'secondary'}
+                className={`min-h-10 rounded-lg px-3 py-2 text-xs ${groupBy !== value ? 'bg-subtle text-on-accent' : ''}`}
+                onClick={() =>
+                  change(
+                    groupBy === value ? null : value,
+                    validSort ? sort : 'LATEST',
+                  )
+                }
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        </div>
+        {!validGrouping || !validSort ? (
+          <StatePanel
+            title="조회 조건을 확인해 주세요"
+            description="분류 또는 정렬 조건이 올바르지 않습니다."
+            onRetry={() => setParams({})}
+          />
+        ) : groupBy ? (
+          <GroupedCatalog
+            key={`${groupBy}-${sort}`}
+            groupBy={groupBy}
+            sort={sort}
+          />
+        ) : (
+          <FlatCatalog key={sort} sort={sort} />
         )}
-        {!query.hasNextPage && songs.length > 0 && (
-          <p role="status" className="text-sm text-muted">
-            모든 노래를 불러왔습니다.
-          </p>
-        )}
-      </div>
-    </section>
+      </section>
+      <footer className="grid gap-1 px-5 pt-5 pb-6 text-xs text-muted md:px-10">
+        <p>Stelody · 팬이 만드는 노래 아카이브</p>
+        <p>공식 서비스가 아닙니다.</p>
+      </footer>
+    </div>
   )
 }

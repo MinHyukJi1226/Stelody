@@ -4,50 +4,6 @@
  */
 
 export interface paths {
-  '/api/v1/songs/upcoming': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * YouTube 공개 예정 영상
-     * @description 수집이 활성화된 멤버·그룹 채널에서 YouTube API가 공개 예약으로 확인한 영상만 제공합니다. 제목과 시작 시각은 YouTube 원본이며 시작 시각은 UTC입니다. 일반 예약 방송과 최초공개를 구분하는 필드는 제공되지 않으므로 화면에는 ‘YouTube 공개 예정’으로 표시하고 원본 링크와 출처를 함께 제공합니다. 시작 시각이 지난 항목과 2시간 넘게 갱신되지 않은 항목은 제외합니다. 예약 시작 시각·영상 ID 오름차순 최대 50건이며 대상이 없으면 items는 빈 배열입니다. 요청 시 외부 API를 호출하지 않습니다.
-     *
-     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     */
-    get: operations['get_songs_upcoming']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/api/v1/songs/milestones': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * 조회수 임박·달성 소식
-     * @description 10만 회부터 10만 회 간격의 목표입니다. approaching은 다음 목표까지 5000회 이하로 남은 공개 대표 영상이며 남은 횟수·곡 ID 순입니다. achievements는 감지 후 24시간 이내 달성 소식입니다. 곡별 가장 최근 달성 한 건을 남기고, 감지 시각이 같으면 가장 높은 목표를 선택합니다. 곡별로 합친 뒤 감지 시각·목표 내림차순으로 최신 10곡을 제공합니다. 최초 관측은 기준점만 만들고 과거 달성은 생성하지 않습니다. 조회수 감소 후 같은 목표를 다시 넘겨도 중복 생성하지 않습니다. 30일간 관측이 없으면 기준점을 폐기하고 다음 관측을 새 기준점으로 사용합니다. 비공개·이용 불가·숨김·대표 영상 교체·수집 제외 채널은 소식에서 제외합니다. 최대 2시간 이내 실제 관측만 제공합니다. DISABLED는 기능 비활성, PENDING은 유효한 관측 없음, READY는 조회 가능 상태이며 두 배열이 비어 있을 수 있습니다. detectedAt은 실제 달성 시각이 아닌 서버 확인 시각입니다. 예상 도달 시각은 내부 조회 주기 조절에만 사용하며 사용자에게 확정 시각으로 제공하지 않습니다. 추가 조회는 임박 영상만 1·10·60분으로 조절하며 API 장애·한도·서버 휴면·유튜브 집계 지연에 따라 늦어질 수 있습니다. 읽기 전용이며 이 GET 요청으로 외부 조회·수집을 실행하지 않습니다. 기존 곡 카드의 viewCount는 정각 수집 기준이고 approaching.viewCount·observedAt은 별도의 최신 확인값입니다.
-     *
-     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
-     */
-    get: operations['get_songs_milestones']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
   '/api/v1/admin/artist-registrations/{requestId}': {
     parameters: {
       query?: never
@@ -1597,6 +1553,72 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/songs/groups': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 전체곡 분류 그룹과 첫 곡 페이지
+     * @description TYPE·MEMBER·ORIGINAL_ARTIST 중 하나로 분류합니다. 그룹 size 기본 10(1~10), 그룹별 songSize 기본 6(1~20)이며 그룹·곡 커서는 독립적입니다. ORIGINAL_ARTIST는 오리지널곡을 ORIGINAL(오리지널) 그룹으로 맨 위에 제공합니다. 이후 가수별 그룹과 OTHERS(기타)에는 커버곡만 포함합니다. 원곡 가수는 공개 고유 커버곡이 2곡 이상일 때 개별 그룹을 만들고 1곡인 가수와 원곡 가수 미등록 커버곡은 기타에 포함합니다. 여러 멤버·원곡 가수에 연결된 곡은 해당 각 그룹에 포함하며 그룹 안에서는 곡 ID로 중복을 제거합니다. 오리지널→커버, 기존 멤버 표시 순서, 정규화된 원곡 가수 이름(C 정렬)·ID순이며 기타는 마지막입니다. 빈 그룹은 제외합니다. 공개 목록과 같은 대표 영상·노출 조건을 사용합니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_groups']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/songs/groups/{groupId}/songs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 분류 그룹 내부 곡 커서 조회
+     * @description groupId는 그룹 목록이 반환한 ID를 사용합니다. TYPE은 ORIGINAL/COVER, MEMBER와 원곡 가수는 UUID, ORIGINAL_ARTIST의 오리지널 그룹은 ORIGINAL, 기타는 OTHERS입니다. ORIGINAL_ARTIST의 이전 버전 커서는 400 INVALID_CATALOG_QUERY이므로 첫 페이지부터 재조회합니다. size는 1~50(기본 20)입니다. 분류·정렬·그룹이 다른 커서 및 그룹 목록 커서는 400 INVALID_CATALOG_QUERY입니다. 인기순 조회수 집계가 교체되면 409 VIEW_PUBLICATION_CHANGED로 첫 페이지부터 다시 조회합니다. 유효한 ID여도 공개 곡이 없거나 커버곡 2곡 미만인 개별 가수 그룹이면 404 CATALOG_NOT_FOUND입니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_groups_groupId_songs']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/songs/milestones': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 조회수 임박·달성 소식
+     * @description 10만 회부터 10만 회 간격의 목표입니다. approaching은 다음 목표까지 5000회 이하로 남은 공개 대표 영상이며 남은 횟수·곡 ID 순입니다. achievements는 감지 후 24시간 이내 달성 소식입니다. 곡별 가장 최근 달성 한 건을 남기고, 감지 시각이 같으면 가장 높은 목표를 선택합니다. 곡별로 합친 뒤 감지 시각·목표 내림차순으로 최신 10곡을 제공합니다. 최초 관측은 기준점만 만들고 과거 달성은 생성하지 않습니다. 조회수 감소 후 같은 목표를 다시 넘겨도 중복 생성하지 않습니다. 30일간 관측이 없으면 기준점을 폐기하고 다음 관측을 새 기준점으로 사용합니다. 비공개·이용 불가·숨김·대표 영상 교체·수집 제외 채널은 소식에서 제외합니다. 최대 2시간 이내 실제 관측만 제공합니다. DISABLED는 기능 비활성, PENDING은 유효한 관측 없음, READY는 조회 가능 상태이며 두 배열이 비어 있을 수 있습니다. detectedAt은 실제 달성 시각이 아닌 서버 확인 시각입니다. 예상 도달 시각은 내부 조회 주기 조절에만 사용하며 사용자에게 확정 시각으로 제공하지 않습니다. 추가 조회는 임박 영상만 1·10·60분으로 조절하며 API 장애·한도·서버 휴면·유튜브 집계 지연에 따라 늦어질 수 있습니다. 읽기 전용이며 이 GET 요청으로 외부 조회·수집을 실행하지 않습니다. 기존 곡 카드의 viewCount는 정각 수집 기준이고 approaching.viewCount·observedAt은 별도의 최신 확인값입니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_milestones']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/songs/recommendations': {
     parameters: {
       query?: never
@@ -1626,11 +1648,33 @@ export interface paths {
     }
     /**
      * 조회수 급상승 목록
-     * @description 대표 영상의 최근 24시간 조회수 증가량 순입니다. 공개 24시간 미만인 영상은 24시간 전 비교 기록이 없으면 공개 후 첫 관측과 최신 관측의 증가량을 사용합니다.
+     * @description 현재 집계 조회수에서 집계 시각 24시간 전까지의 마지막 관측 조회수를 뺀 증가량 순입니다. 수집 누락 시 30일 보관 범위의 이전 기록을 사용하므로 실제 비교 기간은 24시간보다 길 수 있습니다. 실제 비교 시각은 startObservedAt/endObservedAt으로 반환합니다. 공개 24시간 미만인 영상은 24시간 전 비교 기록이 없으면 공개 후 첫 관측과 최신 관측의 증가량을 사용합니다.
      *
      *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
      */
     get: operations['get_songs_trending']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/songs/upcoming': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * YouTube 공개 예정 영상
+     * @description 수집이 활성화된 멤버·그룹 채널에서 YouTube API가 공개 예약으로 확인하고 현재 제목 분류 규칙이 COVER/ORIGINAL로 분류한 영상만 제공합니다. 유형 미확정·분류 비활성 영상은 표시하지 않습니다. 제목과 시작 시각은 YouTube 원본이며 시작 시각은 UTC입니다. 일반 예약 방송과 최초공개를 구분하는 필드는 제공되지 않으므로 화면에는 ‘YouTube 공개 예정’으로 표시하고 원본 링크와 출처를 함께 제공합니다. 시작 시각이 지난 항목은 제외합니다. 마지막 확인 이후 시간이 지났거나 재확인이 실패해도 미래 예약은 유지하고, 비공개·삭제 등 취소 상태가 확인되면 제거합니다. 예약 시작 시각·영상 ID 오름차순 최대 50건이며 대상이 없으면 items는 빈 배열입니다. 요청 시 외부 API를 호출하지 않습니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_upcoming']
     put?: never
     post?: never
     delete?: never
@@ -1727,46 +1771,6 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
-    'com.stelody.schedule.PublicScheduleRepository.Item': {
-      channelName: string
-      /** Format: date-time */
-      scheduledStartAt: string
-      /** @description YouTube 원본 썸네일 URL. 확인된 이미지가 없으면 null. */
-      thumbnailUrl: string | null
-      title: string
-      url: string
-      youtubeId: string
-    }
-    'com.stelody.schedule.PublicScheduleController.Schedule': {
-      items: components['schemas']['com.stelody.schedule.PublicScheduleRepository.Item'][]
-    }
-    'com.stelody.milestone.MilestoneDtos.Approaching': {
-      /** Format: date-time */
-      observedAt: string
-      song: components['schemas']['com.stelody.song.dto.SongDtos.Card']
-      /** Format: int64 */
-      target: number
-      /** Format: int64 */
-      viewCount: number
-    }
-    'com.stelody.milestone.MilestoneDtos.Achievement': {
-      /**
-       * Format: date-time
-       * @description 서버가 목표 돌파를 처음 확인한 시각입니다. 실제 유튜브 달성 시각이 아닙니다.
-       */
-      detectedAt: string
-      song: components['schemas']['com.stelody.song.dto.SongDtos.Card']
-      /** Format: int64 */
-      target: number
-    }
-    'com.stelody.milestone.MilestoneDtos.Feed': {
-      achievements: components['schemas']['com.stelody.milestone.MilestoneDtos.Achievement'][]
-      approaching: components['schemas']['com.stelody.milestone.MilestoneDtos.Approaching'][]
-      /** Format: date-time */
-      checkedAt: string
-      /** @enum {string} */
-      status: 'DISABLED' | 'PENDING' | 'READY'
-    }
     ApiProblem: {
       /** @description 기능별 오류 코드. 각 API의 오류 응답 description·x-error-codes와 HTTP status로 분기합니다. fieldErrors[].code와 내보내기 Job.errorCode는 별도입니다. 새 코드는 추가될 수 있으므로 알 수 없는 코드는 일반 오류로 안내하고 traceId를 보관합니다. */
       code: string
@@ -2694,6 +2698,33 @@ export interface components {
       items: components['schemas']['com.stelody.member.dto.MemberDtos.Card'][]
       nextCursor: string | null
     }
+    'com.stelody.milestone.MilestoneDtos.Achievement': {
+      /**
+       * Format: date-time
+       * @description 서버가 목표 돌파를 처음 확인한 시각입니다. 실제 유튜브 달성 시각이 아닙니다.
+       */
+      detectedAt: string
+      song: components['schemas']['com.stelody.song.dto.SongDtos.Card']
+      /** Format: int64 */
+      target: number
+    }
+    'com.stelody.milestone.MilestoneDtos.Approaching': {
+      /** Format: date-time */
+      observedAt: string
+      song: components['schemas']['com.stelody.song.dto.SongDtos.Card']
+      /** Format: int64 */
+      target: number
+      /** Format: int64 */
+      viewCount: number
+    }
+    'com.stelody.milestone.MilestoneDtos.Feed': {
+      achievements: components['schemas']['com.stelody.milestone.MilestoneDtos.Achievement'][]
+      approaching: components['schemas']['com.stelody.milestone.MilestoneDtos.Approaching'][]
+      /** Format: date-time */
+      checkedAt: string
+      /** @enum {string} */
+      status: 'DISABLED' | 'PENDING' | 'READY'
+    }
     'com.stelody.playlist.dto.PlaylistDtos.Add': {
       /** Format: uuid */
       songId: string
@@ -2828,6 +2859,11 @@ export interface components {
       observedAt: string | null
       /** Format: date-time */
       publishedAt: string | null
+      /**
+       * Format: uuid
+       * @description registeredVideoId 영상에 현재 연결된 곡 ID입니다. 미등록 등 연결 영상이 없으면 null입니다.
+       */
+      registeredSongId: string | null
       /** Format: uuid */
       registeredVideoId: string | null
       reviewNote: string | null
@@ -2840,11 +2876,6 @@ export interface components {
       /** Format: int64 */
       version: number
       youtubeId: string
-      /**
-       * Format: uuid
-       * @description registeredVideoId 영상에 현재 연결된 곡 ID입니다. 미등록 등 연결 영상이 없으면 null입니다.
-       */
-      registeredSongId: string | null
     }
     'com.stelody.review.dto.ReviewDtos.Page': {
       hasNext: boolean
@@ -2863,6 +2894,19 @@ export interface components {
     'com.stelody.review.dto.ReviewDtos.Selection': {
       /** Format: uuid */
       id: string
+    }
+    'com.stelody.schedule.PublicScheduleController.Schedule': {
+      items: components['schemas']['com.stelody.schedule.PublicScheduleRepository.Item'][]
+    }
+    'com.stelody.schedule.PublicScheduleRepository.Item': {
+      channelName: string
+      /** Format: date-time */
+      scheduledStartAt: string
+      /** @description YouTube 원본 썸네일 URL. 확인된 이미지가 없으면 null. */
+      thumbnailUrl: string | null
+      title: string
+      url: string
+      youtubeId: string
     }
     'com.stelody.song.dto.SongDtos.Artist': {
       /** Format: uuid */
@@ -2986,6 +3030,16 @@ export interface components {
       /** @description 공개 곡이 있는 검색 가능 연도(1900~2100)를 중복 없이 내림차순으로 반환합니다. 한국 시간 기준이며 해당 곡이 없으면 빈 배열입니다. 연도 선택의 전체 옵션이고 현재 검색어·필터와 무관합니다. */
       years: number[]
     }
+    'com.stelody.song.service.SongGroupService.Group': {
+      id: string
+      name: string
+      songs: components['schemas']['com.stelody.song.dto.SongDtos.Page']
+    }
+    'com.stelody.song.service.SongGroupService.Page': {
+      hasNext: boolean
+      items: components['schemas']['com.stelody.song.service.SongGroupService.Group'][]
+      nextCursor: string | null
+    }
     'com.stelody.statistics.dto.StatisticsDtos.Point': {
       /** Format: date */
       date: string
@@ -3020,7 +3074,10 @@ export interface components {
       /** Format: date-time */
       referenceAt: string | null
       status: string
-      /** Format: int32 */
+      /**
+       * Format: int32
+       * @description 고정 비교 허용 폭을 두지 않아 0을 반환합니다. 30일 보관 기록 중 24시간 전 이전의 마지막 관측을 사용합니다.
+       */
       toleranceMinutes: number
     }
     'com.stelody.statistics.dto.StatisticsDtos.Views': {
@@ -3100,64 +3157,6 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
-  get_songs_upcoming: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['com.stelody.schedule.PublicScheduleController.Schedule']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
-  get_songs_milestones: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['com.stelody.milestone.MilestoneDtos.Feed']
-        }
-      }
-      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
-      default: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ApiProblem']
-        }
-      }
-    }
-  }
   get_admin_artist_registrations_requestId: {
     parameters: {
       query?: never
@@ -8986,8 +8985,8 @@ export interface operations {
          * @description 이전 클라이언트의 다인 참여 필터를 위한 호환 파라미터입니다. 게임·IP 협업 여부를 뜻하지 않습니다. 신규 연동은 multipleParticipants를 사용합니다. 새 파라미터 미지정 시 이 값을 사용하며, 둘 다 지정한 값이 다르면 400 INVALID_CATALOG_QUERY와 CONFLICTING_FILTER입니다.
          */
         collaboration?: boolean
-        /** @description 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다. */
-        sort?: 'LATEST' | 'RELEVANCE' | 'VIEWS'
+        /** @description LATEST는 대표 영상 공개일·곡 ID 내림차순, OLDEST는 공개일·곡 ID 오름차순, VIEWS는 조회수 내림차순(NULL은 마지막)·공개일·곡 ID 내림차순입니다. 기존 곡 검색은 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST이고 분류 API는 항상 LATEST가 기본입니다. */
+        sort?: 'LATEST' | 'OLDEST' | 'RELEVANCE' | 'VIEWS'
         size?: number
         /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다. */
         cursor?: string
@@ -9059,8 +9058,8 @@ export interface operations {
          * @description 이전 클라이언트의 다인 참여 필터를 위한 호환 파라미터입니다. 게임·IP 협업 여부를 뜻하지 않습니다. 신규 연동은 multipleParticipants를 사용합니다. 새 파라미터 미지정 시 이 값을 사용하며, 둘 다 지정한 값이 다르면 400 INVALID_CATALOG_QUERY와 CONFLICTING_FILTER입니다.
          */
         collaboration?: boolean
-        /** @description 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST입니다. */
-        sort?: 'LATEST' | 'RELEVANCE' | 'VIEWS'
+        /** @description LATEST는 대표 영상 공개일·곡 ID 내림차순, OLDEST는 공개일·곡 ID 오름차순, VIEWS는 조회수 내림차순(NULL은 마지막)·공개일·곡 ID 내림차순입니다. 기존 곡 검색은 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST이고 분류 API는 항상 LATEST가 기본입니다. */
+        sort?: 'LATEST' | 'OLDEST' | 'RELEVANCE' | 'VIEWS'
         size?: number
         /** @description 생략 시 q 미지정은 BROWSE, q 지정은 SEARCH입니다. BROWSE에 검색어는 지정할 수 없습니다. */
         mode?: 'BROWSE' | 'SEARCH'
@@ -9101,6 +9100,155 @@ export interface operations {
         }
         content: {
           'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_songs_groups: {
+    parameters: {
+      query: {
+        groupBy: 'TYPE' | 'MEMBER' | 'ORIGINAL_ARTIST'
+        /** @description LATEST는 대표 영상 공개일·곡 ID 내림차순, OLDEST는 공개일·곡 ID 오름차순, VIEWS는 조회수 내림차순(NULL은 마지막)·공개일·곡 ID 내림차순입니다. 기존 곡 검색은 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST이고 분류 API는 항상 LATEST가 기본입니다. */
+        sort?: 'LATEST' | 'OLDEST' | 'VIEWS'
+        size?: number
+        songSize?: string
+        /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 그룹 목록 커서와 그룹 내부 곡 커서는 서로 바꿀 수 없고 분류·정렬·그룹을 바꾸면 400 INVALID_CATALOG_QUERY입니다. size 변경은 가능합니다. VIEWS 정렬은 조회수 집계 교체 시 409 VIEW_PUBLICATION_CHANGED로 처음부터 재조회합니다. */
+        cursor?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.song.service.SongGroupService.Page']
+        }
+      }
+      /** @description INVALID_CATALOG_QUERY: 분류·정렬·개수·그룹 ID·커서 및 페이지 종류를 확인합니다. 분류·정렬·그룹이 바뀌면 기존 커서를 사용할 수 없습니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description VIEW_PUBLICATION_CHANGED: VIEWS 정렬의 커서가 이전 조회수 집계를 가리킵니다. 커서를 버리고 첫 페이지부터 다시 조회합니다. */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_songs_groups_groupId_songs: {
+    parameters: {
+      query: {
+        groupBy: 'TYPE' | 'MEMBER' | 'ORIGINAL_ARTIST'
+        /** @description LATEST는 대표 영상 공개일·곡 ID 내림차순, OLDEST는 공개일·곡 ID 오름차순, VIEWS는 조회수 내림차순(NULL은 마지막)·공개일·곡 ID 내림차순입니다. 기존 곡 검색은 생략 시 검색어가 있으면 RELEVANCE, 없으면 LATEST이고 분류 API는 항상 LATEST가 기본입니다. */
+        sort?: 'LATEST' | 'OLDEST' | 'VIEWS'
+        size?: number
+        /** @description 직전 응답의 nextCursor를 그대로 전달합니다. 그룹 목록 커서와 그룹 내부 곡 커서는 서로 바꿀 수 없고 분류·정렬·그룹을 바꾸면 400 INVALID_CATALOG_QUERY입니다. size 변경은 가능합니다. VIEWS 정렬은 조회수 집계 교체 시 409 VIEW_PUBLICATION_CHANGED로 처음부터 재조회합니다. */
+        cursor?: string
+      }
+      header?: never
+      path: {
+        groupId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Page']
+        }
+      }
+      /** @description INVALID_CATALOG_QUERY: 분류·정렬·개수·그룹 ID·커서 및 페이지 종류를 확인합니다. 분류·정렬·그룹이 바뀌면 기존 커서를 사용할 수 없습니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description CATALOG_NOT_FOUND: 공개 곡이 없는 그룹이거나 2곡 미만인 개별 원곡 가수 그룹입니다. */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description VIEW_PUBLICATION_CHANGED: VIEWS 정렬의 커서가 이전 조회수 집계를 가리킵니다. 커서를 버리고 첫 페이지부터 다시 조회합니다. */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_songs_milestones: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.milestone.MilestoneDtos.Feed']
         }
       }
       /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
@@ -9163,6 +9311,35 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['com.stelody.statistics.dto.StatisticsDtos.Trending']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_songs_upcoming: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.schedule.PublicScheduleController.Schedule']
         }
       }
       /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
