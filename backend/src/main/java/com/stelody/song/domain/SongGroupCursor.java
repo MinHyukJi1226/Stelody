@@ -32,7 +32,7 @@ public class SongGroupCursor {
     try {
       if (value.isEmpty() || value.length() > 4096) throw CatalogException.invalid();
       var token = mapper.readValue(Base64.getUrlDecoder().decode(value), Token.class);
-      if (token.version() != 1
+      if (token.version() != version(groupBy)
           || !purpose.equals(token.purpose())
           || !groupBy.equals(token.groupBy())
           || !sort.equals(token.sort())
@@ -42,7 +42,7 @@ public class SongGroupCursor {
         if (p == null
             || token.songCursor() != null
             || p.section() < 0
-            || p.section() > 1
+            || p.section() > (groupBy.equals("ORIGINAL_ARTIST") ? 2 : 1)
             || p.activity() < 0
             || p.activity() > 2
             || p.generation() < 0
@@ -70,11 +70,17 @@ public class SongGroupCursor {
   }
 
   public String groups(String groupBy, String sort, UUID publication, Position position) {
-    return encode(new Token(1, "GROUPS", groupBy, sort, null, publication, position, null));
+    return encode(
+        new Token(version(groupBy), "GROUPS", groupBy, sort, null, publication, position, null));
   }
 
   public String songs(String groupBy, String sort, String groupId, UUID publication, String inner) {
-    return encode(new Token(1, "SONGS", groupBy, sort, groupId, publication, null, inner));
+    return encode(
+        new Token(version(groupBy), "SONGS", groupBy, sort, groupId, publication, null, inner));
+  }
+
+  private int version(String groupBy) {
+    return groupBy.equals("ORIGINAL_ARTIST") ? 2 : 1;
   }
 
   private String encode(Token token) {

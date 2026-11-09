@@ -16,12 +16,13 @@ public class SongGroupRepository {
       , artist_counts AS (
         SELECT wa.artist_id,count(DISTINCT s.id) AS total
         FROM public_songs s JOIN app.work_artist wa ON wa.work_id=s.work_id
+        WHERE s.song_type='COVER'
         GROUP BY wa.artist_id
       )
       """;
   static final String OTHER_ARTISTS =
       """
-      (NOT EXISTS (SELECT 1 FROM app.work_artist wa WHERE wa.work_id=s.work_id)
+      s.song_type='COVER' AND (NOT EXISTS (SELECT 1 FROM app.work_artist wa WHERE wa.work_id=s.work_id)
        OR EXISTS (SELECT 1 FROM app.work_artist wa JOIN artist_counts ac ON ac.artist_id=wa.artist_id
                   WHERE wa.work_id=s.work_id AND ac.total<2))
       """;
@@ -66,11 +67,15 @@ public class SongGroupRepository {
           """;
           case "ORIGINAL_ARTIST" ->
               """
-          SELECT a.id::text AS group_id,a.name,0 AS section,
+          SELECT 'ORIGINAL' AS group_id,'오리지널' AS name,0 AS section,
+            0 AS activity,0 AS generation,0 AS display,DATE '0001-01-01' AS debut,'' AS sort_name
+          WHERE EXISTS (SELECT 1 FROM public_songs WHERE song_type='ORIGINAL')
+          UNION ALL
+          SELECT a.id::text AS group_id,a.name,1 AS section,
             0 AS activity,0 AS generation,0 AS display,DATE '0001-01-01' AS debut,a.search_name AS sort_name
           FROM app.artist a JOIN artist_counts ac ON ac.artist_id=a.id WHERE ac.total>=2
           UNION ALL
-          SELECT 'OTHERS','기타',1,0,0,0,DATE '0001-01-01',''
+          SELECT 'OTHERS','기타',2,0,0,0,DATE '0001-01-01',''
           WHERE EXISTS (SELECT 1 FROM public_songs s WHERE
           """
                   + OTHER_ARTISTS
