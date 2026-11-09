@@ -14,7 +14,7 @@ it('검색 조건 타입은 실제 계약을 보존한다', () => {
     'ALL' | 'COVER' | 'ORIGINAL' | undefined
   >()
   expectTypeOf<SongQuery['sort']>().toEqualTypeOf<
-    'LATEST' | 'RELEVANCE' | 'VIEWS' | undefined
+    'LATEST' | 'OLDEST' | 'RELEVANCE' | 'VIEWS' | undefined
   >()
   expectTypeOf<SongQuery['mode']>().toEqualTypeOf<
     'BROWSE' | 'SEARCH' | undefined

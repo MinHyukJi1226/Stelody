@@ -17,7 +17,7 @@ const participants = [
   },
 ]
 
-test('다인 참여곡에 콜라보 배지를 붙이지 않고 등록된 특별 목적 문구만 표시한다', async ({
+test('전체곡의 작은 카드는 유형·제목·참여자를 표시하고 상세 배지를 추가하지 않는다', async ({
   page,
 }) => {
   const songs = [
@@ -44,8 +44,8 @@ test('다인 참여곡에 콜라보 배지를 붙이지 않고 등록된 특별 
   })
   await expect(multi).toContainText('외부 참여자')
   await expect(page.getByText('콜라보', { exact: true })).toHaveCount(0)
-  await expect(page.getByText('생일 기념', { exact: true })).toBeVisible()
-  await expect(page.getByText('게임 협업', { exact: true })).toBeVisible()
+  await expect(page.getByText('생일 기념', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('게임 협업', { exact: true })).toHaveCount(0)
 })
 
 test('상세 배지는 참여 인원과 무관하게 특별 목적 설정과 등록 문구를 따른다', async ({
