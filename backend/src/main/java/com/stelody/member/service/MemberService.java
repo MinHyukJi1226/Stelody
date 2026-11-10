@@ -83,10 +83,9 @@ public class MemberService {
   }
 
   public SongDtos.Page songs(
-      UUID id, String type, boolean multipleParticipants, String sort, int size, String cursor) {
+      UUID id, String type, String participation, String sort, int size, String cursor) {
     members.find(id).orElseThrow(CatalogException::missing);
     return songs.list(
-        SongQuery.create(null, type, null, null, multipleParticipants, sort, size, "BROWSE", id),
-        cursor);
+        SongQuery.create(null, type, null, null, participation, sort, size, "BROWSE", id), cursor);
   }
 }

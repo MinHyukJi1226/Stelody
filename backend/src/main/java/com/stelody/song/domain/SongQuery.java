@@ -16,13 +16,31 @@ public record SongQuery(
     String type,
     List<UUID> memberIds,
     Integer year,
-    boolean multipleParticipants,
+    String participation,
     String sort,
     int size,
     boolean emptySearch,
     UUID requiredMember,
     LocalDate startDate,
     LocalDate endDate) {
+  public boolean multipleParticipants() {
+    return participation.equals("MULTIPLE");
+  }
+
+  public static SongQuery create(
+      String q,
+      String type,
+      List<UUID> members,
+      Integer year,
+      String participation,
+      String sort,
+      int size,
+      String mode,
+      UUID requiredMember) {
+    return create(
+        q, type, members, year, participation, sort, size, mode, requiredMember, null, null);
+  }
+
   public static SongQuery create(
       String q,
       String type,
@@ -49,6 +67,34 @@ public record SongQuery(
       UUID requiredMember,
       String startDate,
       String endDate) {
+    return create(
+        q,
+        type,
+        members,
+        year,
+        multipleParticipants ? "MULTIPLE" : "ALL",
+        sort,
+        size,
+        mode,
+        requiredMember,
+        startDate,
+        endDate);
+  }
+
+  private static SongQuery create(
+      String q,
+      String type,
+      List<UUID> members,
+      Integer year,
+      String participation,
+      String sort,
+      int size,
+      String mode,
+      UUID requiredMember,
+      String startDate,
+      String endDate) {
+    if (participation == null || !List.of("ALL", "SOLO", "MULTIPLE").contains(participation))
+      throw CatalogException.invalid();
     var errors = new ArrayList<ApiFieldError>();
     var start = parseDate("startDate", startDate, errors);
     var end = parseDate("endDate", endDate, errors);
@@ -85,7 +131,7 @@ public record SongQuery(
         actualType,
         ids,
         year,
-        multipleParticipants,
+        participation,
         actualSort,
         size,
         actualMode.equals("SEARCH") && normalized.isEmpty(),

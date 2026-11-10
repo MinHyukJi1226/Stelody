@@ -39,16 +39,26 @@ public class MemberController {
   }
 
   @GetMapping("/api/v1/members/{id}/songs")
-  @Operation(summary = "멤버의 공개 곡 목록")
+  @Operation(
+      summary = "멤버의 공개 곡 목록",
+      description =
+          "participation=ALL(전체)·SOLO(확정 참여자 1명)·MULTIPLE(2명 이상)을 지원합니다. 멤버와 외부 아티스트의 확정 참여자를 합산하며 미확정 참여자는 제외합니다. type·정렬·totalCount·커서에 동일한 조건을 적용합니다. 참여 조건을 바꾸면 커서를 버리고 첫 페이지부터 조회합니다.")
   public SongDtos.Page songs(
       @PathVariable UUID id,
       @RequestParam(required = false) String type,
+      @Parameter(
+              schema =
+                  @io.swagger.v3.oas.annotations.media.Schema(
+                      allowableValues = {"ALL", "SOLO", "MULTIPLE"}))
+          @RequestParam(required = false)
+          String participation,
       @RequestParam(required = false) Boolean multipleParticipants,
       @Parameter(deprecated = true) @RequestParam(required = false) Boolean collaboration,
       @RequestParam(required = false) String sort,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String cursor) {
-    boolean participants = ParticipantFilters.resolve(multipleParticipants, collaboration);
+    String participants =
+        ParticipantFilters.resolve(participation, multipleParticipants, collaboration);
     return members.songs(id, type, participants, sort, size, cursor);
   }
 }

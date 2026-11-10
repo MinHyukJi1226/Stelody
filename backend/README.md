@@ -405,3 +405,18 @@ GET /api/v1/songs/groups/OTHERS/songs?groupBy=ORIGINAL_ARTIST&sort=OLDEST&size=2
 그룹 기준은 요청마다 현재 공개 카탈로그로 계산합니다. 곡 공개·연결·이름·멤버 표시 순서 변경이 요청 사이에 발생하면 그룹 구성·위치와 곡 수가 달라질 수 있으므로 분류를 다시 선택할 때는 커서를 버리고 새로 조회합니다. 같은 응답의 그룹·곡·totalCount·조회수 집계는 한 DB 스냅샷을 사용합니다. 익명 조회이며 공개 GET에 CSRF는 필요하지 않습니다. OpenAPI 검증 산출물은 backend/build/openapi/stelody-openapi.json입니다.
 
 원곡 가수별 분류의 ORIGINAL·가수별·OTHERS 그룹 모두 선택한 정렬과 독립 곡 커서를 사용합니다. ORIGINAL 그룹은 곡이 없으면 생략합니다. 해당 분류의 커서 형식은 v2이며 이전 v1 커서는 400 INVALID_CATALOG_QUERY로 거부하므로 처음부터 재조회합니다. TYPE·MEMBER 커서 형식은 v1입니다.
+
+
+### 멤버별 곡의 참여 인원 필터
+
+GET `/api/v1/members/{id}/songs`의 `participation`은 ALL(전체), SOLO(개인), MULTIPLE(다인)입니다. 개인은 멤버·외부 아티스트의 확정 참여자가 합계 1명, 다인은 2명 이상입니다. 미확정 참여자는 합계에서 제외하며 해당 멤버의 확정 참여·기존 공개 조건을 만족하는 곡만 반환합니다. type=COVER 및 LATEST·OLDEST·RELEVANCE·VIEWS 정렬과 조합할 수 있고 totalCount와 모든 커서 페이지에 동일하게 적용합니다.
+
+participation을 생략하면 기존 multipleParticipants·collaboration을 사용하며 모두 생략하면 ALL입니다. 기존 false는 ALL, true는 MULTIPLE입니다. 함께 보내면 같은 의미만 허용하고, SOLO에서는 기존 불리언을 생략합니다. 기존 두 불리언을 함께 지정하면 값이 같아야 합니다. 충돌 시 400 INVALID_CATALOG_QUERY와 충돌 필드의 CONFLICTING_FILTER를 반환합니다. 잘못된 participation은 같은 오류 코드와 participation 필드의 INVALID_VALUE입니다.
+
+```http
+GET /api/v1/members/{id}/songs?type=COVER&participation=ALL&sort=LATEST
+GET /api/v1/members/{id}/songs?type=COVER&participation=SOLO&sort=OLDEST
+GET /api/v1/members/{id}/songs?type=COVER&participation=MULTIPLE&sort=VIEWS
+```
+
+참여 인원·멤버·곡 유형·정렬을 바꾸면 기존 커서는 400 INVALID_CATALOG_QUERY이며 첫 페이지부터 다시 조회합니다. ALL·MULTIPLE은 같은 의미의 기존 불리언 커서와 호환됩니다. VIEWS에서 조회수 집계가 바뀌면 기존과 같이 409 VIEW_PUBLICATION_CHANGED입니다. 요청 예시의 {id}에는 멤버 UUID를 사용합니다.

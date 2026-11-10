@@ -236,6 +236,7 @@ final class SongSqlQueries {
       params.put("rangeEnd", Timestamp.from(query.rangeEndExclusive()));
     }
     if (query.multipleParticipants()) sql.append(" AND s.participant_count > 1");
+    if (query.participation().equals("SOLO")) sql.append(" AND s.participant_count = 1");
   }
 
   private static void appendCursor(

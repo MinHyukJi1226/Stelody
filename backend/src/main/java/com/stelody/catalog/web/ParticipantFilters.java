@@ -7,6 +7,30 @@ import java.util.List;
 public final class ParticipantFilters {
   private ParticipantFilters() {}
 
+  public static String resolve(
+      String participation, Boolean multipleParticipants, Boolean collaboration) {
+    boolean legacy = resolve(multipleParticipants, collaboration);
+    String legacyValue = legacy ? "MULTIPLE" : "ALL";
+    if (participation == null) return legacyValue;
+    if (!List.of("ALL", "SOLO", "MULTIPLE").contains(participation))
+      throw CatalogException.invalid(
+          List.of(
+              new ApiFieldError(
+                  "participation", "INVALID_VALUE", "ALL, SOLO, MULTIPLE 중 하나를 지정해 주세요")));
+    if ((multipleParticipants != null || collaboration != null)
+        && !participation.equals(legacyValue)) {
+      String message = "participation과 기존 참여 인원 필터의 의미가 일치해야 합니다";
+      var fields = new java.util.ArrayList<ApiFieldError>();
+      fields.add(new ApiFieldError("participation", "CONFLICTING_FILTER", message));
+      if (multipleParticipants != null)
+        fields.add(new ApiFieldError("multipleParticipants", "CONFLICTING_FILTER", message));
+      if (collaboration != null)
+        fields.add(new ApiFieldError("collaboration", "CONFLICTING_FILTER", message));
+      throw CatalogException.invalid(fields);
+    }
+    return participation;
+  }
+
   public static boolean resolve(Boolean multipleParticipants, Boolean collaboration) {
     if (multipleParticipants != null
         && collaboration != null
