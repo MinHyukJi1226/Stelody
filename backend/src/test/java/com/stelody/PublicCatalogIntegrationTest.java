@@ -1241,6 +1241,125 @@ class PublicCatalogIntegrationTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"LATEST", "OLDEST", "VIEWS"})
+  void memberParticipationAppliesToCountAndEveryCursorPage(String sort) throws Exception {
+    String path = "/api/v1/members/" + M1 + "/songs";
+    assertThat(request(path + "?participation=SOLO").path("totalCount").asLong()).isZero();
+    UUID soloOne = id(501), soloTwo = id(502), external = id(503);
+    song(soloOne, "Solo One", "COVER", null, "2026-01-08T00:00:00Z", M1);
+    song(soloTwo, "Solo Two", "COVER", null, "2026-01-09T00:00:00Z", M1);
+    song(external, "External duet", "COVER", null, "2026-01-10T00:00:00Z", M1);
+    writer.update("INSERT INTO app.song_member VALUES(?,?,1,false)", soloOne, M2);
+    writer.update("INSERT INTO app.song_external_artist VALUES(?,?,0,false)", soloOne, A1);
+    writer.update("INSERT INTO app.song_external_artist VALUES(?,?,0,true)", external, A1);
+    publish(100L, 50L, 0L, null);
+    var expected =
+        Map.of(
+            "ALL",
+            List.of(S1, soloOne, soloTwo, external),
+            "SOLO",
+            List.of(soloOne, soloTwo),
+            "MULTIPLE",
+            List.of(S1, external));
+    for (var entry : expected.entrySet()) {
+      var seen = new ArrayList<String>();
+      String cursor = null;
+      do {
+        var req =
+            get(path)
+                .param("participation", entry.getKey())
+                .param("type", "COVER")
+                .param("sort", sort)
+                .param("size", "1");
+        if (cursor != null) req.param("cursor", cursor);
+        var page =
+            mapper.readTree(
+                mvc.perform(req)
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString());
+        assertThat(page.path("totalCount").asLong()).isEqualTo(entry.getValue().size());
+        page.path("items").forEach(item -> seen.add(item.path("id").asText()));
+        cursor = page.path("nextCursor").isNull() ? null : page.path("nextCursor").asText();
+      } while (cursor != null);
+      assertThat(seen)
+          .containsExactlyInAnyOrderElementsOf(
+              entry.getValue().stream().map(UUID::toString).toList());
+      var first =
+          request(
+              path + "?participation=" + entry.getKey() + "&type=COVER&sort=" + sort + "&size=1");
+      String next = first.path("nextCursor").asText();
+      String other = entry.getKey().equals("SOLO") ? "ALL" : "SOLO";
+      mvc.perform(
+              get(path)
+                  .param("participation", other)
+                  .param("type", "COVER")
+                  .param("sort", sort)
+                  .param("cursor", next))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("INVALID_CATALOG_QUERY"));
+    }
+  }
+
+  @Test
+  void memberParticipationKeepsLegacySemanticsAndRejectsConflictingAliases() throws Exception {
+    String path = "/api/v1/members/" + M1 + "/songs";
+    for (boolean value : List.of(false, true)) {
+      String participation = value ? "MULTIPLE" : "ALL";
+      var old = request(path + "?multipleParticipants=" + value + "&size=1");
+      String cursor = old.path("nextCursor").asText();
+      mvc.perform(get(path).param("participation", participation).param("cursor", cursor))
+          .andExpect(status().isOk());
+      mvc.perform(
+              get(path)
+                  .param("participation", participation)
+                  .param("multipleParticipants", "" + value)
+                  .param("collaboration", "" + value))
+          .andExpect(status().isOk());
+      // The legacy hash must retain its previous JSON property identity.
+      var token = mapper.readTree(java.util.Base64.getUrlDecoder().decode(cursor));
+      var identity = new java.util.LinkedHashMap<String, Object>();
+      identity.put("text", "");
+      identity.put("type", "ALL");
+      identity.put("members", List.of());
+      identity.put("year", null);
+      identity.put("collaboration", value);
+      identity.put("sort", "LATEST");
+      identity.put("emptySearch", false);
+      identity.put("requiredMember", M1);
+      String hash =
+          java.util.HexFormat.of()
+              .formatHex(
+                  java.security.MessageDigest.getInstance("SHA-256")
+                      .digest(mapper.writeValueAsBytes(identity)));
+      assertThat(token.path("queryHash").asText()).isEqualTo(hash);
+    }
+    for (String query :
+        List.of(
+            "participation=SOLO&multipleParticipants=false",
+            "participation=SOLO&multipleParticipants=true",
+            "participation=ALL&multipleParticipants=true",
+            "participation=MULTIPLE&multipleParticipants=false",
+            "participation=SOLO&collaboration=false",
+            "participation=ALL&multipleParticipants=false&collaboration=true")) {
+      var error =
+          mapper.readTree(
+              mvc.perform(get(path + "?" + query))
+                  .andExpect(status().isBadRequest())
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString());
+      assertThat(error.path("code").asText()).isEqualTo("INVALID_CATALOG_QUERY");
+      assertThat(error.path("fieldErrors").toString()).contains("CONFLICTING_FILTER");
+    }
+    mvc.perform(get(path).param("participation", "WRONG"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors[0].field").value("participation"))
+        .andExpect(jsonPath("$.fieldErrors[0].code").value("INVALID_VALUE"));
+  }
+
   @Test
   void oldestSortTraversesEverySongOnceInPublishedDateAndIdOrder() throws Exception {
     var expected = request("/api/v1/songs?sort=LATEST&size=50").path("items");

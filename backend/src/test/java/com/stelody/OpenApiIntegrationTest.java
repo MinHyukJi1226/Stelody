@@ -661,6 +661,11 @@ class OpenApiIntegrationTest {
           }
           case "type" -> assertParameterEnum(schema, "ALL", "COVER", "ORIGINAL");
           case "sort" -> assertParameterEnum(schema, "LATEST", "OLDEST", "RELEVANCE", "VIEWS");
+          case "participation" -> {
+            assertParameterEnum(schema, "ALL", "SOLO", "MULTIPLE");
+            assertThat(parameter.path("description").asText())
+                .contains("CONFLICTING_FILTER", "SOLO");
+          }
           case "mode" -> assertParameterEnum(schema, "BROWSE", "SEARCH");
           default -> {}
         }

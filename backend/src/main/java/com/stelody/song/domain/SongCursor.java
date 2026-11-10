@@ -77,7 +77,8 @@ public class SongCursor {
                 query.emptySearch(),
                 query.requiredMember(),
                 query.startDate(),
-                query.endDate()));
+                query.endDate(),
+                query.participation().equals("SOLO") ? "SOLO" : null));
     try {
       return HexFormat.of()
           .formatHex(
@@ -102,5 +103,8 @@ public class SongCursor {
           java.time.LocalDate startDate,
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-          java.time.LocalDate endDate) {}
+          java.time.LocalDate endDate,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          String participation) {}
 }

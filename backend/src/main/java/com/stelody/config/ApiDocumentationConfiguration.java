@@ -836,10 +836,18 @@ public class ApiDocumentationConfiguration {
               "직전 응답의 nextCursor를 그대로 전달합니다. 그룹 목록 커서와 그룹 내부 곡 커서는 서로 바꿀 수 없고 분류·정렬·그룹을 바꾸면 400 INVALID_CATALOG_QUERY입니다. size 변경은 가능합니다. VIEWS 정렬은 조회수 집계 교체 시 409 VIEW_PUBLICATION_CHANGED로 처음부터 재조회합니다.");
         else parameter.setDescription("직전 응답의 nextCursor를 그대로 전달합니다. 필터와 정렬 조건을 유지합니다.");
       }
+      case "participation" -> {
+        schema.setEnum(List.of("ALL", "SOLO", "MULTIPLE"));
+        parameter.setDescription(
+            "멤버·외부 아티스트의 확정 참여자 합계 기준입니다. ALL은 제한 없음, SOLO는 1명, MULTIPLE은 2명 이상입니다. 생략 시 기존 multipleParticipants/collaboration 값을 따르며 모두 생략하면 ALL입니다. 기존 false=ALL, true=MULTIPLE이며 동시에 지정한 값의 의미가 다르면 400 INVALID_CATALOG_QUERY, fieldErrors[].code=CONFLICTING_FILTER입니다. SOLO 요청에서는 기존 불리언을 생략합니다. type·정렬·totalCount·커서에 같은 조건을 적용하며 조건 변경 후 기존 커서는 400입니다.");
+      }
       case "multipleParticipants" -> {
         schema.setDefault(false);
         parameter.setDescription(
-            "기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다. 이전 collaboration과 함께 보내면 값이 같아야 합니다.");
+            "기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다. 이전 collaboration과 함께 보내면 값이 같아야 합니다."
+                + (path.equals("/api/v1/members/{id}/songs")
+                    ? " participation을 함께 지정하면 false는 ALL, true는 MULTIPLE과만 일치하며 SOLO와의 동시 지정은 CONFLICTING_FILTER입니다."
+                    : ""));
       }
       case "collaboration" ->
           parameter.setDescription(
