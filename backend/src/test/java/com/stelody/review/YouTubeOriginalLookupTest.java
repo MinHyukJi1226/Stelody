@@ -117,6 +117,33 @@ class YouTubeOriginalLookupTest {
   }
 
   @Test
+  void automaticSearchNeedsArtistEvidenceAndOneMatchingRelease() {
+    videos(SOURCE, List.of(video(SOURCE, MEMBER, "Member", "Milky Way", "")));
+    assertThat(client("key").findAutomatic(target(first, SOURCE))).isEmpty();
+    server.verify(0, getRequestedFor(urlPathEqualTo("/search")));
+
+    videos(SOURCE, List.of(video(SOURCE, MEMBER, "Member", "Milky Way", "원곡자: Artist")));
+    search(ORIGINAL, "original002");
+    videos(
+        ORIGINAL + ",original002",
+        List.of(
+            video(ORIGINAL, ARTIST, "Artist", "Artist - Milky Way [Official MV]", ""),
+            video("original002", ARTIST, "Artist", "Artist - Milky Way [Official Audio]", "")));
+    assertThat(client("key").findAutomatic(target(first, SOURCE))).isEmpty();
+
+    search(ORIGINAL);
+    videos(
+        ORIGINAL,
+        List.of(video(ORIGINAL, ARTIST, "Artist", "Artist - Milky Way [Official MV]", "")));
+    assertThat(client("key").findAutomatic(target(first, SOURCE)))
+        .hasValueSatisfying(
+            evidence -> {
+              assertThat(evidence.videoId()).isEqualTo(ORIGINAL);
+              assertThat(evidence.artists()).containsExactly("Artist");
+            });
+  }
+
+  @Test
   void absentCreditSearchesTitleAndRejectsCoverBeforeChoosingArtistMatchingOriginal() {
     videos(SOURCE, List.of(video(SOURCE, MEMBER, "Member", "Milky Way", "Mix: Engineer")));
     search("original001", "original002");

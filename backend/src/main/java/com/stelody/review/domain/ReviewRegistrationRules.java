@@ -7,7 +7,6 @@ import com.stelody.collector.repository.CollectionRuleStore.Snapshot;
 import com.stelody.review.dto.ReviewDtos;
 import java.text.Normalizer;
 import java.util.*;
-import java.util.regex.Pattern;
 
 /** Builds editable drafts from observed data, without granting new publication authority. */
 public final class ReviewRegistrationRules {
@@ -61,7 +60,7 @@ public final class ReviewRegistrationRules {
           && (!"MEMBER".equals(channel.channelType())
               || credit.member().id().equals(channel.memberId()))) {
         memberIds = List.of(credit.member().id());
-        title = withoutCredit(title, credit.member());
+        title = CollectedSongTitle.withoutCoverCredit(title, credit.member());
       }
     }
     if (title.isBlank() || title.length() > 300 || SearchText.normalize(title).length() > 400)
@@ -96,25 +95,6 @@ public final class ReviewRegistrationRules {
         : Normalizer.normalize(value, Normalizer.Form.NFKC)
             .replaceAll("(?U)[\\s\\p{Z}]+", " ")
             .strip();
-  }
-
-  private String withoutCredit(String title, CoverPublicationRules.Member member) {
-    String names =
-        member.names().stream()
-            .map(this::display)
-            .map(Pattern::quote)
-            .reduce((a, b) -> a + "|" + b)
-            .orElseThrow();
-    String credit = "(?:" + names + ")(?:\\s*\\((?:" + names + ")\\))?";
-    return title
-        .replaceFirst(
-            "(?iu)\\s*(?:/\\s*"
-                + credit
-                + "\\s+cover|(?<![\\p{L}\\p{N}])covered\\s+by\\s+"
-                + credit
-                + ")\\s*$",
-            "")
-        .strip();
   }
 
   private VideoKind originalKind(String title) {
