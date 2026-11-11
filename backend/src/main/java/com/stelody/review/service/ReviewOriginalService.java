@@ -55,15 +55,21 @@ public class ReviewOriginalService {
       if (outcome != null && outcome.ambiguous()) continue;
       var found = outcome == null ? null : outcome.evidence();
       if (found != null) {
-        var work = store(found, actor);
+        var work = store(found, actor, REASON);
         if (work != null) result.put(target.id(), work.id());
       }
     }
     return Map.copyOf(result);
   }
 
-  private Work store(Evidence evidence, UUID actor) {
-    String reason = REASON + " (" + evidence.method() + "; " + evidence.sourceUrl() + ")";
+  @Transactional(propagation = Propagation.MANDATORY)
+  public Work storeAutomatic(Evidence evidence) {
+    queries.lock();
+    return store(evidence, null, "자동 등록 곡 원곡 정보 보완");
+  }
+
+  private Work store(Evidence evidence, UUID actor, String action) {
+    String reason = action + " (" + evidence.method() + "; " + evidence.sourceUrl() + ")";
     var linked = queries.byVideo(evidence.videoId());
     if (linked.size() > 1) return null;
     var matches =

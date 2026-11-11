@@ -15,6 +15,8 @@ import java.net.URI;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
@@ -51,6 +53,10 @@ class DiscoveryCollectorIntegrationTest {
   @Autowired ObjectMapper mapper;
   @Autowired com.stelody.admin.service.CatalogManagementService catalogManagement;
   @Autowired org.springframework.test.web.servlet.MockMvc mvc;
+  @Autowired org.springframework.jdbc.core.simple.JdbcClient runtimeJdbc;
+  @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
+  @Autowired com.stelody.review.service.ReviewOriginalService originals;
+  @Autowired com.stelody.admin.repository.CatalogAdminQueries adminQueries;
   JdbcTemplate writer, collector;
   HikariDataSource source;
   WireMockServer server;
@@ -722,6 +728,147 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   @Test
+  void collectedCoversPublishWithCleanTitleAndShareVerifiedOriginal() {
+    enableAuto();
+    String title = "발랄라이카 [ BALALAIKA / 9Lana ] / 아오쿠모 린 Cover";
+    page(null, null, 1);
+    clearCovers(title, "none", "PT3M12S", "2026-09-01T00:00:00Z", 1);
+    assertThat(autoRun(NOW, true, true, false).status()).isEqualTo("SUCCEEDED");
+    observePremiere(2, title, NOW, false, true);
+    observePremiere(2, title, NOW.plusSeconds(360), true, true);
+
+    assertThat(writer.queryForList("SELECT title FROM app.song_entry", String.class))
+        .containsExactly("발랄라이카", "발랄라이카");
+    assertThat(writer.queryForList("SELECT source_title FROM app.video", String.class))
+        .containsExactly(title, title);
+    assertThat(writer.queryForList("SELECT visibility FROM app.song_entry", String.class))
+        .containsOnly("PUBLISHED");
+    assertThat(writer.queryForObject("SELECT count(work_id) FROM app.song_entry", Integer.class))
+        .isZero();
+    writer.execute("UPDATE app.cover_auto_registration SET original_lookup_after=now()");
+    writer.execute("UPDATE app.premiere_auto_registration SET original_lookup_after=now()");
+
+    String original = "S2Xu6_XWy4M";
+    for (int n : List.of(1, 2)) {
+      stubOriginalVideo(
+          yt(n),
+          YTCHANNEL,
+          "아오쿠모 린",
+          title,
+          "🐰Original : 「BALALAIKA」 / 9Lana\nhttps://youtu.be/" + original);
+    }
+    stubOriginalVideo(original, "UC" + "z".repeat(22), "9Lana", "【MV】 「BALALAIKA」 / 9Lana", "");
+    var enrichment =
+        new com.stelody.review.service.AutomaticOriginalService(
+            runtimeJdbc,
+            new com.stelody.review.youtube.YouTubeOriginalLookup(settings()),
+            originals,
+            adminQueries,
+            transactionManager);
+    enrichment.runNext();
+    enrichment.runNext();
+    enrichment.runNext();
+
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(DISTINCT work_id) FROM app.song_entry", Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForList(
+                """
+        SELECT w.title||'/'||a.name||'/'||l.url FROM app.song_entry s
+        JOIN app.musical_work w ON w.id=s.work_id JOIN app.work_artist wa ON wa.work_id=w.id
+        JOIN app.artist a ON a.id=wa.artist_id JOIN app.external_link l ON l.work_id=w.id
+        """,
+                String.class))
+        .containsExactly(
+            "BALALAIKA/9Lana/https://www.youtube.com/watch?v=" + original,
+            "BALALAIKA/9Lana/https://www.youtube.com/watch?v=" + original);
+    assertThat(writer.queryForList("SELECT version FROM app.song_entry", Long.class))
+        .containsOnly(1L);
+    server.verify(0, getRequestedFor(urlPathEqualTo("/search")));
+    server.verify(
+        2, getRequestedFor(urlPathEqualTo("/videos")).withQueryParam("id", equalTo(original)));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {" Covered by Aokumo Rin", " / 아오쿠모 린 Cover"})
+  void coverTitleProvidesOriginalSearchEvidenceWithoutDescriptionCredits(String credit) {
+    enableAuto();
+    String title = "발랄라이카 [ BALALAIKA / 9Lana ]" + credit;
+    page(null, null, 1);
+    clearCovers(title, "none", "PT3M12S", "2026-09-01T00:00:00Z", 1);
+    assertThat(autoRun(NOW, true, true, false).status()).isEqualTo("SUCCEEDED");
+    assertThat(writer.queryForObject("SELECT title FROM app.song_entry", String.class))
+        .isEqualTo("발랄라이카");
+    writer.execute("UPDATE app.cover_auto_registration SET original_lookup_after=now()");
+
+    String original = "S2Xu6_XWy4M";
+    stubOriginalVideo(yt(1), YTCHANNEL, "아오쿠모 린", title, "Mix: Engineer");
+    stubOriginalVideo(original, "UC" + "z".repeat(22), "9Lana", "【MV】 「BALALAIKA」 / 9Lana", "");
+    server.stubFor(
+        get(urlPathEqualTo("/search"))
+            .withQueryParam("q", equalTo("BALALAIKA 9Lana original"))
+            .willReturn(
+                okJson(
+                    mapper.writeValueAsString(
+                        Map.of(
+                            "kind",
+                            "youtube#searchListResponse",
+                            "items",
+                            List.of(Map.of("id", Map.of("videoId", original))))))));
+    new com.stelody.review.service.AutomaticOriginalService(
+            runtimeJdbc,
+            new com.stelody.review.youtube.YouTubeOriginalLookup(settings()),
+            originals,
+            adminQueries,
+            transactionManager)
+        .runNext();
+
+    server.verify(
+        1,
+        getRequestedFor(urlPathEqualTo("/search"))
+            .withQueryParam("q", equalTo("BALALAIKA 9Lana original")));
+    assertThat(
+            writer.queryForObject(
+                """
+        SELECT w.title||'/'||a.name||'/'||l.url FROM app.song_entry s
+        JOIN app.musical_work w ON w.id=s.work_id JOIN app.work_artist wa ON wa.work_id=w.id
+        JOIN app.artist a ON a.id=wa.artist_id JOIN app.external_link l ON l.work_id=w.id
+        """,
+                String.class))
+        .isEqualTo("BALALAIKA/9Lana/https://www.youtube.com/watch?v=" + original);
+  }
+
+  private void stubOriginalVideo(
+      String id, String channelId, String channel, String title, String description) {
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .withQueryParam("id", equalTo(id))
+            .willReturn(
+                okJson(
+                    mapper.writeValueAsString(
+                        Map.of(
+                            "kind",
+                            "youtube#videoListResponse",
+                            "items",
+                            List.of(
+                                Map.of(
+                                    "id", id,
+                                    "snippet",
+                                        Map.of(
+                                            "channelId",
+                                            channelId,
+                                            "channelTitle",
+                                            channel,
+                                            "title",
+                                            title,
+                                            "description",
+                                            description),
+                                    "status", Map.of("privacyStatus", "public"))))))));
+  }
+
+  @Test
   void completedBroadcastWithExplicitSoloCreditStaysPendingOnDiscoveryAndRecheck() {
     enableAuto();
     page(null, null, 1);
@@ -1270,6 +1417,13 @@ class DiscoveryCollectorIntegrationTest {
     observePremiere(1, cover, NOW.plusSeconds(420), true, true);
     assertThat(count("song_entry")).isEqualTo(2);
     assertThat(count("premiere_auto_registration")).isEqualTo(2);
+    assertThat(writer.queryForList("SELECT title FROM app.song_entry", String.class))
+        .containsExactlyInAnyOrder("노래", "신곡");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.premiere_auto_registration WHERE original_lookup_after IS NOT NULL",
+                Integer.class))
+        .isEqualTo(1);
     assertThat(writer.queryForList("SELECT song_type FROM app.song_entry", String.class))
         .containsExactlyInAnyOrder("COVER", "ORIGINAL");
     assertThat(writer.queryForList("SELECT visibility FROM app.song_entry", String.class))
