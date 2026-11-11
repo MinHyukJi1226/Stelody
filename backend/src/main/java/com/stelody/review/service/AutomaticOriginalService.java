@@ -33,7 +33,8 @@ public class AutomaticOriginalService {
       String title,
       String sourceTitle,
       boolean premiere,
-      int attempts) {
+      int attempts,
+      List<String> memberNames) {
     String table() {
       return premiere ? "app.premiere_auto_registration" : "app.cover_auto_registration";
     }
@@ -77,7 +78,14 @@ public class AutomaticOriginalService {
               FROM app.premiere_auto_registration WHERE original_lookup_after<=CURRENT_TIMESTAMP
             )
             SELECT d.review_id,d.song_id,d.video_id,v.youtube_id,c.youtube_id,s.title,v.source_title,
-              d.premiere,d.original_lookup_attempts
+              d.premiere,d.original_lookup_attempts,
+              ARRAY(
+                SELECT m.name FROM app.song_member sm JOIN app.member m ON m.id=sm.member_id
+                WHERE sm.song_id=d.song_id AND sm.confirmed
+                UNION
+                SELECT a.alias FROM app.song_member sm JOIN app.member_alias a ON a.member_id=sm.member_id
+                WHERE sm.song_id=d.song_id AND sm.confirmed
+              ) AS member_names
             FROM due d JOIN app.song_entry s ON s.id=d.song_id
               JOIN app.video v ON v.id=d.video_id JOIN app.channel c ON c.id=v.channel_id
             ORDER BY d.original_lookup_after,d.review_id,d.premiere LIMIT 1
@@ -93,16 +101,17 @@ public class AutomaticOriginalService {
                     r.getString(6),
                     r.getString(7),
                     r.getBoolean(8),
-                    r.getInt(9)))
+                    r.getInt(9),
+                    List.of((String[]) r.getArray("member_names").getArray())))
         .optional()
         .orElse(null);
   }
 
   private YouTubeOriginalLookup.Target target(Pending pending) {
     var titles = new LinkedHashSet<String>();
-    String raw = OriginalCredits.text(pending.sourceTitle());
-    int credit = raw.lastIndexOf('/');
-    if (credit > raw.lastIndexOf(']')) raw = raw.substring(0, credit).strip();
+    String raw =
+        CollectedSongTitle.withoutCoverCredit(
+            OriginalCredits.text(pending.sourceTitle()), pending.memberNames());
     var original = CollectedSongTitle.originalCredit(raw);
     original
         .map(CollectedSongTitle.Credit::original)

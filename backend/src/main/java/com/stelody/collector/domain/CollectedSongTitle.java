@@ -22,10 +22,10 @@ public final class CollectedSongTitle {
                 "")
             .strip();
     if (cover) {
-      String withoutMember = withoutCoverCredit(title, member);
+      String withoutMember = withoutCoverCredit(title, member.names());
       return originalCredit(withoutMember).map(Credit::title).orElse(withoutMember);
     }
-    String credit = memberCredit(member);
+    String credit = memberCredit(member.names());
     return title
         .replaceFirst("(?iu)^" + credit + "\\s+[-–—]\\s+", "")
         .replaceFirst("(?iu)\\s*/\\s*" + credit + "(?:\\s+(?:original|오리지널))?$", "")
@@ -33,8 +33,9 @@ public final class CollectedSongTitle {
         .strip();
   }
 
-  public static String withoutCoverCredit(String title, CoverPublicationRules.Member member) {
-    String credit = memberCredit(member);
+  public static String withoutCoverCredit(String title, List<String> names) {
+    if (names.isEmpty()) return title;
+    String credit = memberCredit(names);
     return title
         .replaceFirst(
             "(?iu)\\s*(?:/\\s*"
@@ -46,9 +47,9 @@ public final class CollectedSongTitle {
         .strip();
   }
 
-  private static String memberCredit(CoverPublicationRules.Member member) {
+  private static String memberCredit(List<String> memberNames) {
     String names =
-        member.names().stream()
+        memberNames.stream()
             .map(OriginalCredits::text)
             .filter(name -> !name.isEmpty())
             .map(Pattern::quote)

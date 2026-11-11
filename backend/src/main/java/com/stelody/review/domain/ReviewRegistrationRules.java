@@ -60,7 +60,7 @@ public final class ReviewRegistrationRules {
           && (!"MEMBER".equals(channel.channelType())
               || credit.member().id().equals(channel.memberId()))) {
         memberIds = List.of(credit.member().id());
-        title = CollectedSongTitle.withoutCoverCredit(title, credit.member());
+        title = CollectedSongTitle.withoutCoverCredit(title, credit.member().names());
       }
     }
     if (title.isBlank() || title.length() > 300 || SearchText.normalize(title).length() > 400)
