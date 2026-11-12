@@ -6576,7 +6576,7 @@
     },
     "/api/v1/members/{id}/songs": {
       "get": {
-        "description": "업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "description": "participation=ALL(전체)·SOLO(확정 참여자 1명)·MULTIPLE(2명 이상)을 지원합니다. 멤버와 외부 아티스트의 확정 참여자를 합산하며 미확정 참여자는 제외합니다. type·정렬·totalCount·커서에 동일한 조건을 적용합니다. 참여 조건을 바꾸면 커서를 버리고 첫 페이지부터 조회합니다.\n\n업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
         "operationId": "get_members_id_songs",
         "parameters": [
           {
@@ -6592,7 +6592,14 @@
             "schema": { "type": "string", "enum": ["ALL", "COVER", "ORIGINAL"] }
           },
           {
-            "description": "기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다. 이전 collaboration과 함께 보내면 값이 같아야 합니다.",
+            "description": "멤버·외부 아티스트의 확정 참여자 합계 기준입니다. ALL은 제한 없음, SOLO는 1명, MULTIPLE은 2명 이상입니다. 생략 시 기존 multipleParticipants/collaboration 값을 따르며 모두 생략하면 ALL입니다. 기존 false=ALL, true=MULTIPLE이며 동시에 지정한 값의 의미가 다르면 400 INVALID_CATALOG_QUERY, fieldErrors[].code=CONFLICTING_FILTER입니다. SOLO 요청에서는 기존 불리언을 생략합니다. type·정렬·totalCount·커서에 같은 조건을 적용하며 조건 변경 후 기존 커서는 400입니다.",
+            "in": "query",
+            "name": "participation",
+            "required": false,
+            "schema": { "type": "string", "enum": ["ALL", "SOLO", "MULTIPLE"] }
+          },
+          {
+            "description": "기본 false는 참여 인원 제한 없음, true이면 확정 멤버·외부 참여자가 합계 2명 이상인 공개 곡만 조회합니다. 게임·IP·브랜드 협업 필터가 아닙니다. totalCount와 커서에도 동일하게 적용되며 값을 바꾸면 첫 페이지부터 조회합니다. 이전 collaboration과 함께 보내면 값이 같아야 합니다. participation을 함께 지정하면 false는 ALL, true는 MULTIPLE과만 일치하며 SOLO와의 동시 지정은 CONFLICTING_FILTER입니다.",
             "in": "query",
             "name": "multipleParticipants",
             "required": false,

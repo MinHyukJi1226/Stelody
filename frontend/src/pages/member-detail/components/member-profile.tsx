@@ -1,78 +1,87 @@
-import type { CSSProperties } from 'react'
 import type { MemberDetail } from '@/features/members/queries'
-import { memberAccent } from '@/features/members/member-colors'
 import { externalUrl } from '@/shared/lib/external-url'
 import { Artwork } from '@/shared/ui/artwork'
-import { Button } from '@/shared/ui/button'
+import youtubeIcon from '@/shared/assets/social/youtube-icon.png'
+import chzzkIcon from '@/shared/assets/social/chzzk-icon.png'
+import xLogo from '@/shared/assets/social/x-logo.svg'
 
 export function MemberProfile({ detail }: { detail: MemberDetail }) {
   const { member, channels } = detail
-  const graduated = member.activityStatus === 'GRADUATED'
   const links = [
     ...channels.map((channel) => ({
+      kind: 'youtube',
       label:
         channels.length === 1 ? '공식 YouTube' : `YouTube · ${channel.name}`,
       url: channel.url,
     })),
-    { label: '치지직 채널', url: member.chzzkUrl },
-    { label: 'X', url: member.xUrl },
-  ].flatMap(({ label, url }) => {
+    { kind: 'chzzk', label: '치지직 채널', url: member.chzzkUrl },
+    { kind: 'x', label: 'X', url: member.xUrl },
+  ].flatMap(({ kind, label, url }) => {
     const href = url ? externalUrl(url) : undefined
-    return href ? [{ label, href }] : []
+    return href ? [{ kind, label, href }] : []
   })
-  const affiliation = [
-    member.unitName,
-    member.generation == null ? null : `${member.generation}기`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
   return (
     <section
       aria-labelledby="member-name"
-      style={{ '--member-accent': memberAccent(member.name) } as CSSProperties}
-      className="flex min-w-0 flex-col items-start gap-4 rounded-2xl bg-tint p-6 md:bg-[linear-gradient(to_right,var(--surface)_50%,var(--member-accent))] md:p-10"
+      className="home-section-enter flex min-w-0 items-center gap-5"
     >
       <Artwork
         src={member.profileImageUrl}
         avatar
-        className="size-[72px] rounded-full"
+        className="size-24 rounded-full"
       />
-      {affiliation && (
-        <p className="break-words text-xs leading-[1.5] text-brand">
-          {affiliation}
-        </p>
-      )}
-      <h1
-        id="member-name"
-        className="w-full break-words text-[32px] font-bold leading-[1.5]"
-      >
-        {member.name}
-        {graduated && ' (졸업)'}
-      </h1>
-      <p className="text-base leading-[1.5] text-muted">
-        {graduated
-          ? '졸업 · 공개곡은 계속 만나볼 수 있어요.'
-          : '활동 중 · 공식 채널의 공개곡 모음'}
-      </p>
-      {links.length > 0 && (
-        <div
-          className="flex w-full flex-wrap gap-2"
-          aria-label="공식 채널 링크"
+      <div className="flex min-w-0 flex-col gap-1">
+        <h1
+          id="member-name"
+          className="break-words text-2xl font-bold leading-[1.5]"
         >
-          {links.map(({ label, href }) => (
-            <Button
-              key={`${label}-${href}`}
-              asChild
-              variant="primary"
-              className="max-w-full whitespace-normal break-words"
-            >
-              <a href={href} target="_blank" rel="noopener noreferrer">
-                {label} ↗
+          {member.name}
+          {member.activityStatus === 'GRADUATED' && (
+            <span className="sr-only"> (졸업)</span>
+          )}
+        </h1>
+        {(member.activityStatus === 'GRADUATED' || member.unitName) && (
+          <p className="break-words text-sm">
+            {member.activityStatus === 'GRADUATED'
+              ? 'GRADUATE'
+              : member.unitName}
+          </p>
+        )}
+        {links.length > 0 && (
+          <div className="flex flex-wrap gap-2" aria-label="공식 채널 링크">
+            {links.map(({ kind, label, href }) => (
+              <a
+                key={`${label}-${href}`}
+                href={href}
+                aria-label={label}
+                title={label}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black transition-opacity hover:opacity-75"
+                style={
+                  kind === 'youtube'
+                    ? { backgroundColor: '#ff0033' }
+                    : undefined
+                }
+              >
+                <img
+                  src={
+                    kind === 'youtube'
+                      ? youtubeIcon
+                      : kind === 'chzzk'
+                        ? chzzkIcon
+                        : xLogo
+                  }
+                  alt=""
+                  width={kind === 'youtube' ? 40 : kind === 'chzzk' ? 32 : 16}
+                  height={kind === 'youtube' ? 40 : kind === 'chzzk' ? 32 : 16}
+                  className={`max-w-none shrink-0 object-contain ${kind === 'youtube' ? 'size-10' : kind === 'chzzk' ? 'size-8' : 'size-4'}`}
+                />
               </a>
-            </Button>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   )
 }
