@@ -668,3 +668,25 @@ test('펼친 섹션에서 곡 상세로 갔다 돌아오면 커버 조건과 받
   await expect(cover.getByRole('article')).toHaveCount(21)
   expect(cursors).toEqual([null, 'cover-next'])
 })
+
+test('마지막 캐러셀 페이지에서도 섹션의 모든 곡을 펼칠 수 있다', async ({
+  page,
+}) => {
+  const songs = Array.from({ length: 8 }, (_, index) => memberSong(index + 1))
+  await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) =>
+    route.fulfill({ json: { ...emptyPage, items: songs, totalCount: 8 } }),
+  )
+  await page.goto(`/members/${member.id}`)
+  const cover = page.getByRole('region', { name: '커버 전체 곡 목록' })
+  const next = cover.getByRole('button', { name: '커버 전체 다음 곡 보기' })
+  const pages = (page.viewportSize()?.width ?? 0) >= 1024 ? 2 : 4
+  for (let index = 1; index < pages; index++) {
+    await next.click()
+    await expect(cover.getByRole('article').first()).toContainText(
+      songs[index * (pages === 2 ? 6 : 2)]!.title,
+    )
+  }
+  await expect(next).toHaveCount(0)
+  await cover.getByRole('button', { name: '커버 전체 곡 모두 펼치기' }).click()
+  await expect(cover.getByRole('article')).toHaveCount(8)
+})

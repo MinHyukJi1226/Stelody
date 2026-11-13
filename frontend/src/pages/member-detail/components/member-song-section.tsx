@@ -46,8 +46,7 @@ export function MemberSongSection({
     position.size === pageSize ? position.page : 0,
     Math.max(0, pageCount - 1),
   )
-  const canExpand =
-    currentPage < pageCount - 1 || (query.hasNextPage && !query.isError)
+  const canExpand = pageCount > 1 || (query.hasNextPage && !query.isError)
   const needsBuffer =
     currentPage > 0 && songs.length < (currentPage + 4) * pageSize
   const { hasNextPage, isFetching, isError, fetchNextPage } = query
