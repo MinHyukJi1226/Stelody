@@ -16,6 +16,75 @@ test.beforeEach(async ({ page }) => {
   )
 })
 
+test('멤버 목록은 유닛별 프로필과 졸업 섹션을 표시하고 공통 검색 헤더를 사용한다', async ({
+  page,
+}) => {
+  const rows = [
+    ...['Everys', 'Universe', 'Cliché', 'ABYSS'].flatMap((unitName, index) =>
+      Array.from({ length: index === 0 ? 2 : 4 }, (_, j) => ({
+        ...member,
+        id: `00000000-0000-4000-8000-${String(200 + index * 10 + j).padStart(12, '0')}`,
+        name: `${unitName} 멤버 ${j + 1}`,
+        unitName,
+      })),
+    ),
+    graduate,
+  ]
+  await page.route('**/api/v1/members?*', (route) =>
+    route.fulfill({ json: { items: rows, hasNext: false, nextCursor: null } }),
+  )
+  await page.goto('/members')
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText([
+    'Everys',
+    'Universe',
+    'Cliché',
+    'ABYSS',
+    'GRADUATE',
+  ])
+  for (const [unit, count] of [
+    ['Everys', 2],
+    ['Universe', 4],
+    ['Cliché', 4],
+    ['ABYSS', 4],
+    ['GRADUATE', 1],
+  ] as const) {
+    const section = page.getByRole('region', { name: unit, exact: true })
+    await expect(section.getByRole('link')).toHaveCount(count)
+    await expect(section.locator('span[aria-hidden=true]').first()).toHaveCSS(
+      'width',
+      '72px',
+    )
+    await expect(section.locator('span[aria-hidden=true]').first()).toHaveCSS(
+      'height',
+      '72px',
+    )
+  }
+  await expect(
+    page
+      .getByRole('region', { name: 'GRADUATE', exact: true })
+      .getByRole('link'),
+  ).toHaveAttribute('href', `/members/${graduate.id}`)
+  await expect(page.locator('main footer')).toContainText(
+    '공식 서비스가 아닙니다.',
+  )
+  await page.getByRole('searchbox').fill('유니')
+  await page.getByRole('searchbox').press('Enter')
+  await expect(page).toHaveURL(/\/search\?q=/)
+  await page.goBack()
+  await expect(page.getByRole('searchbox')).toHaveValue('')
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page
+    .getByRole('button', { name: '다크 모드로 변경', exact: true })
+    .click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true)
+})
+
 test('멤버 목록은 서버 순서·졸업 표시를 유지하고 추가 페이지 중복을 제거한다', async ({
   page,
 }) => {
@@ -31,9 +100,7 @@ test('멤버 목록은 서버 순서·졸업 표시를 유지하고 추가 페�
     })
   })
   await page.goto('/members')
-  await expect(
-    page.getByRole('heading', { name: '목소리로 찾아보세요' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: '전체 멤버' })).toBeVisible()
   await page.getByRole('button', { name: '멤버 더 보기' }).click()
   const roster = page.getByLabel('모든 멤버', { exact: true })
   await expect(roster.getByRole('link')).toHaveCount(2)
@@ -48,17 +115,12 @@ test('멤버 목록은 서버 순서·졸업 표시를 유지하고 추가 페�
   await expect(
     page.getByRole('heading', { name: member.name, exact: true }),
   ).toBeVisible()
-  await expect(page.getByText('Universe · 2기', { exact: true })).toBeVisible()
-  const counts = page.getByRole('definition')
-  await expect(counts).toHaveText(['12', '3', '9'])
+  await expect(page.getByText('Universe', { exact: true })).toBeVisible()
   await expect(
-    page.getByText('공동 참여 4곡 · 전체 12곡에 포함됩니다.', { exact: true }),
-  ).toBeVisible()
-  await expect(
-    page.getByRole('link', { name: '공식 YouTube ↗', exact: true }),
+    page.getByRole('link', { name: '공식 YouTube', exact: true }),
   ).toHaveAttribute('href', memberDetail.channels[0]!.url)
   await expect(
-    page.getByRole('link', { name: '치지직 채널 ↗', exact: true }),
+    page.getByRole('link', { name: '치지직 채널', exact: true }),
   ).toHaveAttribute('rel', 'noopener noreferrer')
   await page.goBack()
   await expect(roster.getByRole('link')).toHaveCount(2)
@@ -98,117 +160,195 @@ test('멤버 목록의 로딩·오류·재시도·빈 목록을 구분한다', a
   }
 })
 
-test('필터·정렬을 URL과 API에 적용하고 새로고침·뒤로 가기에서 복원한다', async ({
+test('개인곡은 새 필터와 독립 커서로 조회하고 다인 전환·해제·뒤로 가기를 지원한다', async ({
+  page,
+}) => {
+  const covers: URLSearchParams[] = []
+  let otherCalls = 0
+  await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) => {
+    const params = new URL(route.request().url()).searchParams
+    expect(params.has('multipleParticipants')).toBe(false)
+    expect(params.has('collaboration')).toBe(false)
+    if (params.get('type') !== 'COVER') {
+      otherCalls++
+      return route.fulfill({ json: memberSongs })
+    }
+    covers.push(params)
+    const solo = params.get('participation') === 'SOLO'
+    return route.fulfill({
+      json: solo
+        ? params.has('cursor')
+          ? { ...emptyPage, items: [memberSong(17)], totalCount: 7 }
+          : {
+              items: Array.from({ length: 6 }, (_, i) => memberSong(i + 11)),
+              totalCount: 7,
+              hasNext: true,
+              nextCursor: 'solo-next',
+            }
+        : memberSongs,
+    })
+  })
+  await page.goto(`/members/${member.id}`)
+  await page.getByRole('button', { name: '개인', exact: true }).click()
+  const solo = page.getByRole('region', {
+    name: '커버 개인 곡 목록',
+    exact: true,
+  })
+  await expect(solo.getByRole('heading', { level: 2 })).toHaveText(
+    '커버 개인 7곡',
+  )
+  await expect(
+    page.getByRole('button', { name: '개인', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await solo
+    .getByRole('button', { name: '커버 개인 곡 모두 펼치기', exact: true })
+    .click()
+  await expect(solo.getByRole('article')).toHaveCount(7)
+  await page.getByRole('button', { name: '듀엣 및 단체', exact: true }).click()
+  await expect(
+    page.getByRole('region', {
+      name: '커버 듀엣 및 단체 곡 목록',
+      exact: true,
+    }),
+  ).toBeVisible()
+  expect(covers.at(-1)!.has('cursor')).toBe(false)
+  await page.goBack()
+  await expect(solo).toBeVisible()
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: '개인', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: '개인', exact: true }).click()
+  await expect(
+    page.getByRole('region', { name: '커버 전체 곡 목록', exact: true }),
+  ).toBeVisible()
+  expect(
+    covers.slice(0, 4).map((p) => [p.get('participation'), p.get('cursor')]),
+  ).toEqual([
+    ['ALL', null],
+    ['SOLO', null],
+    ['SOLO', 'solo-next'],
+    ['MULTIPLE', null],
+  ])
+  expect(otherCalls).toBe(4)
+})
+
+test('세 섹션이 독립 조회하고 커버 다인 필터만 URL·새로고침·뒤로 가기로 복원한다', async ({
   page,
 }) => {
   const requests: URLSearchParams[] = []
-  let detailCalls = 0
-  await page.route(`**/api/v1/members/${member.id}`, (route) => {
-    detailCalls++
-    return route.fulfill({ json: memberDetail })
-  })
   await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) => {
-    const p = new URL(route.request().url()).searchParams
-    requests.push(p)
+    const params = new URL(route.request().url()).searchParams
+    requests.push(params)
     return route.fulfill({ json: memberSongs })
   })
-  await page.goto(
-    `/members/${member.id}?type=COVER&multipleParticipants=true&sort=VIEWS`,
-  )
-  await expect(page.getByRole('article')).toHaveCount(2)
+  await page.goto(`/members/${member.id}`)
+  for (const label of ['전체', '오리지널', '커버 전체']) {
+    const section = page.getByRole('region', {
+      name: `${label} 곡 목록`,
+      exact: true,
+    })
+    await expect(section.getByRole('heading', { level: 2 })).toHaveText(
+      `${label} 2곡`,
+    )
+    await expect(section.getByRole('article')).toHaveCount(2)
+  }
+  expect(requests.map((p) => p.get('type')).sort()).toEqual([
+    'ALL',
+    'COVER',
+    'ORIGINAL',
+  ])
   await expect(
-    page.getByRole('tab', { name: '커버', exact: true }),
-  ).toHaveAttribute('aria-selected', 'true')
-  await expect(
-    page.getByRole('button', { name: '공동 참여곡만', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByLabel('참여곡 정렬')).toHaveValue('VIEWS')
-  expect(Object.fromEntries(requests[0]!)).toEqual({
-    type: 'COVER',
-    multipleParticipants: 'true',
-    sort: 'VIEWS',
-    size: '20',
+    page.getByRole('button', { name: '개인', exact: true }),
+  ).toBeEnabled()
+  await page.getByRole('button', { name: '듀엣 및 단체', exact: true }).click()
+  const cover = page.getByRole('region', {
+    name: '커버 듀엣 및 단체 곡 목록',
+    exact: true,
   })
-  await page.getByRole('tab', { name: '오리지널', exact: true }).click()
-  await expect.poll(() => requests.at(-1)?.get('type')).toBe('ORIGINAL')
-  expect(requests.at(-1)?.get('cursor')).toBeNull()
-  await page.getByLabel('참여곡 정렬').selectOption('LATEST')
-  await expect.poll(() => requests.at(-1)?.get('sort')).toBe('LATEST')
-  await page.getByRole('button', { name: '공동 참여곡만', exact: true }).click()
-  await expect
-    .poll(() => requests.at(-1)?.get('multipleParticipants'))
-    .toBe('false')
-  expect(detailCalls).toBe(1)
+  await expect(cover.getByRole('article')).toHaveCount(2)
+  expect(requests.at(-1)!.get('type')).toBe('COVER')
+  expect(requests.at(-1)!.get('participation')).toBe('MULTIPLE')
+  expect(requests.at(-1)!.has('cursor')).toBe(false)
+  await page.getByRole('button', { name: '듀엣 및 단체', exact: true }).click()
+  await expect(
+    page.getByRole('region', { name: '커버 전체 곡 목록', exact: true }),
+  ).toBeVisible()
   await page.goBack()
   await expect(
-    page.getByRole('button', { name: '공동 참여곡만', exact: true }),
+    page.getByRole('button', { name: '듀엣 및 단체', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true')
   await page.reload()
   await expect(
-    page.getByRole('tab', { name: '오리지널', exact: true }),
-  ).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByLabel('참여곡 정렬')).toHaveValue('LATEST')
+    page.getByRole('button', { name: '듀엣 및 단체', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
 })
 
-test('추가 조회 실패는 기존 곡을 유지하고 같은 커서를 재시도한다', async ({
+test('한 섹션의 펼치기 실패는 다른 섹션을 유지하며 같은 커서로 재시도하고 중복을 제거한다', async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    delete (window as { IntersectionObserver?: unknown }).IntersectionObserver
-  })
   let fail = true
   const cursors: (string | null)[] = []
   await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) => {
-    const p = new URL(route.request().url()).searchParams
-    cursors.push(p.get('cursor'))
-    if (p.has('cursor') && fail)
-      return route.fulfill({
-        status: 400,
-        json: { code: 'INVALID_CATALOG_QUERY' },
-      })
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('type') !== 'COVER')
+      return route.fulfill({ json: memberSongs })
+    cursors.push(params.get('cursor'))
+    if (params.has('cursor') && fail)
+      return route.fulfill({ status: 400, json: { code: 'TEMPORARY_FAILURE' } })
     return route.fulfill({
-      json: p.has('cursor')
-        ? {
-            ...emptyPage,
-            items: [memberSong(20), memberSong(21)],
-            totalCount: 21,
-          }
+      json: params.has('cursor')
+        ? { ...emptyPage, items: [memberSong(6), memberSong(7)], totalCount: 7 }
         : {
-            items: Array.from({ length: 20 }, (_, i) => memberSong(i + 1)),
+            items: Array.from({ length: 6 }, (_, i) => memberSong(i + 1)),
             hasNext: true,
-            nextCursor: 'songs+/=&next',
-            totalCount: 21,
+            nextCursor: 'cover-next',
+            totalCount: 7,
           },
     })
   })
-  await page.goto(`/members/${member.id}?type=COVER`)
-  await expect(page.getByRole('article')).toHaveCount(20)
-  await page.getByRole('button', { name: '노래 더 보기', exact: true }).click()
+  await page.goto(`/members/${member.id}`)
+  const cover = page.getByRole('region', {
+    name: '커버 전체 곡 목록',
+    exact: true,
+  })
+  await cover
+    .getByRole('button', { name: '커버 전체 곡 모두 펼치기', exact: true })
+    .click()
   await expect(
-    page.getByText('노래를 더 불러오지 못했습니다', { exact: true }),
+    cover.getByText('노래를 더 불러오지 못했습니다', { exact: true }),
   ).toBeVisible()
-  await expect(page.getByRole('article')).toHaveCount(20)
+  await expect(cover.getByRole('article')).toHaveCount(6)
+  await expect(
+    page
+      .getByRole('region', { name: '전체 곡 목록', exact: true })
+      .getByRole('article'),
+  ).toHaveCount(2)
   fail = false
-  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
-  await expect(page.getByRole('article')).toHaveCount(21)
-  expect(cursors).toEqual([null, 'songs+/=&next', 'songs+/=&next'])
+  await cover.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(cover.getByRole('article')).toHaveCount(7)
+  await cover
+    .getByRole('button', { name: '커버 전체 곡 접기', exact: true })
+    .click()
+  await expect(cover.getByRole('article')).toHaveCount(
+    page.viewportSize()!.width >= 1024 ? 6 : 2,
+  )
+  expect(cursors).toEqual([null, 'cover-next', 'cover-next'])
 })
 
-test('조회수 집계가 바뀌면 같은 필터의 첫 페이지부터 다시 조회한다', async ({
+test('집계가 바뀌면 해당 섹션만 같은 조건의 첫 페이지로 다시 조회한다', async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    delete (window as { IntersectionObserver?: unknown }).IntersectionObserver
-  })
   let changed = false
   const cursors: (string | null)[] = []
   await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) => {
-    const p = new URL(route.request().url()).searchParams
-    expect(p.get('sort')).toBe('VIEWS')
-    expect(p.get('type')).toBe('COVER')
-    expect(p.get('multipleParticipants')).toBe('true')
-    cursors.push(p.get('cursor'))
-    if (p.has('cursor')) {
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('type') !== 'COVER')
+      return route.fulfill({ json: memberSongs })
+    expect(params.get('sort')).toBe('VIEWS')
+    expect(params.get('participation')).toBe('MULTIPLE')
+    cursors.push(params.get('cursor'))
+    if (params.has('cursor')) {
       changed = true
       return route.fulfill({
         status: 409,
@@ -218,26 +358,36 @@ test('조회수 집계가 바뀌면 같은 필터의 첫 페이지부터 다시 
     return route.fulfill({
       json: changed
         ? { ...emptyPage, items: [memberSong(3)], totalCount: 1 }
-        : { ...memberSongs, hasNext: true, nextCursor: 'old-publication' },
+        : { ...memberSongs, hasNext: true, nextCursor: 'old' },
     })
   })
   await page.goto(
     `/members/${member.id}?type=COVER&multipleParticipants=true&sort=VIEWS`,
   )
-  await expect(page.getByRole('article')).toHaveCount(2)
-  await page.getByRole('button', { name: '노래 더 보기', exact: true }).click()
+  const cover = page.getByRole('region', {
+    name: '커버 듀엣 및 단체 곡 목록',
+    exact: true,
+  })
+  await cover
+    .getByRole('button', {
+      name: '커버 듀엣 및 단체 곡 모두 펼치기',
+      exact: true,
+    })
+    .click()
   await expect(
-    page.getByText(
-      '조회수 집계가 갱신되었습니다. 다시 시도하면 첫 페이지부터 불러옵니다.',
-      { exact: true },
-    ),
+    cover.getByText('노래를 더 불러오지 못했습니다', { exact: true }),
   ).toBeVisible()
-  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
-  await expect(page.getByRole('article')).toHaveCount(1)
+  await cover.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(cover.getByRole('article')).toHaveCount(1)
   await expect(
-    page.getByRole('heading', { name: '테스트 노래 3', exact: true }),
+    cover.getByRole('heading', { name: '테스트 노래 3', exact: true }),
   ).toBeVisible()
-  expect(cursors).toEqual([null, 'old-publication', null])
+  await expect(
+    page
+      .getByRole('region', { name: '전체 곡 목록', exact: true })
+      .getByRole('article'),
+  ).toHaveCount(2)
+  expect(cursors).toEqual([null, 'old', null])
 })
 
 test('잘못된 멤버 주소는 요청하지 않고 없는 멤버·비공개·오류를 구분한다', async ({
@@ -288,7 +438,7 @@ test('잘못된 멤버 주소는 요청하지 않고 없는 멤버·비공개·�
   ).toBeVisible()
 })
 
-test('공개 곡이 없어도 프로필·0곡 집계를 유지하고 미등록 프로필을 추정하지 않는다', async ({
+test('공개 곡이 없어도 프로필과 섹션별 0곡을 표시하고 미등록 링크를 추정하지 않는다', async ({
   page,
 }) => {
   await page.route(`**/api/v1/members/${member.id}`, (route) =>
@@ -300,13 +450,6 @@ test('공개 곡이 없어도 프로필·0곡 집계를 유지하고 미등록 �
           generation: null,
           chzzkUrl: null,
           xUrl: null,
-          songCounts: {
-            total: 0,
-            originals: 0,
-            covers: 0,
-            collaborations: 0,
-            multipleParticipants: 0,
-          },
         },
         channels: [],
       },
@@ -319,22 +462,19 @@ test('공개 곡이 없어도 프로필·0곡 집계를 유지하고 미등록 �
   await expect(
     page.getByRole('heading', { name: member.name, exact: true }),
   ).toBeVisible()
-  await expect(page.getByRole('definition')).toHaveText(['0', '0', '0'])
-  await expect(
-    page.getByRole('heading', {
-      name: '등록된 공개 곡이 없습니다',
+  for (const label of ['전체', '오리지널', '커버 전체']) {
+    const section = page.getByRole('region', {
+      name: `${label} 곡 목록`,
       exact: true,
-    }),
-  ).toBeVisible()
+    })
+    await expect(section.getByRole('heading', { level: 2 })).toHaveText(
+      `${label} 0곡`,
+    )
+    await expect(
+      section.getByText('등록된 공개 곡이 없습니다', { exact: true }),
+    ).toBeVisible()
+  }
   await expect(page.getByLabel('공식 채널 링크')).toHaveCount(0)
-  await expect(page.getByText('Universe · 2기', { exact: true })).toHaveCount(0)
-  await page.getByRole('tab', { name: '커버', exact: true }).click()
-  await expect(
-    page.getByRole('heading', {
-      name: '조건에 맞는 공개 곡이 없습니다',
-      exact: true,
-    }),
-  ).toBeVisible()
 })
 
 test('졸업 멤버·복수 채널·긴 이름·이미지 실패를 처리하고 위험한 링크는 숨긴다', async ({
@@ -376,13 +516,11 @@ test('졸업 멤버·복수 채널·긴 이름·이미지 실패를 처리하고
   await expect(
     page.getByRole('heading', { name: `${name} (졸업)`, exact: true }),
   ).toBeVisible()
-  await expect(
-    page.getByText('졸업 · 공개곡은 계속 만나볼 수 있어요.', { exact: true }),
-  ).toBeVisible()
+  await expect(page.getByText('GRADUATE', { exact: true })).toBeVisible()
   const links = page.getByLabel('공식 채널 링크')
   await expect(links.getByRole('link')).toHaveCount(2)
   await expect(
-    links.getByRole('link', { name: 'YouTube · 음악 채널 ↗', exact: true }),
+    links.getByRole('link', { name: 'YouTube · 음악 채널', exact: true }),
   ).toHaveAttribute('href', 'https://www.youtube.com/channel/two')
   await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0)
   await expect(page.locator('img[src="/broken-profile.png"]')).toHaveCount(0)
@@ -395,7 +533,9 @@ test('졸업 멤버·복수 채널·긴 이름·이미지 실패를 처리하고
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
       ).toBe(true)
+      await page.getByRole('button', { name: '메뉴 열기' }).click()
       await page.getByRole('button', { name: /모드로 변경$/ }).click()
+      await page.keyboard.press('Escape')
     }
   }
 })
@@ -433,22 +573,25 @@ test('멤버 상세와 곡 목록은 각각 로딩하고 곡 오류에서도 프
     await expect(
       page.getByRole('heading', { name: member.name, exact: true }),
     ).toBeVisible()
+    const section = page.getByRole('region', {
+      name: '커버 전체 곡 목록',
+      exact: true,
+    })
     await expect(
-      page.getByRole('status', { name: '노래 불러오는 중' }),
+      section.getByRole('status', { name: '노래 불러오는 중' }),
     ).toBeVisible()
     releaseSongs()
     await expect(
-      page.getByRole('heading', {
-        name: '노래를 불러오지 못했어요',
-        exact: true,
-      }),
+      section.getByText('노래를 불러오지 못했어요', { exact: true }),
     ).toBeVisible()
     await expect(
       page.getByRole('heading', { name: member.name, exact: true }),
     ).toBeVisible()
     fail = false
-    await page.getByRole('button', { name: '다시 시도', exact: true }).click()
-    await expect(page.getByRole('article')).toHaveCount(2)
+    await section
+      .getByRole('button', { name: '다시 시도', exact: true })
+      .click()
+    await expect(section.getByRole('article')).toHaveCount(2)
   } finally {
     releaseDetail()
     releaseSongs()
@@ -470,35 +613,43 @@ test('잘못된 URL 필터는 곡 요청을 막고 초기화 후 기본 목록�
   expect(calls).toBe(0)
   await page.getByRole('button', { name: '다시 시도', exact: true }).click()
   await expect(page).toHaveURL(`/members/${member.id}`)
-  await expect(page.getByRole('article')).toHaveCount(2)
-  expect(calls).toBe(1)
+  await expect(page.getByRole('article')).toHaveCount(6)
+  expect(calls).toBe(3)
 })
 
-test('스크롤로 추가 곡을 조회하고 곡 상세에서 뒤로 가면 필터·목록을 복원한다', async ({
+test('펼친 섹션에서 곡 상세로 갔다 돌아오면 커버 조건과 받은 곡을 복원한다', async ({
   page,
 }) => {
   const cursors: (string | null)[] = []
   await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) => {
-    const p = new URL(route.request().url()).searchParams
-    cursors.push(p.get('cursor'))
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('type') !== 'COVER')
+      return route.fulfill({ json: memberSongs })
+    cursors.push(params.get('cursor'))
     return route.fulfill({
-      json: p.has('cursor')
+      json: params.has('cursor')
         ? { ...emptyPage, items: [memberSong(21)], totalCount: 21 }
         : {
             items: Array.from({ length: 20 }, (_, i) => memberSong(i + 1)),
             hasNext: true,
-            nextCursor: 'scroll-next',
+            nextCursor: 'cover-next',
             totalCount: 21,
           },
     })
   })
-  await page.goto(`/members/${member.id}?type=COVER`)
-  await expect(page.getByRole('article')).toHaveCount(20)
-  await page
-    .getByRole('button', { name: '노래 더 보기', exact: true })
-    .scrollIntoViewIfNeeded()
-  await expect(page.getByRole('article')).toHaveCount(21)
-  await page
+  await page.goto(`/members/${member.id}?multipleParticipants=true&type=COVER`)
+  const cover = page.getByRole('region', {
+    name: '커버 듀엣 및 단체 곡 목록',
+    exact: true,
+  })
+  await cover
+    .getByRole('button', {
+      name: '커버 듀엣 및 단체 곡 모두 펼치기',
+      exact: true,
+    })
+    .click()
+  await expect(cover.getByRole('article')).toHaveCount(21)
+  await cover
     .getByRole('link', { name: '테스트 노래 21 상세 보기', exact: true })
     .click()
   await expect(
@@ -506,8 +657,36 @@ test('스크롤로 추가 곡을 조회하고 곡 상세에서 뒤로 가면 필
   ).toBeVisible()
   await page.goBack()
   await expect(
-    page.getByRole('tab', { name: '커버', exact: true }),
-  ).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('article')).toHaveCount(21)
-  expect(cursors).toEqual([null, 'scroll-next'])
+    page.getByRole('button', { name: '듀엣 및 단체', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await cover
+    .getByRole('button', {
+      name: '커버 듀엣 및 단체 곡 모두 펼치기',
+      exact: true,
+    })
+    .click()
+  await expect(cover.getByRole('article')).toHaveCount(21)
+  expect(cursors).toEqual([null, 'cover-next'])
+})
+
+test('마지막 캐러셀 페이지에서도 섹션의 모든 곡을 펼칠 수 있다', async ({
+  page,
+}) => {
+  const songs = Array.from({ length: 8 }, (_, index) => memberSong(index + 1))
+  await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) =>
+    route.fulfill({ json: { ...emptyPage, items: songs, totalCount: 8 } }),
+  )
+  await page.goto(`/members/${member.id}`)
+  const cover = page.getByRole('region', { name: '커버 전체 곡 목록' })
+  const next = cover.getByRole('button', { name: '커버 전체 다음 곡 보기' })
+  const pages = (page.viewportSize()?.width ?? 0) >= 1024 ? 2 : 4
+  for (let index = 1; index < pages; index++) {
+    await next.click()
+    await expect(cover.getByRole('article').first()).toContainText(
+      songs[index * (pages === 2 ? 6 : 2)]!.title,
+    )
+  }
+  await expect(next).toHaveCount(0)
+  await cover.getByRole('button', { name: '커버 전체 곡 모두 펼치기' }).click()
+  await expect(cover.getByRole('article')).toHaveCount(8)
 })

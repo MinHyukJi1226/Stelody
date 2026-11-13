@@ -5,6 +5,36 @@ import {
   readMemberSongFilters,
 } from './song-filters'
 
+it.each(['SOLO', 'MULTIPLE'] as const)(
+  '새 참여 조건 %s는 기존 불리언 없이 URL을 왕복한다',
+  (participation) => {
+    const filters = {
+      type: 'COVER',
+      sort: 'LATEST',
+      participation,
+      multipleParticipants: participation === 'MULTIPLE',
+    } as const
+    const params = memberSongParams(filters)
+    expect(params.get('participation')).toBe(participation)
+    expect(params.has('multipleParticipants')).toBe(false)
+    expect(params.has('collaboration')).toBe(false)
+    expect(params.has('cursor')).toBe(false)
+    expect(readMemberSongFilters(params).data).toEqual(filters)
+  },
+)
+
+it.each([
+  'participation=SOLO&multipleParticipants=false',
+  'participation=SOLO&multipleParticipants=true',
+  'participation=SOLO&collaboration=false',
+  'participation=MULTIPLE&multipleParticipants=false',
+  'participation=ALL&collaboration=true',
+  'participation=UNKNOWN',
+  'participation=',
+])('신규 필터 오류·충돌 %s은 서버에 전달하지 않는다', (value) => {
+  expect(readMemberSongFilters(new URLSearchParams(value)).success).toBe(false)
+})
+
 it('조건이 없는 멤버 주소는 전체·최신순으로 조회한다', () => {
   expect(readMemberSongFilters(new URLSearchParams()).data).toEqual(
     defaultMemberSongFilters,

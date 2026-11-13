@@ -1,6 +1,6 @@
 import { test, expect, emptyPage, makeSong } from './fixtures'
 import { detail, makeViews } from './song-detail-fixtures'
-import { member, memberDetail, memberSongs } from './member-fixtures'
+import { member, memberDetail, memberSong } from './member-fixtures'
 
 const participants = [
   {
@@ -91,43 +91,74 @@ test('상세 배지는 참여 인원과 무관하게 특별 목적 설정과 등
   ).toHaveCount(0)
 })
 
-test('기존 주소도 새 필터만 보내며 멤버 집계는 새 필드를 사용한다', async ({
+test('기존 다인 참여 주소를 커버 필터로 복원하고 충돌하는 주소는 조회하지 않는다', async ({
   page,
 }) => {
   const requests: URLSearchParams[] = []
+  const originals = Array.from({ length: 3 }, (_, index) =>
+    makeSong(index + 1, { type: 'ORIGINAL', participants }),
+  )
+  const multipleCovers = Array.from({ length: 4 }, (_, index) =>
+    makeSong(index + 4, { participants }),
+  )
+  const covers = [
+    ...multipleCovers,
+    ...Array.from({ length: 5 }, (_, index) => memberSong(index + 8)),
+  ]
   await page.route(`**/api/v1/members/${member.id}`, (route) =>
-    route.fulfill({
-      json: {
-        ...memberDetail,
-        member: {
-          ...member,
-          songCounts: {
-            ...member.songCounts,
-            collaborations: 99,
-            multipleParticipants: 4,
-          },
-        },
-      },
-    }),
+    route.fulfill({ json: memberDetail }),
   )
   await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) => {
     const params = new URL(route.request().url()).searchParams
     expect(params.has('collaboration')).toBe(false)
+    expect(params.has('multipleParticipants')).toBe(false)
     requests.push(params)
-    return route.fulfill({ json: memberSongs })
+    const type = params.get('type')
+    const items =
+      type === 'ORIGINAL'
+        ? originals
+        : type === 'COVER'
+          ? params.get('participation') === 'MULTIPLE'
+            ? multipleCovers
+            : covers
+          : [...originals, ...covers]
+    return route.fulfill({
+      json: { ...emptyPage, items, totalCount: items.length },
+    })
   })
+
   await page.goto(`/members/${member.id}?collaboration=true`)
-  await expect(page.getByRole('article')).toHaveCount(2)
-  expect(requests[0]!.get('multipleParticipants')).toBe('true')
+  const filtered = page.getByRole('region', {
+    name: '커버 듀엣 및 단체 곡 목록',
+  })
+  await expect(filtered.getByRole('heading', { level: 2 })).toHaveText(
+    '커버 듀엣 및 단체 4곡',
+  )
+  await expect(page.getByRole('heading', { name: '전체 12곡' })).toBeVisible()
   await expect(
-    page.getByText('공동 참여 4곡 · 전체 12곡에 포함됩니다.', { exact: true }),
+    page.getByRole('heading', { name: '오리지널 3곡' }),
   ).toBeVisible()
-  await expect(page.getByText(/공동 참여 99곡/)).toHaveCount(0)
-  await page.getByRole('button', { name: '공동 참여곡만', exact: true }).click()
-  await expect
-    .poll(() => requests.at(-1)?.get('multipleParticipants'))
-    .toBe('false')
+  expect(requests.map((p) => [p.get('type'), p.get('participation')])).toEqual(
+    expect.arrayContaining([
+      ['ALL', 'ALL'],
+      ['ORIGINAL', 'ALL'],
+      ['COVER', 'MULTIPLE'],
+    ]),
+  )
+  const toggle = filtered.getByRole('button', {
+    name: '듀엣 및 단체',
+    exact: true,
+  })
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await toggle.click()
+
+  await expect(
+    page.getByRole('heading', { name: '커버 전체 9곡' }),
+  ).toBeVisible()
+  expect(requests.at(-1)?.get('type')).toBe('COVER')
+  expect(requests.at(-1)?.get('participation')).toBe('ALL')
   expect(new URL(page.url()).searchParams.has('collaboration')).toBe(false)
+
   const calls = requests.length
   await page.goto(
     `/members/${member.id}?multipleParticipants=true&collaboration=false`,
