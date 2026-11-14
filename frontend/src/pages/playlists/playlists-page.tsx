@@ -5,19 +5,29 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { sessionOptions } from '@/features/auth/session'
-import { playlistKeys, playlistListOptions } from '@/features/playlists/queries'
+import type { Playlist } from '@/features/playlists/api'
+import {
+  isUncertainPlaylistWrite,
+  playlistErrorMessage,
+  playlistKeys,
+  playlistListOptions,
+} from '@/features/playlists/queries'
+import { PlaylistCover } from '@/features/playlists/playlist-cover'
+import { usePlaylistManagement } from '@/features/playlists/use-playlist-management'
 import { ApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
 import { PageState } from '@/shared/ui/page-state'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { StatePanel } from '@/shared/ui/state-panel'
-import { LibraryTabs } from '@/pages/favorites/components/library-tabs'
-import { PlaylistLoading } from './components/playlist-loading'
+import { useToast } from '@/shared/ui/toast-context'
+import { LibraryDeleteButton } from '@/pages/favorites/components/library-delete-button'
+import { LibraryPage } from '@/pages/favorites/components/library-page'
 
 export function PlaylistsPage() {
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
   const user = session.data?.id ?? ''
   const client = useQueryClient()
+  const notify = useToast()
+  const action = usePlaylistManagement(user, '/library/playlists')
   const query = useInfiniteQuery({
     ...playlistListOptions(user),
     enabled: !!user && !session.isError,
@@ -47,114 +57,143 @@ export function PlaylistsPage() {
           title: '불러오지 못했어요',
           description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
         }
-      : !query.isPending && !items.length
-        ? {
-            kind: 'empty' as const,
-            title: '아직 만든 플레이리스트가 없습니다',
-            description: '첫 플레이리스트에 좋아하는 노래를 모아보세요.',
-          }
-        : null
+      : null
+
+  async function remove(playlist: Playlist) {
+    try {
+      const result = await action.write({ kind: 'delete', playlist })
+      if (result?.kind === 'deleted') notify('플레이리스트를 삭제했어요.')
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) return
+      notify(playlistErrorMessage(error), 'error')
+      if (
+        isUncertainPlaylistWrite(error) ||
+        (error instanceof ApiError && [404, 409].includes(error.status))
+      ) {
+        await query.refetch()
+      }
+    }
+  }
+
   return (
-    <div className="favorites-page flex min-w-0 flex-col gap-12">
-      {(query.isPending || state) && <LibraryTabs playlists />}
-      <section
-        className={`flex min-w-0 flex-1 flex-col gap-8 ${state ? 'justify-center' : ''}`}
-      >
-        {query.isPending ? (
-          <>
-            <h1 className="sr-only">내 플레이리스트</h1>
-            <PlaylistLoading />
-          </>
-        ) : state ? (
-          <>
-            <h1 className="sr-only">내 플레이리스트</h1>
-            <PageState
-              {...state}
-              detail="나만 볼 수 있는 목록입니다."
-              action={{
-                to:
-                  state.kind === 'empty'
-                    ? '/library/playlists/new'
-                    : '/library',
-                label: state.kind === 'empty' ? '첫 목록 만들기' : '내 보관함',
-              }}
-              {...(state.kind === 'error'
-                ? { onRetry: () => void retry() }
-                : {})}
-            />
-            {state.kind === 'empty' && (
-              <div className="self-center">
-                <Button asChild>
-                  <Link to="/library/youtube">YouTube 연결 관리</Link>
-                </Button>
+    <LibraryPage
+      playlists
+      action={
+        <Button asChild className="min-h-10 bg-transparent px-2 py-2">
+          <Link to="/library/playlists/new">새로 만들기</Link>
+        </Button>
+      }
+    >
+      {query.isPending ? (
+        <div
+          role="status"
+          aria-label="플레이리스트 불러오는 중"
+          aria-busy="true"
+          className="grid gap-8"
+        >
+          {[0, 1, 2].map((i) => (
+            <div key={i} aria-hidden="true" className="flex items-center gap-4">
+              <div className="size-20 shrink-0 rounded-xl bg-line md:size-[150px]" />
+              <div className="grid min-w-0 flex-1 gap-2">
+                <div className="h-4 w-28 max-w-full rounded bg-line" />
+                <div className="h-3 w-14 max-w-full rounded bg-line" />
               </div>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="text-xs leading-[1.5] text-brand">MY PLAYLISTS</p>
-            <h1 className="text-[32px] font-bold leading-[1.5]">
-              내 취향대로 모아두기
-            </h1>
-            <p className="text-muted">모든 플레이리스트는 나만 볼 수 있어요.</p>
-            <LibraryTabs playlists />
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="primary">
-                <Link to="/library/playlists/new">＋ 새 플레이리스트</Link>
-              </Button>
-              <Button asChild>
-                <Link to="/library/youtube">YouTube 연결 관리</Link>
-              </Button>
+              <div className="size-9 shrink-0 rounded-xl bg-line" />
+              <div className="size-9 shrink-0 rounded-xl bg-line" />
             </div>
+          ))}
+        </div>
+      ) : state ? (
+        <PageState
+          {...state}
+          detail="나만 볼 수 있는 목록입니다."
+          action={{ to: '/library', label: '즐겨찾기' }}
+          {...(state.kind === 'error' ? { onRetry: () => void retry() } : {})}
+        />
+      ) : !items.length ? (
+        <h2 className="home-section-enter text-lg font-bold leading-[1.5]">
+          아직 만든 플레이리스트가 없습니다
+        </h2>
+      ) : (
+        <>
+          <div className="home-section-enter grid gap-6 md:gap-8">
             {items.map((playlist) => (
               <article
                 key={playlist.id}
-                className="flex flex-col gap-4 rounded-2xl bg-surface p-4 md:flex-row md:gap-3"
+                className="flex min-w-0 items-center justify-between gap-3 md:gap-4"
               >
-                <div className="flex min-w-0 flex-1 flex-col gap-4 md:gap-1">
-                  <h2 className="break-words text-lg font-bold leading-[1.5]">
-                    {playlist.name}
-                  </h2>
-                  <p className="text-sm leading-[1.5] text-muted">
-                    {playlist.totalCount
-                      ? `${playlist.totalCount}곡 · 이용 가능 ${playlist.availableCount}곡 · 나만 보기`
-                      : '아직 담은 곡이 없습니다'}
-                  </p>
-                </div>
-                <div className="flex flex-1 flex-wrap gap-2">
-                  {playlist.totalCount === 0 && (
-                    <Button asChild>
-                      <Link to="/search">곡 찾기</Link>
-                    </Button>
-                  )}
-                  <Button asChild>
-                    <Link to={`/library/playlists/${playlist.id}`}>
-                      목록 열기
+                <Link
+                  to={`/library/playlists/${playlist.id}`}
+                  aria-label={`${playlist.name} 목록 열기`}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl md:gap-5"
+                >
+                  <PlaylistCover
+                    playlist={playlist}
+                    userId={user}
+                    className="size-20 shrink-0 rounded-xl md:size-[150px]"
+                  />
+                  <div className="grid min-w-0 gap-1">
+                    <h2 className="break-words text-sm font-medium md:text-base">
+                      {playlist.name}
+                    </h2>
+                    <p className="text-xs md:text-sm">
+                      총 {playlist.totalCount.toLocaleString('ko-KR')}곡
+                    </p>
+                  </div>
+                </Link>
+                <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center md:gap-8">
+                  <Button
+                    asChild
+                    size="icon"
+                    className="size-9 rounded-xl border-0 bg-[#00e600] text-white"
+                  >
+                    <Link
+                      to={`/library/playlists/${playlist.id}/edit?from=library`}
+                      aria-label={`${playlist.name} 이름 수정`}
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m15 5 4 4M4 20l4.7-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z" />
+                      </svg>
                     </Link>
                   </Button>
+                  <LibraryDeleteButton
+                    key={playlist.version}
+                    label={`${playlist.name} 삭제`}
+                    pending={action.pending || !user || session.isError}
+                    onConfirm={() => void remove(playlist)}
+                  />
                 </div>
               </article>
             ))}
-            {query.isError && (
-              <StatePanel
-                title="목록을 갱신하지 못했어요"
-                onRetry={() => void retry()}
-              />
-            )}
-            {query.hasNextPage && !query.isError && (
-              <div>
-                <Button
-                  disabled={query.isFetching}
-                  onClick={() => void query.fetchNextPage()}
-                >
-                  {query.isFetching ? '불러오는 중…' : '목록 더 보기'}
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </section>
-      <SiteFooter />
-    </div>
+          </div>
+          {query.isError && (
+            <StatePanel
+              title="목록을 갱신하지 못했어요"
+              onRetry={() => void retry()}
+            />
+          )}
+          {query.hasNextPage && !query.isError && (
+            <div>
+              <Button
+                disabled={query.isFetching}
+                onClick={() => void query.fetchNextPage()}
+              >
+                {query.isFetching ? '불러오는 중…' : '목록 더 보기'}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </LibraryPage>
   )
 }

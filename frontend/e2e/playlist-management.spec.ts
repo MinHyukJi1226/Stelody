@@ -421,8 +421,10 @@ test('빈 목록도 이름 수정과 삭제를 할 수 있다', async ({ page })
   })
   await expect(
     card.getByRole('link', { name: '곡 찾기', exact: true }),
-  ).toHaveAttribute('href', '/search')
-  await card.getByRole('link', { name: '목록 열기', exact: true }).click()
+  ).toHaveCount(0)
+  await card
+    .getByRole('link', { name: '밤에 듣는 목소리 목록 열기', exact: true })
+    .click()
   await expect(page).toHaveURL(path)
   await expect(
     page.getByRole('heading', { name: '아직 담은 곡이 없습니다' }),
@@ -682,3 +684,35 @@ for (const theme of ['light', 'dark']) {
     await capture('error')
   })
 }
+
+test('보관함에서 목록 이름을 수정하고 두 번째 클릭으로 삭제한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await page.goto('/library/playlists')
+  await page.getByRole('link', { name: '밤에 듣는 목소리 이름 수정' }).click()
+  await expect(page).toHaveURL(`${path}/edit?from=library`)
+  await page.getByRole('textbox', { name: '플레이리스트 이름' }).fill('새 이름')
+  await page.getByRole('button', { name: '이름 저장' }).click()
+  await expect(page).toHaveURL('/library/playlists')
+  await expect(page.getByRole('heading', { name: '새 이름' })).toBeVisible()
+  await page.getByRole('button', { name: '새 이름 삭제', exact: true }).click()
+  const confirm = page.getByRole('button', {
+    name: '새 이름 삭제 정말 삭제하시겠습니까?',
+  })
+  await expect(confirm).toBeVisible()
+  expect(state.writes.map((write) => write.kind)).toEqual(['rename'])
+  await confirm.click()
+  await expect(
+    page.getByRole('heading', { name: '아직 만든 플레이리스트가 없습니다' }),
+  ).toBeVisible()
+  expect(state.writes).toEqual([
+    {
+      method: 'PATCH',
+      kind: 'rename',
+      version: 0,
+      body: { version: 0, name: '새 이름' },
+    },
+    { method: 'DELETE', kind: 'delete', version: 1, body: null },
+  ])
+})

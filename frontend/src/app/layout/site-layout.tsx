@@ -12,7 +12,8 @@ export function SiteLayout() {
   const search = pathname === '/search'
   const catalog = pathname === '/songs'
   const members = pathname === '/members' || pathname.startsWith('/members/')
-  const compact = home || search || catalog || members
+  const library = pathname === '/library' || pathname === '/library/playlists'
+  const compact = home || search || catalog || members || library
   return (
     <PageActionProvider>
       <div
@@ -39,7 +40,7 @@ export function SiteLayout() {
           className={
             home
               ? 'w-full flex-1 px-5 pt-3 md:px-10'
-              : search || catalog || members
+              : search || catalog || members || library
                 ? 'flex w-full flex-1 flex-col'
                 : 'page-content'
           }

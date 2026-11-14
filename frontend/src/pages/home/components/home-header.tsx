@@ -26,6 +26,9 @@ export function HomeHeader({
   const members =
     location.pathname === '/members' ||
     location.pathname.startsWith('/members/')
+  const library =
+    location.pathname === '/library' ||
+    location.pathname === '/library/playlists'
   const query = search
     ? (new URLSearchParams(location.search).get('q') ?? '')
     : ''
@@ -37,7 +40,7 @@ export function HomeHeader({
 
   return (
     <header
-      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search || catalog || members ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
+      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search || catalog || members || library ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
     >
       <Link
         to="/"
@@ -136,12 +139,7 @@ export function HomeHeader({
               <>
                 <Button asChild>
                   <Link to="/library" onClick={close}>
-                    좋아하는 곡
-                  </Link>
-                </Button>
-                <Button asChild>
-                  <Link to="/library/playlists" onClick={close}>
-                    플레이리스트
+                    내 보관함
                   </Link>
                 </Button>
                 <AdminLink onNavigate={close} />

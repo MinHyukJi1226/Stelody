@@ -667,7 +667,7 @@ test('메인 소식과 급상승을 API 값으로 표시하고 로그인 후 보
   })
   await page.getByRole('button', { name: '메뉴 열기' }).click()
   await expect(
-    page.getByRole('link', { name: '좋아하는 곡', exact: true }),
+    page.getByRole('link', { name: '내 보관함', exact: true }),
   ).toHaveAttribute('href', '/library')
   await page.getByRole('button', { name: '다크 모드로 변경' }).click()
   await page.keyboard.press('Escape')

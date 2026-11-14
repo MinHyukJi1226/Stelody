@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { z } from 'zod'
 import { sessionOptions } from '@/features/auth/session'
 import { playlistNameSchema, type Playlist } from '@/features/playlists/api'
@@ -20,6 +20,8 @@ import { PlaylistLoading } from './components/playlist-loading'
 
 export function PlaylistRenamePage() {
   const { playlistId = '' } = useParams()
+  const [params] = useSearchParams()
+  const fromLibrary = params.get('from') === 'library'
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
   const user = session.data?.id ?? ''
   const valid = z.uuid().safeParse(playlistId).success
@@ -60,6 +62,7 @@ export function PlaylistRenamePage() {
                 key={`${user}:${playlistId}`}
                 userId={user}
                 playlist={query.data}
+                fromLibrary={fromLibrary}
                 load={async () => {
                   const result = await query.refetch()
                   if (result.error) throw result.error
@@ -78,10 +81,12 @@ export function PlaylistRenamePage() {
 function RenameForm({
   userId,
   playlist,
+  fromLibrary,
   load,
 }: {
   userId: string
   playlist: Playlist
+  fromLibrary: boolean
   load: () => Promise<Playlist>
 }) {
   const [baseline, setBaseline] = useState(playlist)
@@ -95,7 +100,11 @@ function RenameForm({
   const navigate = useNavigate()
   const notify = useToast()
   const path = `/library/playlists/${playlist.id}`
-  const action = usePlaylistManagement(userId, `${path}/edit`)
+  const destination = fromLibrary ? '/library/playlists' : path
+  const action = usePlaylistManagement(
+    userId,
+    `${path}/edit${fromLibrary ? '?from=library' : ''}`,
+  )
   const changed = baseline.version !== playlist.version
   const busy = action.pending || reloading
   async function reload() {
@@ -132,7 +141,7 @@ function RenameForm({
       })
       if (result?.kind === 'saved') {
         notify('플레이리스트 이름을 저장했어요.')
-        void navigate(path, { replace: true })
+        void navigate(destination, { replace: true })
       }
     } catch (failure) {
       const field =
@@ -190,7 +199,7 @@ function RenameForm({
             {busy ? '저장 중…' : '이름 저장'}
           </Button>
         )}
-        <Button disabled={busy} onClick={() => void navigate(path)}>
+        <Button disabled={busy} onClick={() => void navigate(destination)}>
           취소
         </Button>
       </div>

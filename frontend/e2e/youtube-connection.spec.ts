@@ -141,7 +141,7 @@ test('로딩과 조회 오류를 미연결과 구분하고 수동 재조회한�
 })
 
 for (const empty of [false, true]) {
-  test(`플레이리스트 ${empty ? '빈' : '정상'} 목록에서 연결 관리에 진입한다`, async ({
+  test(`플레이리스트 ${empty ? '빈' : '정상'} 목록에서 연결 관리 링크를 숨긴다`, async ({
     page,
   }) => {
     await setup(page)
@@ -168,11 +168,14 @@ for (const empty of [false, true]) {
       }),
     )
     await page.goto('/library/playlists')
-    await page
-      .getByRole('link', { name: 'YouTube 연결 관리', exact: true })
-      .click()
-    await expect(page).toHaveURL(new RegExp(`${path}$`))
-    await expect(panel(page)).toBeVisible()
+    await expect(
+      page.getByRole('heading', {
+        name: empty ? '아직 만든 플레이리스트가 없습니다' : '테스트 목록',
+      }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: 'YouTube 연결 관리', exact: true }),
+    ).toHaveCount(0)
   })
 }
 
@@ -203,9 +206,7 @@ for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
     let release!: () => void
     state.writeGate = new Promise<void>((resolve) => (release = resolve))
     await page.goto('/library/playlists')
-    await page
-      .getByRole('link', { name: 'YouTube 연결 관리', exact: true })
-      .click()
+    await page.goto(path)
     await expect(panel(page)).toBeVisible()
     await page
       .getByRole('button', { name: 'YouTube 연결', exact: true })
@@ -227,16 +228,13 @@ for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
     } else if (destination === 'back') await page.goBack()
     else
       await page.getByRole('link', { name: '플레이리스트로 돌아가기' }).click()
-    if (destination === 'revisit')
-      await page
-        .getByRole('link', { name: 'YouTube 연결 관리', exact: true })
-        .click()
-    const expected =
-      destination === 'header'
-        ? '/search'
-        : destination === 'revisit'
-          ? path
-          : '/library/playlists'
+    if (destination === 'revisit') await page.goBack()
+    const expected = {
+      header: '/search',
+      revisit: path,
+      back: '/library/playlists',
+      playlist: '/library/playlists',
+    }[destination]
     await expect(page).toHaveURL(new RegExp(`${expected}$`))
     const response = page.waitForResponse(
       (r) =>

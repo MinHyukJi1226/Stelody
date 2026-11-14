@@ -163,7 +163,7 @@ test('빈 목록에서 이름을 검증하고 생성 후 빈 상세로 이동하
       .getByRole('navigation', { name: '보관함 종류' })
       .getByRole('link', { name: '즐겨찾기', exact: true }),
   ).toBeVisible()
-  await page.getByRole('link', { name: '첫 목록 만들기' }).click()
+  await page.getByRole('link', { name: '새로 만들기', exact: true }).click()
   const input = page.getByRole('textbox', { name: '플레이리스트 이름' })
   await page.getByRole('button', { name: '만들고 곡 담기' }).click()
   await expect(
@@ -198,13 +198,13 @@ test('저장·이용 가능 곡 수와 서버 순서를 표시하고 이용 불�
   ])
   state.items.set(first, [entry(), entry(1, false)])
   await page.goto('/library/playlists')
-  await expect(page.getByText('2곡 · 이용 가능 1곡 · 나만 보기')).toBeVisible()
+  await expect(page.getByText('총 2곡')).toBeVisible()
   await page
     .getByRole('article')
     .filter({
       has: page.getByRole('heading', { name: '밤에 듣는 목소리', exact: true }),
     })
-    .getByRole('link', { name: '목록 열기' })
+    .getByRole('link', { name: '밤에 듣는 목소리 목록 열기' })
     .click()
   await expect(
     page.getByRole('heading', { name: '밤에 듣는 목소리', exact: true }),

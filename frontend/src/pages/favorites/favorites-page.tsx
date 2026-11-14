@@ -9,12 +9,11 @@ import { favoriteListOptions } from '@/features/favorites/queries'
 import { useMemberDirectory } from '@/features/members/use-member-directory'
 import { ApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { PageState } from '@/shared/ui/page-state'
 import { FavoriteItem } from './components/favorite-item'
 import { FavoriteSkeleton } from './components/favorite-skeleton'
-import { LibraryTabs } from './components/library-tabs'
+import { LibraryPage } from './components/library-page'
 
 export function FavoritesPage() {
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
@@ -35,7 +34,6 @@ export function FavoritesPage() {
   const members = useMemberDirectory(
     items.some((item) => item.song && item.song.participants.length >= 2),
   )
-  const summary = query.data?.pages[0]
   const unavailable =
     query.error instanceof ApiError && [403, 404].includes(query.error.status)
   const invalidCursor =
@@ -82,95 +80,59 @@ export function FavoritesPage() {
           title: '불러오지 못했어요',
           description: '연결 상태를 확인한 뒤 다시 시도해 주세요.',
         }
-      : empty
-        ? {
-            kind: 'empty' as const,
-            title: '아직 저장한 노래가 없습니다',
-            description: '마음에 드는 곡에서 즐겨찾기를 눌러보세요.',
-          }
-        : null
+      : null
 
   return (
-    <div className="favorites-page flex min-w-0 flex-col gap-12">
-      {(query.isPending || state) && <LibraryTabs />}
-      <section
-        className={`flex min-w-0 flex-1 flex-col gap-8 ${state ? 'justify-center' : ''}`}
-      >
-        {query.isPending ? (
-          <FavoriteSkeleton />
-        ) : state ? (
-          <>
-            <h1 className="sr-only">내 즐겨찾기</h1>
-            <PageState
-              {...state}
-              detail={
-                empty
-                  ? '저장 0곡 · 나만 보기'
-                  : '나만 볼 수 있는 즐겨찾기 목록입니다.'
+    <LibraryPage>
+      {query.isPending ? (
+        <FavoriteSkeleton />
+      ) : state ? (
+        <PageState
+          {...state}
+          detail="나만 볼 수 있는 즐겨찾기 목록입니다."
+          action={{ to: '/search', label: '노래 찾기' }}
+          {...(state.kind === 'error' ? { onRetry: retry } : {})}
+        />
+      ) : empty ? (
+        <h2 className="home-section-enter text-lg font-bold leading-[1.5]">
+          아직 저장한 노래가 없습니다
+        </h2>
+      ) : (
+        <>
+          <div className="home-section-enter grid gap-6 md:gap-8">
+            {items.map((item) => (
+              <FavoriteItem key={item.songId} item={item} members={members} />
+            ))}
+          </div>
+          {query.isError && query.data && (
+            <StatePanel
+              title={
+                query.isFetchNextPageError
+                  ? '즐겨찾기를 더 불러오지 못했습니다'
+                  : '즐겨찾기를 갱신하지 못했습니다'
               }
-              action={{ to: '/search', label: '노래 찾기' }}
-              {...(state.kind === 'error' ? { onRetry: retry } : {})}
+              description={
+                invalidCursor
+                  ? '목록을 처음부터 다시 불러와 주세요.'
+                  : '이미 불러온 목록은 유지됩니다.'
+              }
+              onRetry={retry}
             />
-          </>
-        ) : (
-          <>
-            <p className="text-xs leading-[1.5] text-brand">MY LIBRARY</p>
-            <h1 className="text-[32px] font-bold leading-[1.5]">내 즐겨찾기</h1>
-            <p className="text-muted">나만 볼 수 있는 고정 목록</p>
-            <LibraryTabs />
-            <div className="flex flex-wrap items-start gap-2">
-              <p className="min-w-0 flex-1 text-lg font-bold leading-[1.5]">
-                저장 {summary?.totalCount ?? 0}곡 · 이용 가능{' '}
-                {summary?.availableCount ?? 0}곡
-              </p>
-              <span
-                className="inline-flex min-h-[53px] items-center rounded-xl bg-surface p-4 text-sm"
-                aria-label="정렬: 최근 저장순"
+          )}
+          <div ref={sentinel}>
+            {query.hasNextPage && !query.isError && (
+              <Button
+                disabled={query.isFetching}
+                onClick={() => void query.fetchNextPage()}
               >
-                최근 저장순
-              </span>
-            </div>
-            <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {items.map((item) => (
-                <FavoriteItem key={item.songId} item={item} members={members} />
-              ))}
-            </div>
-            {query.isError && query.data && (
-              <StatePanel
-                title={
-                  query.isFetchNextPageError
-                    ? '즐겨찾기를 더 불러오지 못했습니다'
-                    : '즐겨찾기를 갱신하지 못했습니다'
-                }
-                description={
-                  invalidCursor
-                    ? '목록을 처음부터 다시 불러와 주세요.'
-                    : '이미 불러온 목록은 유지됩니다.'
-                }
-                onRetry={retry}
-              />
+                {query.isFetchingNextPage
+                  ? '즐겨찾기 더 불러오는 중…'
+                  : '즐겨찾기 더 보기'}
+              </Button>
             )}
-            <div ref={sentinel}>
-              {query.hasNextPage && !query.isError && (
-                <Button
-                  disabled={query.isFetching}
-                  onClick={() => void query.fetchNextPage()}
-                >
-                  {query.isFetchingNextPage
-                    ? '즐겨찾기 더 불러오는 중…'
-                    : '즐겨찾기 더 보기'}
-                </Button>
-              )}
-              {!query.hasNextPage && items.length > 0 && (
-                <p role="status" className="text-sm text-muted">
-                  모든 즐겨찾기를 불러왔습니다.
-                </p>
-              )}
-            </div>
-          </>
-        )}
-      </section>
-      <SiteFooter />
-    </div>
+          </div>
+        </>
+      )}
+    </LibraryPage>
   )
 }
