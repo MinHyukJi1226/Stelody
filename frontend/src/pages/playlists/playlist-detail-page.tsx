@@ -24,9 +24,9 @@ export function PlaylistDetailPage() {
   const conflict =
     query.error instanceof ApiError && query.error.code === 'PLAYLIST_CHANGED'
   return (
-    <div className="favorites-page flex min-w-0 flex-col gap-12">
+    <div className="flex min-w-0 flex-1 flex-col px-4 md:px-6">
       <section
-        className={`flex min-w-0 flex-1 flex-col gap-8 ${denied || (!query.data && query.isError) ? 'justify-center' : ''}`}
+        className={`flex min-w-0 flex-1 flex-col gap-4 py-6 md:py-8 ${denied || (!query.data && query.isError) ? 'justify-center' : ''}`}
       >
         {denied || (!query.data && query.isError) ? (
           <>
@@ -73,7 +73,7 @@ export function PlaylistDetailPage() {
           )
         )}
       </section>
-      <SiteFooter />
+      <SiteFooter className="mx-0 mb-0 bg-transparent px-0 md:mx-0 md:px-0" />
     </div>
   )
 }

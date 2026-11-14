@@ -107,7 +107,7 @@ export function PlaylistNameForm({
         event.preventDefault()
         void submit()
       }}
-      className={`flex w-full flex-col ${modal ? 'gap-4' : 'gap-8'}`}
+      className={`flex w-full flex-col ${modal ? 'gap-4' : 'gap-3'}`}
       aria-busy={action.pending}
     >
       {modal ? (
@@ -141,25 +141,25 @@ export function PlaylistNameForm({
       ) : (
         <TextField
           label="플레이리스트 이름"
-          placeholder="이름을 입력해 주세요"
+          hideLabel
+          placeholder="1 ~ 50자의 이름을 입력해 주세요"
+          className="rounded-lg text-sm"
           value={name}
           onChange={(event) => {
             setName(event.target.value)
             setFieldError(undefined)
           }}
           disabled={action.pending || !!created || uncertain}
-          description="1–50자 · 앞뒤 공백 제거"
           {...(fieldError ? { error: fieldError } : {})}
           aria-describedby={error ? id : undefined}
         />
       )}
-      {!modal && <p className="text-sm font-medium text-brand">나만 보기</p>}
       {error && (
         <p id={id} role="alert" className="text-sm text-error">
           {error}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className={modal ? 'flex flex-wrap gap-2' : 'flex flex-wrap gap-5'}>
         {modal && (
           <Button onClick={onCancel} disabled={action.pending}>
             취소
@@ -168,6 +168,7 @@ export function PlaylistNameForm({
         <Button
           type="submit"
           variant="primary"
+          className={modal ? undefined : 'min-h-10 rounded-lg px-3 py-2'}
           disabled={action.pending || uncertain}
         >
           {action.pending
@@ -176,10 +177,14 @@ export function PlaylistNameForm({
               ? '곡 담기 다시 시도'
               : modal
                 ? '만들고 담기'
-                : '만들고 곡 담기'}
+                : '생성하기'}
         </Button>
         {!modal && (
-          <Button onClick={onCancel} disabled={action.pending}>
+          <Button
+            className="min-h-10 rounded-lg bg-subtle px-3 py-2 text-on-accent"
+            onClick={onCancel}
+            disabled={action.pending}
+          >
             취소
           </Button>
         )}

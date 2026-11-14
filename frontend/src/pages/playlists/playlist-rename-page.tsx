@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { z } from 'zod'
 import { sessionOptions } from '@/features/auth/session'
 import { playlistNameSchema, type Playlist } from '@/features/playlists/api'
@@ -14,12 +14,14 @@ import { ApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
 import { TextField } from '@/shared/ui/input'
 import { PageState } from '@/shared/ui/page-state'
-import { SiteFooter } from '@/shared/ui/site-footer'
+import { PlaylistFormLayout } from './components/playlist-form-layout'
 import { useToast } from '@/shared/ui/toast-context'
 import { PlaylistLoading } from './components/playlist-loading'
 
 export function PlaylistRenamePage() {
   const { playlistId = '' } = useParams()
+  const [params] = useSearchParams()
+  const fromLibrary = params.get('from') === 'library'
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
   const user = session.data?.id ?? ''
   const valid = z.uuid().safeParse(playlistId).success
@@ -31,57 +33,52 @@ export function PlaylistRenamePage() {
     !valid ||
     (query.error instanceof ApiError && [403, 404].includes(query.error.status))
   return (
-    <div className="favorites-page flex min-w-0 flex-col gap-12">
-      <section
-        className={`flex min-w-0 flex-1 flex-col gap-8 ${denied || (query.isError && !query.data) ? 'justify-center' : ''}`}
-      >
-        {denied || (query.isError && !query.data) ? (
-          <PageState
-            kind={denied ? 'unavailable' : 'error'}
-            title={
-              denied ? '이 목록에 접근할 수 없습니다' : '불러오지 못했어요'
-            }
-            description={
-              denied
-                ? '목록이 없거나 현재 계정에서 볼 수 없습니다.'
-                : '연결 상태를 확인한 뒤 다시 시도해 주세요.'
-            }
-            action={{ to: '/library/playlists', label: '내 플레이리스트' }}
-            {...(!denied ? { onRetry: () => void query.refetch() } : {})}
-          />
-        ) : query.isPending ? (
-          <PlaylistLoading />
-        ) : (
-          query.data && (
-            <>
-              <p className="text-xs leading-[1.5] text-brand">PLAYLIST</p>
-              <h1 className="text-[32px] font-bold leading-[1.5]">이름 수정</h1>
-              <RenameForm
-                key={`${user}:${playlistId}`}
-                userId={user}
-                playlist={query.data}
-                load={async () => {
-                  const result = await query.refetch()
-                  if (result.error) throw result.error
-                  return result.data!
-                }}
-              />
-            </>
-          )
-        )}
-      </section>
-      <SiteFooter />
-    </div>
+    <PlaylistFormLayout>
+      {denied || (query.isError && !query.data) ? (
+        <PageState
+          kind={denied ? 'unavailable' : 'error'}
+          title={denied ? '이 목록에 접근할 수 없습니다' : '불러오지 못했어요'}
+          description={
+            denied
+              ? '목록이 없거나 현재 계정에서 볼 수 없습니다.'
+              : '연결 상태를 확인한 뒤 다시 시도해 주세요.'
+          }
+          action={{ to: '/library/playlists', label: '내 플레이리스트' }}
+          {...(!denied ? { onRetry: () => void query.refetch() } : {})}
+        />
+      ) : query.isPending ? (
+        <PlaylistLoading />
+      ) : (
+        query.data && (
+          <>
+            <h1 className="text-xl font-bold leading-[1.5]">이름 변경</h1>
+            <RenameForm
+              key={`${user}:${playlistId}`}
+              userId={user}
+              playlist={query.data}
+              fromLibrary={fromLibrary}
+              load={async () => {
+                const result = await query.refetch()
+                if (result.error) throw result.error
+                return result.data!
+              }}
+            />
+          </>
+        )
+      )}
+    </PlaylistFormLayout>
   )
 }
 
 function RenameForm({
   userId,
   playlist,
+  fromLibrary,
   load,
 }: {
   userId: string
   playlist: Playlist
+  fromLibrary: boolean
   load: () => Promise<Playlist>
 }) {
   const [baseline, setBaseline] = useState(playlist)
@@ -95,7 +92,11 @@ function RenameForm({
   const navigate = useNavigate()
   const notify = useToast()
   const path = `/library/playlists/${playlist.id}`
-  const action = usePlaylistManagement(userId, `${path}/edit`)
+  const destination = fromLibrary ? '/library/playlists' : path
+  const action = usePlaylistManagement(
+    userId,
+    `${path}/edit${fromLibrary ? '?from=library' : ''}`,
+  )
   const changed = baseline.version !== playlist.version
   const busy = action.pending || reloading
   async function reload() {
@@ -132,7 +133,7 @@ function RenameForm({
       })
       if (result?.kind === 'saved') {
         notify('플레이리스트 이름을 저장했어요.')
-        void navigate(path, { replace: true })
+        void navigate(destination, { replace: true })
       }
     } catch (failure) {
       const field =
@@ -155,7 +156,7 @@ function RenameForm({
         e.preventDefault()
         void submit()
       }}
-      className="flex flex-col gap-8"
+      className="flex flex-col gap-3"
       aria-busy={busy}
     >
       <TextField
@@ -166,7 +167,9 @@ function RenameForm({
           setFieldError(undefined)
         }}
         disabled={busy}
-        description="1–50자 · 앞뒤 공백 제거"
+        hideLabel
+        placeholder="1 ~ 50자의 이름을 입력해 주세요"
+        className="rounded-lg text-sm"
         {...(fieldError ? { error: fieldError } : {})}
       />
       {(error || changed) && (
@@ -180,17 +183,26 @@ function RenameForm({
           {notice}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-5">
         {reloadRequired || changed ? (
           <Button disabled={busy} onClick={() => void reload()}>
             최신 목록 확인
           </Button>
         ) : (
-          <Button type="submit" variant="primary" disabled={busy}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="min-h-10 rounded-lg px-3 py-2"
+            disabled={busy}
+          >
             {busy ? '저장 중…' : '이름 저장'}
           </Button>
         )}
-        <Button disabled={busy} onClick={() => void navigate(path)}>
+        <Button
+          className="min-h-10 rounded-lg bg-subtle px-3 py-2 text-on-accent"
+          disabled={busy}
+          onClick={() => void navigate(destination)}
+        >
           취소
         </Button>
       </div>

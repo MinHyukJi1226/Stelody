@@ -11,7 +11,6 @@ export function PlaylistSong({
   song: Song
   members: readonly MemberCard[] | undefined
 }) {
-  const origin = song.work?.artists.map(({ name }) => name).join(' · ')
   return (
     <Link
       to={`/songs/${song.id}`}
@@ -20,18 +19,13 @@ export function PlaylistSong({
     >
       <Artwork
         src={song.thumbnailUrl}
-        className="h-[54px] w-24 rounded-lg md:h-[72px] md:w-32"
+        className="aspect-video w-20 rounded-xl sm:w-32 md:w-[200px]"
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h2 className="break-words text-lg font-bold leading-[1.5]">
+        <h2 className="wrap-anywhere text-sm font-medium md:text-base leading-[1.5]">
           {song.title}
         </h2>
-        {song.type === 'COVER' && (
-          <p className="break-words text-xs leading-[1.5] text-muted">
-            원곡 · {origin || song.work?.title || '정보 준비 중'}
-          </p>
-        )}
-        <p className="break-words text-sm leading-[1.5] text-muted">
+        <p className="wrap-anywhere text-xs leading-[1.5] text-muted md:text-sm">
           {participantLabel(song, members)}
         </p>
       </div>

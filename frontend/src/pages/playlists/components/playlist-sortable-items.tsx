@@ -19,6 +19,7 @@ import type { MemberCard } from '@/shared/api/types'
 import type { PlaylistItem } from '@/features/playlists/api'
 import { Button } from '@/shared/ui/button'
 import { PlaylistSong } from './playlist-song'
+import { PlaylistActionIcon } from './playlist-action-icon'
 
 export function PlaylistSortableItems({
   items,
@@ -81,7 +82,7 @@ export function PlaylistSortableItems({
         <div
           role="list"
           aria-label="플레이리스트 곡 순서"
-          className="flex min-w-0 flex-col gap-8"
+          className="home-section-enter flex min-w-0 flex-col gap-6 md:gap-8"
         >
           {items.map((item, index) => (
             <SortableItem
@@ -154,12 +155,12 @@ function SortableItem({
         position: 'relative',
         zIndex: isDragging ? 1 : undefined,
       }}
-      className={`flex min-w-0 touch-manipulation flex-col gap-4 rounded-2xl p-4 ${available ? 'bg-surface md:flex-row md:items-center md:gap-3' : 'bg-bg'} ${isDragging ? 'opacity-70 shadow-lg' : ''} ${disabled ? '' : 'cursor-grab active:cursor-grabbing'}`}
+      className={`flex min-w-0 touch-manipulation items-center justify-between gap-2 rounded-xl py-1 md:gap-4 ${isDragging ? 'opacity-70 shadow-lg' : ''} ${disabled ? '' : 'cursor-grab active:cursor-grabbing'}`}
     >
       {available ? (
         <PlaylistSong song={item.song!} members={members} />
       ) : (
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h2 className="text-sm leading-[1.5]">현재 이용할 수 없는 곡</h2>
           <p className="text-xs leading-[1.5] text-muted">
             {item.unavailableMessage || '저장한 순서는 유지됩니다.'}
@@ -167,34 +168,41 @@ function SortableItem({
         </div>
       )}
       <div
-        className="flex shrink-0 flex-wrap gap-2"
+        className="flex shrink-0 items-center gap-1.5 sm:gap-3 md:gap-5"
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
       >
         {available && (
           <>
             <Button
+              size="icon"
+              className="size-8 rounded-lg border-ink bg-transparent md:size-9"
               disabled={disabled || index === 0}
               aria-label={`${item.song!.title} 위로 이동`}
               onClick={() => onMove(index, index - 1)}
             >
-              ↑ 위로
+              <PlaylistActionIcon kind="up" />
             </Button>
             <Button
+              size="icon"
+              className="size-8 rounded-lg border-ink bg-transparent md:size-9"
               disabled={disabled || index === count - 1}
               aria-label={`${item.song!.title} 아래로 이동`}
               onClick={() => onMove(index, index + 1)}
             >
-              ↓ 아래로
+              <PlaylistActionIcon kind="down" />
             </Button>
           </>
         )}
         <Button
+          size="icon"
+          variant="destructive"
+          className="ml-1 size-8 rounded-lg border-0 bg-[#ff4d4f] text-white md:ml-6 md:size-9"
           disabled={disabled || removalLocked}
           aria-label={`${available ? item.song!.title : '이용 불가 곡'} 목록에서 제거`}
           onClick={() => onRemove(item)}
         >
-          {available ? '제거' : '목록에서 제거'}
+          <PlaylistActionIcon kind="delete" />
         </Button>
       </div>
     </article>

@@ -112,7 +112,19 @@ async function accountMenu(page: Page) {
     await page.getByRole('button', { name: '메뉴 열기' }).click()
 }
 
-test('보관함은 저장순·요약·이용 불가 항목을 표시하고 삭제 후 합계와 빈 화면을 갱신한다', async ({
+async function confirmFavoriteRemoval(page: Page) {
+  await page
+    .getByRole('button', { name: `${song.title} 즐겨찾기 해제`, exact: true })
+    .click()
+  await page
+    .getByRole('button', {
+      name: `${song.title} 즐겨찾기 해제 정말 삭제하시겠습니까?`,
+      exact: true,
+    })
+    .click()
+}
+
+test('보관함은 저장순과 이용 불가 항목을 표시하고 두 번째 클릭에 삭제한다', async ({
   page,
 }) => {
   const mock = await mockFavorites(page, [
@@ -126,8 +138,8 @@ test('보관함은 저장순·요약·이용 불가 항목을 표시하고 삭�
     },
   ])
   await page.goto('/library')
-  await expect(page.getByText('저장 2곡 · 이용 가능 1곡')).toBeVisible()
-  await expect(page.getByLabel('정렬: 최근 저장순')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '내 보관함' })).toBeVisible()
+  await expect(page.getByRole('article')).toHaveCount(2)
   await expect(
     page.getByRole('heading', { name: '현재 이용할 수 없는 곡' }),
   ).toBeVisible()
@@ -135,11 +147,22 @@ test('보관함은 저장순·요약·이용 불가 항목을 표시하고 삭�
     song.title,
   )
   await expect(page.locator('article').nth(1).getByRole('link')).toHaveCount(0)
-  await page.getByRole('button', { name: '이용 불가 곡 즐겨찾기 해제' }).click()
-  await expect(page.getByText('저장 1곡 · 이용 가능 1곡')).toBeVisible()
-  await page
-    .getByRole('button', { name: `${song.title} 즐겨찾기 해제` })
-    .click()
+  const unavailableRemove = page.getByRole('button', {
+    name: '이용 불가 곡 즐겨찾기 해제',
+    exact: true,
+  })
+  const confirmUnavailable = page.getByRole('button', {
+    name: '이용 불가 곡 즐겨찾기 해제 정말 삭제하시겠습니까?',
+  })
+  await unavailableRemove.click()
+  await expect(confirmUnavailable).toBeVisible()
+  expect(mock.writes).toHaveLength(0)
+  await page.keyboard.press('Escape')
+  await expect(unavailableRemove).toBeVisible()
+  await unavailableRemove.click()
+  await confirmUnavailable.click()
+  await expect(page.getByRole('article')).toHaveCount(1)
+  await confirmFavoriteRemoval(page)
   await expect(
     page.getByRole('heading', { name: '아직 저장한 노래가 없습니다' }),
   ).toBeVisible()
@@ -187,10 +210,8 @@ test('일반 카드는 상세 링크만 제공하고 상세에서 저장한 곡�
   await expect(remove).toBeEnabled()
   await accountMenu(page)
   await page.getByRole('link', { name: '내 보관함', exact: true }).click()
-  await expect(page.getByText('저장 1곡 · 이용 가능 1곡')).toBeVisible()
-  await page
-    .getByRole('button', { name: `${song.title} 즐겨찾기 해제`, exact: true })
-    .click()
+  await expect(page.getByRole('article')).toHaveCount(1)
+  await confirmFavoriteRemoval(page)
   await expect(
     page.getByRole('heading', { name: '아직 저장한 노래가 없습니다' }),
   ).toBeVisible()
@@ -469,9 +490,7 @@ test('변경 중 세션이 만료되면 로그인으로 이동하고 개인 목�
   ).toBeEnabled()
   mock.setError(401)
   mock.setLoggedIn(false)
-  await page
-    .getByRole('button', { name: `${song.title} 즐겨찾기 해제` })
-    .click()
+  await confirmFavoriteRemoval(page)
   await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
   await expect(
     page.getByRole('heading', { name: song.title, exact: true }),
@@ -532,7 +551,7 @@ test('즐겨찾기가 비어 있어도 기존 플레이리스트로 이동하고
   await expect(
     page.getByRole('link', { name: '플레이리스트', exact: true }),
   ).toBeVisible()
-  await accountMenu(page)
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await expect(
     page.getByRole('button', { name: '로그아웃', exact: true }),
   ).toBeVisible()

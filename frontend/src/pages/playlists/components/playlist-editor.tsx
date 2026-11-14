@@ -13,10 +13,10 @@ import {
 } from '@/features/playlists/queries'
 import { ApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
-import { PageState } from '@/shared/ui/page-state'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { useToast } from '@/shared/ui/toast-context'
 import { PlaylistSortableItems } from './playlist-sortable-items'
+import { PlaylistActionIcon } from './playlist-action-icon'
 
 type Draft = { base: PlaylistSnapshot; items: PlaylistItem[] }
 export function PlaylistEditor({
@@ -137,56 +137,62 @@ export function PlaylistEditor({
   }
   return (
     <>
-      <p className="text-xs leading-[1.5] text-brand">PRIVATE PLAYLIST</p>
-      <h1 className="break-words text-[32px] font-bold leading-[1.5]">
-        {playlist.name}
-      </h1>
-      <div className="flex flex-col gap-1 text-muted">
-        <p>총 {playlist.totalCount}곡</p>
+      <header className="home-section-enter flex min-w-0 flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="min-w-0 wrap-anywhere text-xl font-bold md:text-2xl">
+            {playlist.name}
+          </h1>
+          <p className="text-xs text-muted">총 {playlist.totalCount}곡</p>
+          <Button
+            size="icon"
+            className="size-9 rounded-xl border-0 bg-[#00e600] text-white"
+            disabled={disabled || dirty}
+            aria-label="이름 수정"
+            onClick={() =>
+              void navigate(`/library/playlists/${playlist.id}/edit`)
+            }
+          >
+            <PlaylistActionIcon kind="edit" />
+          </Button>
+          <Button
+            size="icon"
+            variant="destructive"
+            className="size-9 rounded-xl border-0 bg-[#ff4d4f] text-white"
+            disabled={disabled || dirty}
+            aria-label="목록 삭제"
+            onClick={() => setDeleting(true)}
+          >
+            <PlaylistActionIcon kind="delete" />
+          </Button>
+        </div>
         {playlist.totalCount > playlist.availableCount && (
-          <p>이용 불가 곡 {playlist.totalCount - playlist.availableCount}곡</p>
+          <p className="text-xs text-muted">
+            이용 불가 곡 {playlist.totalCount - playlist.availableCount}곡
+          </p>
         )}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="primary"
-          disabled={disabled || dirty}
-          onClick={() => void navigate('/search')}
-        >
-          ＋ 곡 추가하기
-        </Button>
-        <Button
-          disabled={disabled || dirty}
-          onClick={() =>
-            void navigate(`/library/playlists/${playlist.id}/edit`)
-          }
-        >
-          이름 수정
-        </Button>
-        <Button
-          variant="destructive"
-          disabled={disabled || dirty}
-          onClick={() => setDeleting(true)}
-        >
-          목록 삭제
-        </Button>
-        <Button
-          disabled={disabled || dirty}
-          onClick={() =>
-            void navigate(`/library/playlists/${playlist.id}/youtube-export`)
-          }
-        >
-          YouTube로 내보내기
-        </Button>
-      </div>
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant="primary"
+            className="min-h-10 rounded-lg px-3 py-2"
+            disabled={disabled || dirty}
+            onClick={() => void navigate('/songs')}
+          >
+            곡 추가하기
+          </Button>
+          <Button
+            variant="primary"
+            className="min-h-10 rounded-lg px-3 py-2"
+            disabled={disabled || dirty}
+            onClick={() =>
+              void navigate(`/library/playlists/${playlist.id}/youtube-export`)
+            }
+          >
+            YouTube로 내보내기
+          </Button>
+        </div>
+      </header>
       {items.length > 0 ? (
         <>
-          <div className="flex flex-col gap-4 rounded-2xl bg-tint p-4 text-sm leading-[1.5]">
-            <p className="font-medium text-brand">순서 편집</p>
-            <p className="text-muted">
-              드래그하거나 위·아래 버튼으로 이동한 뒤 저장하세요.
-            </p>
-          </div>
           {blocker.state === 'blocked' && (
             <p role="alert" className="text-sm text-error">
               {busy
@@ -204,15 +210,9 @@ export function PlaylistEditor({
           />
         </>
       ) : (
-        <div className="flex flex-1 items-center">
-          <PageState
-            kind="empty"
-            title="아직 담은 곡이 없습니다"
-            description="노래를 찾아 이 플레이리스트에 담아보세요."
-            detail="나만 볼 수 있는 목록입니다."
-            action={{ to: '/search', label: '곡 찾기' }}
-          />
-        </div>
+        <h2 className="home-section-enter text-lg font-bold leading-[1.5]">
+          아직 담은 곡이 없습니다
+        </h2>
       )}
       {(error || readError || conflict) && (
         <StatePanel
@@ -232,16 +232,16 @@ export function PlaylistEditor({
           {error}
         </p>
       )}
-      {items.length > 0 && (
+      {dirty && (
         <div className="flex flex-wrap gap-2">
           <Button
             variant="primary"
-            disabled={!dirty || disabled}
+            disabled={disabled}
             onClick={() => void save()}
           >
             {action.pending ? '저장 중…' : '변경 순서 저장'}
           </Button>
-          <Button disabled={!dirty || busy} onClick={cancel}>
+          <Button disabled={busy} onClick={cancel}>
             취소
           </Button>
         </div>

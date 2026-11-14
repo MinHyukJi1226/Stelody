@@ -3,11 +3,8 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { favoriteListOptions } from '@/features/favorites/queries'
 import type { Playlist } from '@/features/playlists/api'
-import {
-  playlistItemsOptions,
-  playlistListOptions,
-} from '@/features/playlists/queries'
-import { Artwork } from '@/shared/ui/artwork'
+import { playlistListOptions } from '@/features/playlists/queries'
+import { PlaylistCover } from '@/features/playlists/playlist-cover'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { HomeSection } from './home-section'
 import { HomeSongGrid, HomeSongSkeleton, homeGrid } from './home-song-grid'
@@ -20,34 +17,12 @@ function PlaylistPreview({
   playlist: Playlist
   userId: string
 }) {
-  const query = useInfiniteQuery({
-    ...playlistItemsOptions(userId, playlist.id),
-    enabled: playlist.availableCount > 0,
-  })
-  const thumbnails =
-    query.data?.pages[0]?.items
-      .flatMap((item) =>
-        item.available && item.song?.thumbnailUrl
-          ? [item.song.thumbnailUrl]
-          : [],
-      )
-      .slice(0, 4) ?? []
-
   return (
     <Link
       to={`/library/playlists/${playlist.id}`}
       className="grid min-w-0 gap-2 rounded-lg"
     >
-      <div className="grid aspect-square grid-cols-2 grid-rows-2 overflow-hidden rounded-lg bg-line">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Artwork
-            key={index}
-            src={thumbnails[index] ?? null}
-            className="size-full min-h-0 min-w-0"
-            fallbackText=""
-          />
-        ))}
-      </div>
+      <PlaylistCover playlist={playlist} userId={userId} />
       <span className="truncate text-sm" title={playlist.name}>
         {playlist.name}
       </span>
