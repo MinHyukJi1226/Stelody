@@ -16,7 +16,8 @@ export function SiteLayout() {
   const playlistPage =
     !!matchPath('/library/playlists/:playlistId', pathname) ||
     !!matchPath('/library/playlists/:playlistId/edit', pathname)
-  const compact = home || search || catalog || members || library || playlistPage
+  const compact =
+    home || search || catalog || members || library || playlistPage
   return (
     <PageActionProvider>
       <div
