@@ -216,9 +216,7 @@ test('저장·이용 가능 곡 수와 서버 순서를 표시하고 이용 불�
   await expect(
     page.getByText('이용 불가 곡 1곡', { exact: true }),
   ).toBeVisible()
-  await expect(
-    page.getByText('원곡 · 원곡 가수', { exact: true }),
-  ).toBeVisible()
+  await expect(page.getByRole('searchbox')).toBeVisible()
   const unavailable = page
     .locator('article')
     .filter({ hasText: '현재 이용할 수 없는 곡' })

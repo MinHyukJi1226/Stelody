@@ -212,7 +212,7 @@ test('전체 페이지와 이용 불가 곡을 유지하며 위아래 편집·�
   ])
   await expect(
     page.getByRole('button', { name: '변경 순서 저장' }),
-  ).toBeDisabled()
+  ).toHaveCount(0)
   await page.reload()
   await expect(rows(page).first()).toContainText(two.title)
   await expect(rows(page).nth(2)).toContainText('현재 이용할 수 없는 곡')
@@ -263,7 +263,7 @@ test('키보드 드래그로 순서를 바꾸고 Escape로 진행 중 이동을 
   await expect(rows(page).first()).toContainText(one.title)
   await expect(
     page.getByRole('button', { name: '변경 순서 저장' }),
-  ).toBeDisabled()
+  ).toHaveCount(0)
 })
 
 test('모바일에서 길게 누른 터치 드래그로 순서를 바꾼다', async ({
@@ -506,7 +506,7 @@ test('순서 저장 응답 유실은 성공으로 안내하거나 자동 재전�
   await expect(rows(page).first()).toContainText(two.title)
   await expect(
     page.getByRole('button', { name: '변경 순서 저장' }),
-  ).toBeDisabled()
+  ).toHaveCount(0)
   expect(state.writes).toHaveLength(1)
 })
 

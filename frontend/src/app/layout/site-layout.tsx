@@ -1,5 +1,5 @@
 import { PageActionProvider } from '@/shared/ui/page-action-provider'
-import { Outlet, ScrollRestoration, useLocation } from 'react-router'
+import { matchPath, Outlet, ScrollRestoration, useLocation } from 'react-router'
 import { HomeHeader } from '@/pages/home/components/home-header'
 import { SiteHeader } from './site-header'
 import { useTheme } from '../use-theme'
@@ -13,7 +13,10 @@ export function SiteLayout() {
   const catalog = pathname === '/songs'
   const members = pathname === '/members' || pathname.startsWith('/members/')
   const library = pathname === '/library' || pathname === '/library/playlists'
-  const compact = home || search || catalog || members || library
+  const playlistPage =
+    pathname !== '/library/playlists/new' &&
+    !!matchPath('/library/playlists/:playlistId', pathname)
+  const compact = home || search || catalog || members || library || playlistPage
   return (
     <PageActionProvider>
       <div
@@ -40,7 +43,7 @@ export function SiteLayout() {
           className={
             home
               ? 'w-full flex-1 px-5 pt-3 md:px-10'
-              : search || catalog || members || library
+              : search || catalog || members || library || playlistPage
                 ? 'flex w-full flex-1 flex-col'
                 : 'page-content'
           }
