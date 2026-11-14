@@ -14,8 +14,8 @@ export function SiteLayout() {
   const members = pathname === '/members' || pathname.startsWith('/members/')
   const library = pathname === '/library' || pathname === '/library/playlists'
   const playlistPage =
-    pathname !== '/library/playlists/new' &&
-    !!matchPath('/library/playlists/:playlistId', pathname)
+    !!matchPath('/library/playlists/:playlistId', pathname) ||
+    !!matchPath('/library/playlists/:playlistId/edit', pathname)
   const compact = home || search || catalog || members || library || playlistPage
   return (
     <PageActionProvider>

@@ -165,18 +165,18 @@ test('빈 목록에서 이름을 검증하고 생성 후 빈 상세로 이동하
   ).toBeVisible()
   await page.getByRole('link', { name: '새로 만들기', exact: true }).click()
   const input = page.getByRole('textbox', { name: '플레이리스트 이름' })
-  await page.getByRole('button', { name: '만들고 곡 담기' }).click()
+  await page.getByRole('button', { name: '생성하기' }).click()
   await expect(
     page.getByText('이름을 입력해 주세요.', { exact: true }),
   ).toBeVisible()
   await input.fill('가'.repeat(51))
-  await page.getByRole('button', { name: '만들고 곡 담기' }).click()
+  await page.getByRole('button', { name: '생성하기' }).click()
   await expect(
     page.getByText('이름은 50자까지 입력할 수 있어요.'),
   ).toBeVisible()
   expect(state.creates).toBe(0)
   await input.fill('  새 목록  ')
-  await page.getByRole('button', { name: '만들고 곡 담기' }).click()
+  await page.getByRole('button', { name: '생성하기' }).click()
   await expect(page).toHaveURL(`/library/playlists/${makeSong(1001).id}`)
   await expect(
     page.getByRole('heading', { name: '아직 담은 곡이 없습니다' }),
@@ -330,13 +330,11 @@ test('생성 요청 결과가 불확실하면 생성 재전송을 막고 목록 
   await page
     .getByRole('textbox', { name: '플레이리스트 이름' })
     .fill('응답 유실 목록')
-  await page.getByRole('button', { name: '만들고 곡 담기' }).click()
+  await page.getByRole('button', { name: '생성하기' }).click()
   await expect(page.getByRole('alert')).toContainText(
     '처리 결과를 확인하지 못했어요.',
   )
-  await expect(
-    page.getByRole('button', { name: '만들고 곡 담기' }),
-  ).toBeDisabled()
+  await expect(page.getByRole('button', { name: '생성하기' })).toBeDisabled()
   expect(state.creates).toBe(1)
   await page.getByRole('link', { name: '목록 확인' }).click()
   await expect(

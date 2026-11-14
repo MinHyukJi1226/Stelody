@@ -15,12 +15,14 @@ export function Input({ className, ...props }: ComponentProps<'input'>) {
 
 type TextFieldProps = ComponentProps<typeof Input> & {
   label: string
+  hideLabel?: boolean
   description?: string
   error?: string
 }
 
 export function TextField({
   label,
+  hideLabel = false,
   description,
   error,
   id,
@@ -33,7 +35,10 @@ export function TextField({
   const hintId = `${inputId}-hint`
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={inputId} className="text-sm font-medium leading-[1.5]">
+      <label
+        htmlFor={inputId}
+        className={hideLabel ? 'sr-only' : 'text-sm font-medium leading-[1.5]'}
+      >
         {label}
       </label>
       <Input
