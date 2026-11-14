@@ -205,9 +205,10 @@ for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
     const state = await setup(page)
     let release!: () => void
     state.writeGate = new Promise<void>((resolve) => (release = resolve))
-    await page.goto('/library/playlists')
-    await page.goto(path)
+    await page.goto('/account')
+    await page.getByRole('link', { name: 'YouTube 연결 관리' }).click()
     await expect(panel(page)).toBeVisible()
+    const connectionUrl = page.url()
     await page
       .getByRole('button', { name: 'YouTube 연결', exact: true })
       .click()
@@ -226,16 +227,16 @@ for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
         .getByRole('link', { name: '검색', exact: true })
         .click()
     } else if (destination === 'back') await page.goBack()
-    else
-      await page.getByRole('link', { name: '플레이리스트로 돌아가기' }).click()
-    if (destination === 'revisit') await page.goBack()
-    const expected = {
-      header: '/search',
-      revisit: path,
-      back: '/library/playlists',
-      playlist: '/library/playlists',
-    }[destination]
-    await expect(page).toHaveURL(new RegExp(`${expected}$`))
+    else await page.getByRole('link', { name: '계정 관리로 돌아가기' }).click()
+    if (destination === 'revisit')
+      await page.getByRole('link', { name: 'YouTube 연결 관리' }).click()
+    const expected =
+      destination === 'header'
+        ? '/search'
+        : destination === 'revisit'
+          ? connectionUrl
+          : '/account'
+    await expect(page).toHaveURL(expected)
     const response = page.waitForResponse(
       (r) =>
         r.url().endsWith('/me/youtube/authorizations') &&
@@ -249,7 +250,7 @@ for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         ),
     )
-    await expect(page).toHaveURL(new RegExp(`${expected}$`))
+    await expect(page).toHaveURL(expected)
     if (destination === 'revisit') {
       await expect(
         page.getByRole('button', { name: 'YouTube 연결', exact: true }),
