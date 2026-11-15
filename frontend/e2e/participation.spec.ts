@@ -48,7 +48,7 @@ test('전체곡의 작은 카드는 유형·제목·참여자를 표시하고 �
   await expect(page.getByText('게임 협업', { exact: true })).toHaveCount(0)
 })
 
-test('상세 배지는 참여 인원과 무관하게 특별 목적 설정과 등록 문구를 따른다', async ({
+test('공개일 옆 특별 목적 문구는 참여 인원과 무관하게 특별 목적 설정과 등록 문구를 따른다', async ({
   page,
 }) => {
   let special = true
@@ -73,12 +73,16 @@ test('상세 배지는 참여 인원과 무관하게 특별 목적 설정과 등
     route.fulfill({ json: makeViews() }),
   )
   await page.goto(`/songs/${detail.song.id}`)
-  const heading = page.locator('main header')
-  await expect(heading.getByText('게임 협업', { exact: true })).toBeVisible()
+  const publication = page.getByRole('region', { name: '공개일', exact: true })
+  await expect(
+    publication.getByText('게임 협업', { exact: true }),
+  ).toBeVisible()
   await expect(page.getByText('콜라보', { exact: true })).toHaveCount(0)
   label = null
   await page.reload()
-  await expect(heading.getByText('특별한 날', { exact: true })).toBeVisible()
+  await expect(
+    publication.getByText('특별한 날', { exact: true }),
+  ).toBeVisible()
   await expect(page.getByText('콜라보', { exact: true })).toHaveCount(0)
   special = false
   label = '표시하지 않을 문구'
@@ -87,7 +91,7 @@ test('상세 배지는 참여 인원과 무관하게 특별 목적 설정과 등
     page.getByRole('heading', { name: detail.song.title, exact: true }),
   ).toBeVisible()
   await expect(
-    heading.getByText('표시하지 않을 문구', { exact: true }),
+    publication.getByText('표시하지 않을 문구', { exact: true }),
   ).toHaveCount(0)
 })
 

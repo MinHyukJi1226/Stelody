@@ -31,6 +31,8 @@ test.beforeEach(async ({ page }) => {
 test('누적·일별 그래프와 표에서 결측·계산 불가·실제 0·오늘을 구분한다', async ({
   page,
 }, testInfo) => {
+  // Measure completed bars independent of frame timing on the CI runner.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(`/songs/${song.id}`)
   const section = page.getByRole('region', { name: '조회수 추이', exact: true })
   await expect(
@@ -40,6 +42,7 @@ test('누적·일별 그래프와 표에서 결측·계산 불가·실제 0·오
   await expect(
     section.getByText('총 조회수 11,200회', { exact: true }),
   ).toBeVisible()
+  await page.getByRole('button', { name: '날짜별 데이터' }).click()
   const table = section.getByRole('table', { name: '날짜별 데이터' })
   await expect(table.getByRole('columnheader')).toHaveText([
     '날짜(KST)',
@@ -102,7 +105,9 @@ test('누적·일별 그래프와 표에서 결측·계산 불가·실제 0·오
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true)
+    await page.getByRole('button', { name: '메뉴 열기' }).click()
     await page.getByRole('button', { name: /모드로 변경$/ }).click()
+    await page.keyboard.press('Escape')
   }
 })
 
@@ -131,14 +136,14 @@ test('마우스 호버 위치에서 누적·일별 값과 결측 상태를 표�
   await expect(chart.locator('.recharts-line-curve')).toBeVisible()
   await hoverDate(5)
   await expect(tooltip).toContainText('2026.10.16')
-  await expect(tooltip).toContainText('누적 조회수 10,500회')
-  await expect(tooltip).toContainText('2026. 10. 16. 14:30 KST')
+  await expect(tooltip).toContainText('10,500회')
+  await expect(tooltip).not.toContainText('관측')
   await expect(
     section.getByRole('status', { name: '선택한 날짜 데이터' }),
   ).toHaveCount(0)
   await hoverDate(2)
-  await expect(tooltip).toContainText('누적 조회수 미수집')
-  await expect(tooltip).toContainText('관측값 없음')
+  await expect(tooltip).toContainText('미수집')
+  await expect(tooltip).not.toContainText('관측값 없음')
   await section
     .getByRole('heading', { name: '조회수 추이', exact: true })
     .hover()
@@ -152,16 +157,18 @@ test('마우스 호버 위치에서 누적·일별 값과 결측 상태를 표�
     [6, '+700회'],
   ] as const) {
     await hoverDate(index)
-    await expect(tooltip).toContainText(`일별 증가량 ${value}`)
+    await expect(tooltip).toContainText(`${value}`)
   }
-  await expect(tooltip).toContainText('오늘 · 집계 중')
+  await expect(tooltip).not.toContainText('집계 중')
   const tip = (await tooltip.boundingBox())!
   const bounds = (await chart.boundingBox())!
   expect(tip.x).toBeGreaterThanOrEqual(bounds.x)
   expect(tip.x + tip.width).toBeLessThanOrEqual(bounds.x + bounds.width)
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page.getByRole('button', { name: /모드로 변경$/ }).click()
+  await page.keyboard.press('Escape')
   await hoverDate(5)
-  await expect(tooltip).toContainText('일별 증가량 +8,000회')
+  await expect(tooltip).toContainText('+8,000회')
   await section
     .getByRole('heading', { name: '조회수 추이', exact: true })
     .hover()
@@ -178,6 +185,7 @@ test('종류 전환은 기간을 유지하고 추가 요청 없이 같은 데이
     return route.fulfill({ json: { ...views, days } })
   })
   await page.goto(`/songs/${song.id}`)
+  await page.getByRole('button', { name: '날짜별 데이터' }).click()
   await expect(page.getByRole('table', { name: '날짜별 데이터' })).toBeVisible()
   await page.getByRole('radio', { name: '최근 30일', exact: true }).check()
   await expect.poll(() => periods.length).toBe(2)
@@ -268,6 +276,7 @@ test('0 증가만 있는 경우와 계산 불가·미수집만 있는 경우를 
   )
   await page.goto(`/songs/${song.id}`)
   await page.getByRole('radio', { name: '일별 증가량', exact: true }).check()
+  await page.getByRole('button', { name: '날짜별 데이터' }).click()
   await expect(
     page.getByRole('table', { name: '날짜별 데이터' }).getByRole('row'),
   ).toHaveCount(8)

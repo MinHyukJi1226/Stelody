@@ -22,14 +22,17 @@ export function SearchHelp({ detail }: { detail: SongDetail }) {
     }
   }
   return (
-    <section aria-label="YouTube 검색 도움말" className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 rounded-2xl bg-tint p-4 text-sm">
+    <section
+      aria-label="YouTube 검색 도움말"
+      className="home-section-enter flex flex-wrap items-center justify-between gap-3 p-4"
+    >
+      <div className="flex min-w-0 flex-col gap-2 text-sm">
         <p className="font-medium text-brand">
           {detail.searchHelp.visibility === 'DIFFICULT'
             ? 'YouTube 검색에서 영상을 찾기 어려울 수 있습니다'
             : 'YouTube에서 노래 찾아보기'}
         </p>
-        <p className="break-words text-muted">
+        <p className="wrap-anywhere text-muted">
           권장 검색어: <span className="select-text">{recommended}</span>
         </p>
       </div>

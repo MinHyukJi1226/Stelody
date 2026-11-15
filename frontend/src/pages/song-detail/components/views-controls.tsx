@@ -3,7 +3,7 @@ import type { ViewPeriod } from '@/features/songs/detail-queries'
 import type { ViewMetric } from '@/features/songs/view-series'
 
 const optionClass =
-  'flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-lg px-2 text-sm font-medium text-muted peer-checked:bg-tint peer-checked:text-brand peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand'
+  'flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-lg px-2 text-sm font-medium text-muted peer-checked:bg-brand-fill peer-checked:text-on-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand'
 
 export function ViewsControls({
   metric,

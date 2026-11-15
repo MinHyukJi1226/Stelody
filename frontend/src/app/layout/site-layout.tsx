@@ -11,13 +11,20 @@ export function SiteLayout() {
   const home = pathname === '/'
   const search = pathname === '/search'
   const catalog = pathname === '/songs'
+  const songDetail = !!matchPath('/songs/:songId', pathname)
   const members = pathname === '/members' || pathname.startsWith('/members/')
   const library = pathname === '/library' || pathname === '/library/playlists'
   const playlistPage =
     !!matchPath('/library/playlists/:playlistId', pathname) ||
     !!matchPath('/library/playlists/:playlistId/edit', pathname)
   const compact =
-    home || search || catalog || members || library || playlistPage
+    home ||
+    search ||
+    catalog ||
+    songDetail ||
+    members ||
+    library ||
+    playlistPage
   return (
     <PageActionProvider>
       <div
@@ -44,7 +51,12 @@ export function SiteLayout() {
           className={
             home
               ? 'w-full flex-1 px-5 pt-3 md:px-10'
-              : search || catalog || members || library || playlistPage
+              : search ||
+                  catalog ||
+                  songDetail ||
+                  members ||
+                  library ||
+                  playlistPage
                 ? 'flex w-full flex-1 flex-col'
                 : 'page-content'
           }

@@ -10,12 +10,14 @@ export function FavoriteButton({
   mode = 'toggle',
   knownFavorited,
   className,
+  iconOnly = false,
 }: {
   songId: string
   songTitle: string
   mode?: 'toggle' | 'remove'
   knownFavorited?: boolean
   className?: string
+  iconOnly?: boolean
 }) {
   const action = useFavoriteChange(songId)
   const { session, userId } = action
@@ -56,11 +58,12 @@ export function FavoriteButton({
     <div
       className={cn(
         'flex min-w-0 flex-col items-start gap-1',
-        mode === 'toggle' && 'min-h-[72px] w-44',
+        mode === 'toggle' && !iconOnly && 'min-h-[72px] w-44',
         className,
       )}
     >
       <Button
+        size={iconOnly ? 'icon' : 'default'}
         aria-label={
           checking
             ? `${songTitle} 즐겨찾기 확인 중`
@@ -71,33 +74,47 @@ export function FavoriteButton({
         disabled={checking || action.pending}
         onClick={click}
         className={cn(
-          mode === 'toggle' &&
+          iconOnly && 'size-12 border-0 bg-transparent',
+          !iconOnly &&
+            mode === 'toggle' &&
             'h-12 min-h-12 w-full border border-line p-3 font-bold leading-5',
         )}
       >
         {mode === 'toggle' && (
           <span
             aria-hidden="true"
-            className={cn('text-xl font-normal', saved && 'text-error')}
+            className={cn(
+              'font-normal',
+              iconOnly ? 'text-2xl' : 'text-xl',
+              saved && 'text-error',
+            )}
           >
             {saved ? '♥' : '♡'}
           </span>
         )}
-        {checking
-          ? '확인 중…'
-          : action.pending
-            ? '변경 중…'
-            : state.isError || session.isError
-              ? '다시 확인'
-              : mode === 'remove'
-                ? '즐겨찾기 해제'
-                : '즐겨찾기'}
+        {!iconOnly &&
+          (checking
+            ? '확인 중…'
+            : action.pending
+              ? '변경 중…'
+              : state.isError || session.isError
+                ? '다시 확인'
+                : mode === 'remove'
+                  ? '즐겨찾기 해제'
+                  : '즐겨찾기')}
       </Button>
       {message ? (
-        <p role="status" className="text-xs leading-[1.5] text-error">
+        <p
+          role="status"
+          className={cn(
+            'text-xs leading-[1.5] text-error',
+            iconOnly && 'sr-only',
+          )}
+        >
           {message}
         </p>
       ) : (
+        !iconOnly &&
         mode === 'toggle' &&
         saved && (
           <p className="text-[11px] leading-[18px] text-muted">
