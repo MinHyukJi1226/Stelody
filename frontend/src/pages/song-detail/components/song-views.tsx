@@ -12,7 +12,6 @@ import {
 } from '@/features/songs/view-series'
 import { Button } from '@/shared/ui/button'
 import { StatePanel } from '@/shared/ui/state-panel'
-import { formatObservedAt } from '../format'
 import { ViewsChart } from './views-chart'
 import { ViewsControls } from './views-controls'
 import { ViewsDataTable } from './views-data-table'
@@ -23,13 +22,11 @@ export function SongViews({
   songId,
   videoId,
   viewCount,
-  observedAt,
   onVideoChanged,
 }: {
   songId: string
   videoId: string
   viewCount: number | null
-  observedAt: string | null
   onVideoChanged: () => void
 }) {
   const [days, setDays] = useState<ViewPeriod>(7)
@@ -55,32 +52,15 @@ export function SongViews({
   return (
     <section
       aria-labelledby="views-title"
-      className="flex min-w-0 flex-col gap-4 rounded-2xl bg-surface p-4 md:p-6"
+      className="home-section-enter flex w-full min-w-0 flex-col gap-4"
     >
-      <h2 id="views-title" className="text-2xl font-bold leading-[1.5]">
+      <h2 id="views-title" className="text-lg font-bold leading-[1.5]">
         조회수 추이
       </h2>
       <div className="flex flex-col gap-1">
-        <p className="break-words text-[32px] font-bold leading-[1.5]">
+        <p className="break-words text-2xl font-bold leading-[1.5]">
           총 조회수{' '}
           {formatViewCount(summary ? summary.latestViewCount : viewCount)}
-        </p>
-        <p className="text-xs leading-[1.5] text-muted">
-          현재 영상의 전체 누적값 · 선택 기간의 증가량이 아닙니다.
-        </p>
-        <p className="text-xs leading-[1.5] text-muted">
-          수집 시작{' '}
-          {summary?.collectionStartedAt
-            ? formatObservedAt(summary.collectionStartedAt)
-            : '미확인'}{' '}
-          · 최종 관측{' '}
-          {formatObservedAt(summary ? summary.latestObservedAt : observedAt)}
-        </p>
-        <p className="text-xs leading-[1.5] text-muted">
-          갱신{' '}
-          {summary?.publishedAt
-            ? formatObservedAt(summary.publishedAt)
-            : '시각 미확인'}
         </p>
       </div>
       <ViewsControls
@@ -92,9 +72,6 @@ export function SongViews({
           setSelected(null)
         }}
       />
-      <p className="text-sm font-medium text-muted">
-        {metric === 'daily' ? '일별 증가량 (회) · 0 기준' : '누적 조회수 (회)'}
-      </p>
       {loading ? (
         <ViewsSkeleton />
       ) : mismatch ? (
@@ -150,20 +127,6 @@ export function SongViews({
             selected={selected}
             onSelect={setSelected}
           />
-          <p className="text-xs leading-[1.5] text-muted">
-            {metric === 'daily' ? (
-              <>
-                × 미수집 · ? 계산 불가 · 0회 실제 증가량 0<br />
-                옅은 막대는 오늘 · 집계 중 데이터입니다.
-              </>
-            ) : (
-              '한국 시간(KST) 기준 · 미수집 구간은 선을 연결하지 않습니다.'
-            )}
-          </p>
-          <p className="text-xs leading-[1.5] text-muted">
-            그래프에 마우스를 올리거나 터치해 값을 확인하세요. 표의 날짜로도
-            확인할 수 있습니다.
-          </p>
         </>
       )}
       {!loading && !mismatch && selectedRow && (

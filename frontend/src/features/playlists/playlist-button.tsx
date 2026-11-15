@@ -12,7 +12,13 @@ import { Button } from '@/shared/ui/button'
 import { useToast } from '@/shared/ui/toast-context'
 import { PlaylistPicker } from './playlist-picker'
 
-export function PlaylistButton({ songId }: { songId: string }) {
+export function PlaylistButton({
+  songId,
+  iconOnly = false,
+}: {
+  songId: string
+  iconOnly?: boolean
+}) {
   // An explicit close must override the initial login-resume intent.
   const [open, setOpen] = useState<boolean>()
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
@@ -52,11 +58,40 @@ export function PlaylistButton({ songId }: { songId: string }) {
   return (
     <>
       <Button
+        size={iconOnly ? 'icon' : 'default'}
+        aria-label={
+          iconOnly
+            ? session.isError
+              ? '로그인 상태 다시 확인'
+              : '＋ 플레이리스트'
+            : undefined
+        }
         disabled={session.isPending || session.isFetching}
         onClick={click}
-        className="h-12 min-h-12 w-full min-w-0 border border-line p-3 font-bold leading-5 md:w-44 md:flex-none"
+        className={
+          iconOnly
+            ? 'size-12 border-0 bg-transparent'
+            : 'h-12 min-h-12 w-full min-w-0 border border-line p-3 font-bold leading-5 md:w-44 md:flex-none'
+        }
       >
-        {session.isError ? '로그인 상태 다시 확인' : '＋ 플레이리스트'}
+        {iconOnly ? (
+          <svg
+            aria-hidden="true"
+            width="26"
+            height="26"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          >
+            <path d="M3 6h18M3 11h12M3 16h8m7-4v8m-4-4h8" />
+          </svg>
+        ) : session.isError ? (
+          '로그인 상태 다시 확인'
+        ) : (
+          '＋ 플레이리스트'
+        )}
       </Button>
       {session.data && !session.isError && (open ?? resume) && (
         <PlaylistPicker

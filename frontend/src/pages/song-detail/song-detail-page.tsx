@@ -5,14 +5,15 @@ import {
   songDetailOptions,
   type SongDetail,
 } from '@/features/songs/detail-queries'
-import { SongGrid } from '@/features/songs/song-card'
+import { useMemberDirectory } from '@/features/members/use-member-directory'
+import { CompactSongGrid } from '@/features/songs/compact-song-grid'
 import { ApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { SongHeading } from './components/song-heading'
+import { SongParticipants } from './components/song-participants'
+import { formatDate } from './format'
 import { SongVideo } from './components/song-video'
-import { ExternalLinks } from './components/external-links'
 import { KaraokeNumbers, WorkInformation } from './components/song-resources'
 import { SearchHelp } from './components/search-help'
 import { SongViews } from './components/song-views'
@@ -27,41 +28,47 @@ export function SongDetailPage() {
     !valid ||
     (query.error instanceof ApiError && [403, 404].includes(query.error.status))
   return (
-    <div className="flex min-w-0 flex-col gap-8">
-      {unavailable ? (
-        <>
-          <h1 className="text-2xl font-bold">노래를 찾을 수 없습니다</h1>
-          <StatePanel title="존재하지 않거나 공개되지 않은 노래입니다" />
-          <Button asChild>
-            <Link to="/songs">전체곡 보기</Link>
-          </Button>
-        </>
-      ) : query.isPending ? (
-        <div
-          role="status"
-          aria-label="노래 상세 불러오는 중"
-          className="flex flex-col gap-8"
-          aria-busy="true"
-        >
-          <div className="h-10 w-24 rounded-xl bg-line" />
-          <div className="h-12 w-2/3 rounded-xl bg-line" />
-          <div className="h-14 w-1/3 rounded-xl bg-line" />
-          <div className="aspect-video rounded-2xl bg-line" />
+    <div className="flex min-w-0 flex-1 flex-col">
+      {unavailable || !query.data ? (
+        <div className="flex flex-col gap-6 px-5 py-8 md:px-8">
+          {unavailable ? (
+            <>
+              <h1 className="text-2xl font-bold">노래를 찾을 수 없습니다</h1>
+              <StatePanel title="존재하지 않거나 공개되지 않은 노래입니다" />
+              <Button asChild>
+                <Link to="/songs">전체곡 보기</Link>
+              </Button>
+            </>
+          ) : query.isPending ? (
+            <div
+              role="status"
+              aria-label="노래 상세 불러오는 중"
+              className="flex flex-col gap-8"
+              aria-busy="true"
+            >
+              <div className="h-10 w-24 rounded-xl bg-line" />
+              <div className="h-12 w-2/3 rounded-xl bg-line" />
+              <div className="h-14 w-1/3 rounded-xl bg-line" />
+              <div className="aspect-video rounded-2xl bg-line" />
+            </div>
+          ) : (
+            <StatePanel
+              title="노래 정보를 불러오지 못했습니다"
+              description="잠시 후 다시 시도해 주세요."
+              onRetry={() => void query.refetch()}
+            />
+          )}
         </div>
-      ) : !query.data ? (
-        <StatePanel
-          title="노래 정보를 불러오지 못했습니다"
-          description="잠시 후 다시 시도해 주세요."
-          onRetry={() => void query.refetch()}
-        />
       ) : (
         <>
           {query.isError && (
-            <StatePanel
-              title="노래 정보를 갱신하지 못했습니다"
-              description="이전에 불러온 정보를 표시하고 있습니다."
-              onRetry={() => void query.refetch()}
-            />
+            <div className="px-5 py-4 md:px-8">
+              <StatePanel
+                title="노래 정보를 갱신하지 못했습니다"
+                description="이전에 불러온 정보를 표시하고 있습니다."
+                onRetry={() => void query.refetch()}
+              />
+            </div>
           )}
           <SongContent
             key={`${query.data.song.id}-${query.data.representativeVideo.id}`}
@@ -70,7 +77,10 @@ export function SongDetailPage() {
           />
         </>
       )}
-      <SiteFooter />
+      <footer className="mt-auto grid gap-1 px-5 pt-5 pb-6 text-xs text-muted md:px-8">
+        <p>Stelody · 팬이 만드는 노래 아카이브</p>
+        <p>공식 서비스가 아닙니다.</p>
+      </footer>
     </div>
   )
 }
@@ -82,45 +92,70 @@ function SongContent({
   detail: SongDetail
   reload: () => void
 }) {
+  const { song } = detail
+  const members = useMemberDirectory(
+    song.participants.some((participant) => participant.kind === 'MEMBER'),
+  )
   return (
     <>
-      <SongHeading detail={detail} />
-      <SongVideo detail={detail} />
-      <KaraokeNumbers entries={detail.karaoke} />
-      {detail.links.length > 0 && <ExternalLinks links={detail.links} />}
-      <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-2 items-start gap-2 md:flex md:flex-wrap md:gap-3">
-          <FavoriteButton
-            songId={detail.song.id}
-            songTitle={detail.song.title}
-            className="w-full min-w-0 md:w-44 md:flex-none"
-          />
-          <PlaylistButton songId={detail.song.id} />
-        </div>
-      </div>
-      {(detail.song.type === 'COVER' ||
-        detail.searchHelp.visibility === 'DIFFICULT') && (
-        <SearchHelp detail={detail} />
-      )}
-      <WorkInformation detail={detail} />
-      <SongViews
-        songId={detail.song.id}
-        videoId={detail.representativeVideo.id}
-        viewCount={detail.song.viewCount}
-        observedAt={detail.song.viewsObservedAt}
-        onVideoChanged={reload}
+      <SongHeading
+        detail={detail}
+        members={members}
+        actions={
+          <div className="flex max-w-full shrink-0 items-start gap-2">
+            <FavoriteButton songId={song.id} songTitle={song.title} iconOnly />
+            <PlaylistButton songId={song.id} iconOnly />
+          </div>
+        }
       />
-      {detail.relatedSongs.length > 0 && (
-        <section
-          aria-labelledby="related-title"
-          className="flex flex-col gap-8"
-        >
-          <h2 id="related-title" className="text-2xl font-bold leading-[1.5]">
-            같은 원곡의 다른 커버
-          </h2>
-          <SongGrid songs={detail.relatedSongs} />
-        </section>
-      )}
+      <div className="flex min-w-0 flex-col gap-8 px-5 py-5 md:px-8">
+        <div className="home-section-enter grid min-w-0 items-start gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] md:gap-8">
+          <SongVideo detail={detail} />
+          <aside className="flex min-w-0 flex-col gap-5">
+            <SongParticipants song={song} members={members} />
+            <section aria-labelledby="published-title" className="grid gap-2">
+              <h2 id="published-title" className="text-lg font-bold">
+                공개일
+              </h2>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <time className="text-sm" dateTime={song.publishedAt}>
+                  {formatDate(song.publishedAt)}
+                </time>
+                {song.isSpecialEvent && (
+                  <span className="ml-auto text-right text-xs text-brand wrap-anywhere">
+                    {song.specialEventLabel || '특별한 날'}
+                  </span>
+                )}
+              </div>
+            </section>
+            {song.type === 'ORIGINAL' && (
+              <KaraokeNumbers entries={detail.karaoke} />
+            )}
+            <WorkInformation detail={detail} />
+          </aside>
+        </div>
+        {detail.relatedSongs.length > 0 && (
+          <section
+            aria-labelledby="related-title"
+            className="home-section-enter flex min-w-0 flex-col gap-3"
+          >
+            <h2 id="related-title" className="text-lg font-bold leading-[1.5]">
+              같은 원곡의 다른 커버
+            </h2>
+            <CompactSongGrid songs={detail.relatedSongs} />
+          </section>
+        )}
+        <SongViews
+          songId={song.id}
+          videoId={detail.representativeVideo.id}
+          viewCount={song.viewCount}
+          onVideoChanged={reload}
+        />
+        {(song.type === 'COVER' ||
+          detail.searchHelp.visibility === 'DIFFICULT') && (
+          <SearchHelp detail={detail} />
+        )}
+      </div>
     </>
   )
 }

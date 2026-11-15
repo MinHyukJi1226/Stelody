@@ -108,7 +108,10 @@ async function mockFavorites(page: Page, initial: FavoriteItem[] = []) {
 }
 
 async function accountMenu(page: Page) {
-  if ((page.viewportSize()?.width ?? 0) < 768)
+  if (
+    new URL(page.url()).pathname.startsWith('/songs/') ||
+    (page.viewportSize()?.width ?? 0) < 768
+  )
     await page.getByRole('button', { name: '메뉴 열기' }).click()
 }
 

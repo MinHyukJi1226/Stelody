@@ -2,6 +2,9 @@ import { test, expect, emptyPage } from './fixtures'
 import { detail, song, makeViews } from './song-detail-fixtures'
 
 test.beforeEach(async ({ page }) => {
+  await page.route('https://www.youtube-nocookie.com/**', (route) =>
+    route.fulfill({ body: '<html></html>', contentType: 'text/html' }),
+  )
   await page.route(`**/api/v1/songs/${song.id}`, (route) =>
     route.fulfill({ json: detail }),
   )
@@ -26,14 +29,34 @@ test('목록에서 상세로 이동하고 곡·원곡 리소스를 구분하며 
     page.getByRole('heading', { name: song.title, exact: true }),
   ).toBeVisible()
   await expect(
-    page.getByRole('link', { name: '테스트 멤버 ›', exact: true }),
+    page.getByRole('link', { name: '테스트 멤버', exact: true }),
   ).toHaveAttribute('href', `/members/${song.participants[0]!.id}`)
-  const own = page.getByLabel('노래방 번호', { exact: true }).first()
-  await expect(own).toContainText('TJ · 00123')
-  await expect(own).toContainText('KY · 미수록')
+  await expect(page.getByLabel('노래방 번호', { exact: true })).toHaveCount(1)
   const work = page.getByRole('region', { name: '원곡 정보', exact: true })
-  await expect(work).toContainText('원곡 가수')
+  await expect(work.getByText('원곡 가수', { exact: true })).toBeVisible()
   await expect(work).toContainText('TJ · 00999')
+  await expect(work.getByText('원곡 노래방 번호')).toHaveCount(0)
+  await expect(work.getByRole('link')).toHaveCount(0)
+  await expect(
+    work.locator('iframe[title="원곡 제목 원곡 YouTube 영상"]'),
+  ).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/origin12345')
+  const chart = page.getByRole('img', { name: /누적 조회수 선 그래프/ })
+  const table = page.getByRole('table', { name: '날짜별 데이터' })
+  const tableToggle = page.getByRole('button', { name: '날짜별 데이터' })
+  await expect(tableToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(table).toBeHidden()
+  await tableToggle.click()
+  await expect(chart).toBeVisible()
+  const chartBox = (await chart.boundingBox())!
+  const tableBox = (await table.boundingBox())!
+  expect(chartBox.x).toBeGreaterThan(0)
+  expect(chartBox.width).toBeGreaterThan(page.viewportSize()!.width * 0.85)
+  expect(tableBox.width).toBeGreaterThanOrEqual(chartBox.width - 24)
+  await tableToggle.click()
+  await expect(tableToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(table).toBeHidden()
+  await tableToggle.click()
+  await expect(table).toBeVisible()
   await expect(
     page.getByRole('link', { name: '관련 커버 상세 보기' }),
   ).toHaveAttribute('href', `/songs/${detail.relatedSongs[0]!.id}`)
@@ -71,6 +94,7 @@ test('조회수 기간 변경·결측·0회·독립 오류와 재시도를 처�
       : route.fulfill({ json: makeViews(days) })
   })
   await page.goto(`/songs/${song.id}`)
+  await page.getByRole('button', { name: '날짜별 데이터' }).click()
   const table = page.getByRole('table', { name: '날짜별 데이터' })
   await expect(table.getByRole('row')).toHaveCount(8)
   await expect(
@@ -106,22 +130,20 @@ test('조회수 기간 변경·결측·0회·독립 오류와 재시도를 처�
   expect(periods).toEqual([7, 30, 30])
 })
 
-test('사용자가 재생할 때만 YouTube 임베드를 로드한다', async ({ page }) => {
-  await page.route('https://www.youtube-nocookie.com/**', (route) =>
-    route.fulfill({ body: '<html></html>', contentType: 'text/html' }),
-  )
+test('사용자가 재생할 때만 대표 영상 임베드를 로드한다', async ({ page }) => {
   await page.goto(`/songs/${song.id}`)
   const play = page.getByRole('button', { name: '테스트 커버 영상 재생' })
   await expect(play).toBeVisible()
-  await expect(page.locator('iframe')).toHaveCount(0)
+  const player = page.locator(`iframe[title="${song.title} YouTube 영상"]`)
+  await expect(player).toHaveCount(0)
   await play.click()
-  await expect(page.locator('iframe')).toHaveAttribute(
+  await expect(player).toHaveAttribute(
     'src',
     `https://www.youtube-nocookie.com/embed/${detail.representativeVideo.youtubeId}?autoplay=1`,
   )
   await expect(
     page.getByRole('link', { name: 'YouTube 원본 보기 ↗' }),
-  ).toHaveAttribute('href', detail.representativeVideo.url)
+  ).toHaveCount(0)
 })
 
 test('임베드 불가·오리지널·외부 참여자·안전한 링크를 처리한다', async ({
@@ -165,13 +187,20 @@ test('임베드 불가·오리지널·외부 참여자·안전한 링크를 처�
   await expect(page.getByRole('link', { name: /잘못된 링크/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: /외부 가수/ })).toHaveCount(0)
   await expect(
-    page.getByRole('region', { name: '참여 멤버와 아티스트' }),
-  ).toHaveCount(0)
-  await expect(page.getByText('외부 가수', { exact: true })).toBeVisible()
+    page.getByRole('region', { name: '참여 멤버', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('region', { name: '참여 멤버', exact: true }),
+  ).toContainText('외부 가수')
   await expect(
     page.getByRole('region', { name: 'YouTube 검색 도움말' }),
   ).toBeVisible()
   await expect(page.getByRole('heading', { name: '원곡 정보' })).toHaveCount(0)
+  const music = page.getByRole('region', { name: '음원 사이트', exact: true })
+  await expect(music.getByRole('link', { name: /Spotify/ })).toHaveAttribute(
+    'href',
+    'https://open.spotify.com/track/test',
+  )
   await expect(
     page.getByRole('heading', { name: '같은 원곡의 다른 커버' }),
   ).toHaveCount(0)
@@ -303,6 +332,7 @@ test('미수집·대표 영상 변경 시 잘못된 조회수를 표시하지 �
   await expect(
     page.getByRole('table', { name: '날짜별 데이터' }).getByRole('button'),
   ).toHaveCount(0)
+  await page.getByRole('button', { name: '날짜별 데이터' }).click()
   changed = true
   await page.getByRole('button', { name: '다시 시도', exact: true }).click()
   await expect(
@@ -311,6 +341,7 @@ test('미수집·대표 영상 변경 시 잘못된 조회수를 표시하지 �
   await expect(
     page.getByText('기간 내 수집된 데이터가 없습니다', { exact: true }),
   ).toBeVisible()
+  await page.getByRole('button', { name: '날짜별 데이터' }).click()
   await expect(
     page
       .getByRole('table', { name: '날짜별 데이터' })
@@ -347,7 +378,9 @@ test('긴 제목·다수 참여자·라이트/다크에서 모바일 가로 넘�
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true)
+    await page.getByRole('button', { name: '메뉴 열기' }).click()
     await page.getByRole('button', { name: /모드로 변경$/ }).click()
+    await page.keyboard.press('Escape')
   }
 })
 
@@ -381,6 +414,7 @@ test('상세와 조회수 로딩 상태를 각각 표시한다', async ({ page }
       page.getByRole('status', { name: '조회수 불러오는 중' }),
     ).toBeVisible()
     releaseViews()
+    await page.getByRole('button', { name: '날짜별 데이터' }).click()
     await expect(
       page.getByRole('table', { name: '날짜별 데이터' }),
     ).toBeVisible()
