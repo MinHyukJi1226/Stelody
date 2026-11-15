@@ -31,6 +31,8 @@ test.beforeEach(async ({ page }) => {
 test('누적·일별 그래프와 표에서 결측·계산 불가·실제 0·오늘을 구분한다', async ({
   page,
 }, testInfo) => {
+  // Measure completed bars independent of frame timing on the CI runner.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(`/songs/${song.id}`)
   const section = page.getByRole('region', { name: '조회수 추이', exact: true })
   await expect(
