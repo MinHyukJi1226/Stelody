@@ -51,6 +51,7 @@ export function ViewsChart({
   selected: string | null
   onSelect: (date: string) => void
 }) {
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const desktop = useMediaQuery('(min-width: 768px)')
   const canHover = useMediaQuery('(hover: hover) and (pointer: fine)')
   function select(state: MouseHandlerDataParam) {
@@ -78,7 +79,7 @@ export function ViewsChart({
       >
         <ComposedChart
           data={rows}
-          margin={{ top: desktop ? 30 : 24, right: 12, bottom: 26, left: 0 }}
+          margin={{ top: desktop ? 30 : 24, right: 28, bottom: 26, left: 0 }}
           accessibilityLayer
           onClick={select}
         >
@@ -148,7 +149,9 @@ export function ViewsChart({
               <Bar
                 dataKey="increase"
                 shape={DailyBar}
-                isAnimationActive={false}
+                isAnimationActive={!reducedMotion}
+                animationDuration={450}
+                animationEasing="ease-out"
               />
               {rows.map((row) =>
                 row.increase === null || row.increase === 0 ? (
@@ -187,7 +190,9 @@ export function ViewsChart({
               strokeWidth={3}
               dot={{ r: 3, fill: 'var(--brand)' }}
               connectNulls={false}
-              isAnimationActive={false}
+              isAnimationActive={!reducedMotion}
+              animationDuration={450}
+              animationEasing="ease-out"
             />
           )}
         </ComposedChart>

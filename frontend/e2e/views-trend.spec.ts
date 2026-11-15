@@ -134,14 +134,14 @@ test('마우스 호버 위치에서 누적·일별 값과 결측 상태를 표�
   await expect(chart.locator('.recharts-line-curve')).toBeVisible()
   await hoverDate(5)
   await expect(tooltip).toContainText('2026.10.16')
-  await expect(tooltip).toContainText('누적 조회수 10,500회')
-  await expect(tooltip).toContainText('2026. 10. 16. 14:30 KST')
+  await expect(tooltip).toContainText('10,500회')
+  await expect(tooltip).not.toContainText('관측')
   await expect(
     section.getByRole('status', { name: '선택한 날짜 데이터' }),
   ).toHaveCount(0)
   await hoverDate(2)
-  await expect(tooltip).toContainText('누적 조회수 미수집')
-  await expect(tooltip).toContainText('관측값 없음')
+  await expect(tooltip).toContainText('미수집')
+  await expect(tooltip).not.toContainText('관측값 없음')
   await section
     .getByRole('heading', { name: '조회수 추이', exact: true })
     .hover()
@@ -155,9 +155,9 @@ test('마우스 호버 위치에서 누적·일별 값과 결측 상태를 표�
     [6, '+700회'],
   ] as const) {
     await hoverDate(index)
-    await expect(tooltip).toContainText(`일별 증가량 ${value}`)
+    await expect(tooltip).toContainText(`${value}`)
   }
-  await expect(tooltip).toContainText('오늘 · 집계 중')
+  await expect(tooltip).not.toContainText('집계 중')
   const tip = (await tooltip.boundingBox())!
   const bounds = (await chart.boundingBox())!
   expect(tip.x).toBeGreaterThanOrEqual(bounds.x)
@@ -166,7 +166,7 @@ test('마우스 호버 위치에서 누적·일별 값과 결측 상태를 표�
   await page.getByRole('button', { name: /모드로 변경$/ }).click()
   await page.keyboard.press('Escape')
   await hoverDate(5)
-  await expect(tooltip).toContainText('일별 증가량 +8,000회')
+  await expect(tooltip).toContainText('+8,000회')
   await section
     .getByRole('heading', { name: '조회수 추이', exact: true })
     .hover()
