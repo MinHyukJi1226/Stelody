@@ -141,7 +141,7 @@ async function setup(page: Page, initial: Playlist[] = [list()]) {
   return state
 }
 const picker = (page: Page) =>
-  page.getByRole('dialog', { name: '플레이리스트에 추가', exact: true })
+  page.getByRole('dialog', { name: '플레이리스트 추가', exact: true })
 async function open(page: Page) {
   await page.goto(`/songs/${song.id}`)
   await page
@@ -247,9 +247,7 @@ test('추가 선택창은 이미 담긴 목록을 잠그고 선택한 목록 버
   await expect(
     picker(page).getByRole('button', { name: '밤에 듣는 목소리 추가됨' }),
   ).toBeDisabled()
-  await picker(page)
-    .getByRole('button', { name: '새벽 노래 이 목록에 담기' })
-    .click()
+  await picker(page).getByRole('button', { name: '새벽 노래 추가하기' }).click()
   await expect(picker(page)).toHaveCount(0)
   expect(state.adds).toEqual([{ id: second, version: 0, songId: song.id }])
   await page
@@ -271,7 +269,9 @@ test('만들고 담기는 추가 실패 후 새 목록을 다시 생성하지 �
   const state = await setup(page, [])
   state.addError = 'ACCESS_DENIED'
   await open(page)
-  await picker(page).getByRole('button', { name: '＋ 새 플레이리스트' }).click()
+  await picker(page)
+    .getByRole('button', { name: '새 플레이리스트 추가하기' })
+    .click()
   const dialog = page.getByRole('dialog', {
     name: '새 플레이리스트',
     exact: true,
@@ -307,7 +307,7 @@ test('버전 충돌은 최신 목록을 보여주고 사용자 재시도에서 �
   state.addError = 'PLAYLIST_CHANGED'
   await open(page)
   await picker(page)
-    .getByRole('button', { name: '밤에 듣는 목소리 이 목록에 담기' })
+    .getByRole('button', { name: '밤에 듣는 목소리 추가하기' })
     .click()
   await expect(picker(page).getByRole('alert')).toContainText(
     '목록이 변경되었어요.',
@@ -315,7 +315,7 @@ test('버전 충돌은 최신 목록을 보여주고 사용자 재시도에서 �
   expect(state.adds).toHaveLength(1)
   state.addError = ''
   await picker(page)
-    .getByRole('button', { name: '밤에 듣는 목소리 이 목록에 담기' })
+    .getByRole('button', { name: '밤에 듣는 목소리 추가하기' })
     .click()
   await expect(picker(page)).toHaveCount(0)
   expect(state.adds.map((x) => x.version)).toEqual([0, 1])
@@ -397,7 +397,9 @@ test('Google 복귀로 열린 선택창에서 만들고 담기 성공 후 재시
     .click()
   await page.getByRole('link', { name: 'Google로 로그인', exact: true }).click()
   await expect(picker(page)).toBeVisible()
-  await picker(page).getByRole('button', { name: '＋ 새 플레이리스트' }).click()
+  await picker(page)
+    .getByRole('button', { name: '새 플레이리스트 추가하기' })
+    .click()
   const dialog = page.getByRole('dialog', {
     name: '새 플레이리스트',
     exact: true,
@@ -521,7 +523,7 @@ for (const code of [
     state.addError = code
     await open(page)
     await picker(page)
-      .getByRole('button', { name: '밤에 듣는 목소리 이 목록에 담기' })
+      .getByRole('button', { name: '밤에 듣는 목소리 추가하기' })
       .click()
     await expect(picker(page).getByRole('alert')).toContainText(
       code === 'PLAYLIST_ITEM_LIMIT_REACHED'
@@ -542,7 +544,9 @@ test('생성 중 버튼·취소·Escape를 막아 중복 생성을 방지한다'
     release = resolve
   })
   await open(page)
-  await picker(page).getByRole('button', { name: '＋ 새 플레이리스트' }).click()
+  await picker(page)
+    .getByRole('button', { name: '새 플레이리스트 추가하기' })
+    .click()
   const dialog = page.getByRole('dialog', {
     name: '새 플레이리스트',
     exact: true,

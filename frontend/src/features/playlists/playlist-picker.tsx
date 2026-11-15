@@ -66,18 +66,50 @@ export function PlaylistPicker({
     }
   }
   return (
-    <Dialog labelledBy={titleId} busy={busy} onDismiss={onClose}>
-      <div className="flex flex-col items-start gap-4">
-        <div className="flex w-full items-start gap-3">
+    <Dialog
+      labelledBy={titleId}
+      busy={busy}
+      onDismiss={onClose}
+      className={
+        creating
+          ? ''
+          : 'h-[min(505px,calc(100dvh-40px))] max-w-[492px] overflow-hidden'
+      }
+    >
+      <div
+        className={
+          creating
+            ? 'flex flex-col gap-4'
+            : 'flex h-full min-h-0 flex-col gap-4'
+        }
+      >
+        <div className="flex w-full shrink-0 items-center gap-3">
           <h2
             id={titleId}
             className={`min-w-0 flex-1 break-words font-bold leading-[1.5] ${creating ? 'text-2xl' : 'text-xl md:text-2xl'}`}
           >
-            {creating ? '새 플레이리스트' : '플레이리스트에 추가'}
+            {creating ? '새 플레이리스트' : '플레이리스트 추가'}
           </h2>
           {!creating && (
-            <Button disabled={busy} onClick={onClose}>
-              닫기
+            <Button
+              size="icon"
+              className="border-0 bg-transparent"
+              aria-label="닫기"
+              disabled={busy}
+              onClick={onClose}
+            >
+              <svg
+                aria-hidden="true"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              >
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
             </Button>
           )}
         </div>
@@ -93,86 +125,85 @@ export function PlaylistPicker({
           />
         ) : (
           <>
-            <p className="text-sm leading-[1.5] text-muted">
-              추가할 플레이리스트를 선택하세요.
-            </p>
-            {error && (
-              <p role="alert" className="text-sm text-error">
-                {error}
-              </p>
-            )}
-            {query.isPending ? (
-              <p role="status">플레이리스트 불러오는 중…</p>
-            ) : denied ? (
-              <StatePanel title="이 목록에 접근할 수 없습니다" />
-            ) : query.isError && !items.length ? (
-              <StatePanel
-                title="플레이리스트를 불러오지 못했어요"
-                onRetry={() => void retry()}
-              />
-            ) : (
-              <>
-                {!items.length && (
-                  <p className="text-sm leading-[1.5] text-muted">
-                    아직 만든 플레이리스트가 없습니다.
-                  </p>
-                )}
-                {items.map((playlist) => (
-                  <div
-                    key={playlist.id}
-                    className={`flex w-full flex-col items-start gap-2 rounded-xl p-4 ${playlist.containsSong === false ? 'bg-tint' : 'bg-bg'}`}
-                  >
-                    <h3 className="w-full break-words font-bold leading-6">
-                      {playlist.name}
-                    </h3>
+            <div className="flex min-h-0 flex-1 flex-col items-start gap-3 overflow-y-auto">
+              {error && (
+                <p role="alert" className="text-sm text-error">
+                  {error}
+                </p>
+              )}
+              {query.isPending ? (
+                <p role="status">플레이리스트 불러오는 중…</p>
+              ) : denied ? (
+                <StatePanel title="이 목록에 접근할 수 없습니다" />
+              ) : query.isError && !items.length ? (
+                <StatePanel
+                  title="플레이리스트를 불러오지 못했어요"
+                  onRetry={() => void retry()}
+                />
+              ) : (
+                <>
+                  {!items.length && (
                     <p className="text-sm leading-[1.5] text-muted">
-                      {playlist.containsSong
-                        ? '이미 담긴 곡'
-                        : playlist.containsSong === false
-                          ? '이 목록에 노래를 추가합니다.'
-                          : '포함 여부를 다시 확인해 주세요.'}
+                      아직 만든 플레이리스트가 없습니다.
                     </p>
-                    <Button
-                      variant={
-                        playlist.containsSong === false
-                          ? 'primary'
-                          : 'secondary'
-                      }
-                      disabled={
-                        busy ||
-                        query.isFetching ||
-                        playlist.containsSong !== false
-                      }
-                      aria-label={`${playlist.name} ${playlist.containsSong ? '추가됨' : '이 목록에 담기'}`}
-                      onClick={() => void add(playlist)}
+                  )}
+                  {items.map((playlist) => (
+                    <div
+                      key={playlist.id}
+                      className="flex w-full shrink-0 items-center justify-between gap-3 py-2"
                     >
-                      {playlist.containsSong
-                        ? '추가됨 ✓'
-                        : busy
-                          ? '저장 중…'
-                          : '이 목록에 담기'}
+                      <h3 className="min-w-0 leading-6 wrap-anywhere">
+                        {playlist.name}
+                      </h3>
+                      <Button
+                        className="min-h-9 px-3 py-1.5"
+                        variant={
+                          playlist.containsSong === false
+                            ? 'primary'
+                            : 'secondary'
+                        }
+                        disabled={
+                          busy ||
+                          query.isFetching ||
+                          playlist.containsSong !== false
+                        }
+                        aria-label={`${playlist.name} ${playlist.containsSong ? '추가됨' : playlist.containsSong === null ? '확인 필요' : '추가하기'}`}
+                        onClick={() => void add(playlist)}
+                      >
+                        {playlist.containsSong
+                          ? '추가됨 ✓'
+                          : playlist.containsSong === null
+                            ? '확인 필요'
+                            : busy
+                              ? '저장 중…'
+                              : '추가하기'}
+                      </Button>
+                    </div>
+                  ))}
+                  {query.isError && items.length > 0 && (
+                    <StatePanel
+                      title="목록을 갱신하지 못했어요"
+                      onRetry={() => void retry()}
+                    />
+                  )}
+                  {query.hasNextPage && !query.isError && (
+                    <Button
+                      onClick={() => void query.fetchNextPage()}
+                      disabled={busy || query.isFetching}
+                    >
+                      목록 더 보기
                     </Button>
-                  </div>
-                ))}
-                {query.isError && items.length > 0 && (
-                  <StatePanel
-                    title="목록을 갱신하지 못했어요"
-                    onRetry={() => void retry()}
-                  />
-                )}
-                {query.hasNextPage && !query.isError && (
-                  <Button
-                    onClick={() => void query.fetchNextPage()}
-                    disabled={busy || query.isFetching}
-                  >
-                    목록 더 보기
-                  </Button>
-                )}
-              </>
-            )}
+                  )}
+                </>
+              )}
+            </div>
             {!denied && (
-              <Button disabled={busy} onClick={() => setCreating(true)}>
-                ＋ 새 플레이리스트
+              <Button
+                className="min-h-9 self-start bg-transparent px-0 py-1.5"
+                disabled={busy}
+                onClick={() => setCreating(true)}
+              >
+                새 플레이리스트 추가하기
               </Button>
             )}
           </>
