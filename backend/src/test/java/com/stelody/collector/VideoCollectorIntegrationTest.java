@@ -123,6 +123,90 @@ class VideoCollectorIntegrationTest {
     return "YT%09d".formatted(n);
   }
 
+  @Test
+  void registeredExternalMetadataRefreshPreservesCatalogAndNeverCollectsViews() throws Exception {
+    seed(2);
+    writer.update(
+        "UPDATE app.channel SET channel_type='EXTERNAL',collection_enabled=false WHERE id=?",
+        CHANNEL_ID);
+    writer.update(
+        "UPDATE app.video SET source_observed_at=?,status_observed_at=?",
+        java.sql.Timestamp.from(NOW.minusSeconds(25L * 86400)),
+        java.sql.Timestamp.from(NOW.minusSeconds(25L * 86400)));
+    success(List.of(1, 2), 1000);
+    var refresh =
+        new com.stelody.collector.service.RegisteredVideoMetadataRefresh(
+            source, settings(Duration.ofSeconds(10), 1), Clock.fixed(NOW, ZoneOffset.UTC), d -> {});
+    refresh.refresh();
+    assertThat(writer.queryForList("SELECT source_title FROM app.video ORDER BY id", String.class))
+        .containsExactly("source 1", "source 2");
+    assertThat(
+            writer.queryForList(
+                "SELECT source_observed_at FROM app.video", java.sql.Timestamp.class))
+        .containsOnly(java.sql.Timestamp.from(NOW));
+    assertThat(writer.queryForList("SELECT title FROM app.song_entry", String.class))
+        .containsOnly("manual title");
+    assertThat(writer.queryForList("SELECT version FROM app.song_entry", Long.class))
+        .containsOnly(0L);
+    assertThat(writer.queryForList("SELECT thumbnail_url FROM app.video", String.class))
+        .containsOnly("https://manual.invalid/override.jpg");
+    assertThat(writer.queryForList("SELECT published_at FROM app.video", java.sql.Timestamp.class))
+        .containsOnly(java.sql.Timestamp.from(Instant.parse("2020-01-01T00:00:00Z")));
+    for (String table :
+        List.of("view_snapshot", "daily_video_view", "collection_run", "published_video_view"))
+      assertThat(writer.queryForObject("SELECT count(*) FROM app." + table, Integer.class))
+          .isZero();
+    refresh.refresh();
+    server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
+    writer.update(
+        "UPDATE app.channel SET channel_type='GROUP',collection_enabled=true WHERE id=?",
+        CHANNEL_ID);
+    new com.stelody.collector.service.RegisteredVideoMetadataRefresh(
+            source,
+            settings(Duration.ofSeconds(10), 1),
+            Clock.fixed(NOW.plusSeconds(86401), ZoneOffset.UTC),
+            d -> {})
+        .refresh();
+    server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
+  void externalMetadataCannotRefreshOnFailureMismatchOrOverwriteNewerObservation()
+      throws Exception {
+    seed(2);
+    writer.update("UPDATE app.channel SET collection_enabled=false WHERE id=?", CHANNEL_ID);
+    writer.update(
+        "UPDATE app.video SET source_observed_at=?,status_observed_at=?",
+        java.sql.Timestamp.from(NOW.minusSeconds(25L * 86400)),
+        java.sql.Timestamp.from(NOW.minusSeconds(25L * 86400)));
+    var refresh =
+        new com.stelody.collector.service.RegisteredVideoMetadataRefresh(
+            source, settings(Duration.ofSeconds(10), 1), Clock.fixed(NOW, ZoneOffset.UTC), d -> {});
+    server.stubFor(get(urlPathEqualTo("/videos")).willReturn(aResponse().withStatus(500)));
+    assertThatThrownBy(refresh::refresh).isInstanceOf(CollectionFailure.class);
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .willReturn(
+                okJson(response(List.of(1, 2), 100).replace(CHANNEL, "UC" + "b".repeat(22)))));
+    assertThatThrownBy(refresh::refresh).isInstanceOf(CollectionFailure.class);
+    assertThat(writer.queryForList("SELECT source_title FROM app.video", String.class))
+        .containsOnly("previous source");
+
+    var repository = new com.stelody.collector.repository.RegisteredVideoMetadataRepository(source);
+    var targets = repository.due(NOW);
+    writer.update(
+        "UPDATE app.video SET status_observed_at=?", java.sql.Timestamp.from(NOW.plusSeconds(1)));
+    var values = new java.util.HashMap<String, VideoObservation>();
+    for (var target : targets)
+      values.put(
+          target.youtubeId(),
+          new VideoObservation(
+              target.youtubeId(), CHANNEL, "PUBLIC", "older", NOW, null, 120L, true, 100L));
+    repository.save(targets, values, NOW);
+    assertThat(writer.queryForList("SELECT source_title FROM app.video", String.class))
+        .containsOnly("previous source");
+  }
+
   void seed(int count) {
     for (int i = 1; i <= count; i++) {
       writer.update(
