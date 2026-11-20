@@ -61,6 +61,23 @@ public class YouTubeOriginalLookup {
   }
 
   public Map<UUID, Outcome> find(List<Target> targets) {
+    return find(targets, false);
+  }
+
+  public Optional<Evidence> findAutomatic(Target target) {
+    var outcome = find(List.of(target), true).get(target.id());
+    if (outcome == null || outcome.evidence() == null) return Optional.empty();
+    var evidence = outcome.evidence();
+    return Optional.of(
+        new Evidence(
+            OriginalCredits.unquoteTitle(evidence.title()),
+            evidence.artists(),
+            evidence.videoId(),
+            evidence.sourceUrl(),
+            evidence.method()));
+  }
+
+  private Map<UUID, Outcome> find(List<Target> targets, boolean automatic) {
     if (targets.isEmpty() || settings.apiKey().isBlank()) return Map.of();
     var session = new Lookup(settings);
     var sources = session.videos(targets.stream().map(Target::videoId).distinct().toList());
@@ -89,6 +106,7 @@ public class YouTubeOriginalLookup {
         var original = session.videos(List.of(hint.videoId())).get(hint.videoId());
         if (original != null)
           OriginalCredits.direct(original, hint, source.id(), target.titles())
+              .filter(e -> !automatic || automaticMatch(original, e, target, hint))
               .ifPresent(e -> result.put(target.id(), Outcome.found(e)));
         result.putIfAbsent(target.id(), Outcome.conflict());
         // An explicit original reference must not be replaced by a different search result.
@@ -116,6 +134,11 @@ public class YouTubeOriginalLookup {
       }
       var expectedArtists = hint.explicitArtists() ? hint.artists() : List.<String>of();
       var titles = target.titles();
+      if (automatic) {
+        expectedArtists = OriginalCredits.creditedArtists(hint, titles);
+        if (expectedArtists.isEmpty()) expectedArtists = target.knownArtists();
+        if (expectedArtists.isEmpty()) continue;
+      }
       if (titles.isEmpty()) continue;
       String queryTitle =
           titles.stream()
@@ -130,12 +153,16 @@ public class YouTubeOriginalLookup {
       for (var video : session.videos(session.search(query)).values()) {
         if (video.id().equals(source.id()) || video.channelId().equals(source.channelId()))
           continue;
-        OriginalCredits.searched(video, titles, expectedArtists).ifPresent(candidates::add);
+        if (!automatic || OriginalCredits.hasReleaseEvidence(video))
+          OriginalCredits.searched(video, titles, expectedArtists).ifPresent(candidates::add);
       }
-      var evidence = OriginalCredits.unique(candidates);
+      var evidence =
+          automatic && candidates.size() != 1
+              ? Optional.<Evidence>empty()
+              : OriginalCredits.unique(candidates);
       if (evidence.isPresent()) result.put(target.id(), Outcome.found(evidence.get()));
       else if (!candidates.isEmpty()) result.put(target.id(), Outcome.conflict());
-      else if (hint.explicitArtists())
+      else if (!automatic && hint.explicitArtists())
         result.put(
             target.id(),
             Outcome.found(
@@ -146,7 +173,28 @@ public class YouTubeOriginalLookup {
                     OriginalCredits.url(source.id()),
                     "DESCRIPTION")));
     }
+    if (automatic && session.unavailable)
+      throw new CollectionFailure("ORIGINAL_LOOKUP_UNAVAILABLE", true);
     return Map.copyOf(result);
+  }
+
+  private boolean automaticMatch(Video original, Evidence evidence, Target target, Hint hint) {
+    if (evidence.artists().isEmpty()
+        || OriginalCredits.searched(original, List.of(evidence.title()), evidence.artists())
+            .isEmpty()) return false;
+    var artists = OriginalCredits.creditedArtists(hint, target.titles());
+    var originalCreditArtists = OriginalCredits.creditedArtists(hint, List.of(evidence.title()));
+    boolean matchingTitle =
+        target.titles().stream()
+            .anyMatch(
+                title ->
+                    OriginalCredits.titleKey(title)
+                        .equals(OriginalCredits.titleKey(evidence.title())));
+    if (!matchingTitle && originalCreditArtists.isEmpty()) return false;
+    if (artists.isEmpty()) artists = originalCreditArtists;
+    if (artists.isEmpty()) artists = target.knownArtists();
+    var verified = evidence.artists().stream().map(SearchText::searchKey).toList();
+    return artists.stream().map(SearchText::searchKey).allMatch(verified::contains);
   }
 
   private static final class Lookup {

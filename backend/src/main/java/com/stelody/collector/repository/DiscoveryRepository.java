@@ -1,6 +1,7 @@
 package com.stelody.collector.repository;
 
 import com.stelody.catalog.domain.SearchText;
+import com.stelody.collector.domain.CollectedSongTitle;
 import com.stelody.collector.domain.CollectionFailure;
 import com.stelody.collector.domain.CoverPublicationRules;
 import com.stelody.collector.domain.DiscoveryRules.Decision;
@@ -73,6 +74,7 @@ public final class DiscoveryRepository {
           AND has_table_privilege(current_user,'app.member','SELECT')
           AND has_table_privilege(current_user,'app.member_alias','SELECT')
           AND has_function_privilege(current_user,'app.publish_discovered_cover(uuid,timestamptz,uuid,bigint,text,boolean,text,uuid)','EXECUTE')
+          AND has_function_privilege(current_user,'app.publish_collected_song(uuid,timestamptz,uuid,bigint,text,text,boolean,text,uuid,boolean)','EXECUTE')
         """)
             .query(Boolean.class)
             .single();
@@ -338,18 +340,20 @@ public final class DiscoveryRepository {
       changed += updated;
       if (updated == 1 && eligibility != null && eligibility.eligible()) {
         var member = eligibility.member();
-        String function =
-            completedPremiere ? "app.publish_completed_premiere" : "app.publish_discovered_cover";
+        String title =
+            CollectedSongTitle.display(
+                video.title(), member, "COVER".equals(decision.suggestedType()));
         jdbc.sql(
                 """
-            SELECT %s(id,:now,:member,:version,:title,:embed,:rule,:token)
+            SELECT app.publish_collected_song(id,:now,:member,:version,:displayTitle,:searchTitle,:embed,:rule,:token,:premiere)
             FROM app.review_item WHERE youtube_id=:youtube AND channel_id=:channel
-            """
-                    .formatted(function))
+            """)
             .param("now", ts(now))
             .param("member", member.id())
             .param("version", member.version())
-            .param("title", SearchText.normalize(video.title()))
+            .param("displayTitle", title)
+            .param("searchTitle", SearchText.normalize(title))
+            .param("premiere", completedPremiere)
             .param("embed", video.embeddable())
             .param(
                 "rule",
