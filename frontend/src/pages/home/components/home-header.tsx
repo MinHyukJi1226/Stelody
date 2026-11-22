@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Form, Link, useLocation } from 'react-router'
 import { MenuIcon } from '@/app/layout/menu-icon'
-import { accountPath } from '@/features/account/api'
+import { accountPath, withdrawalPath } from '@/features/account/api'
 import { AdminLink } from '@/features/admin/admin-link'
 import { AccountControl } from '@/features/auth/account-control'
 import { loginPath } from '@/features/auth/return-path'
@@ -24,7 +24,8 @@ export function HomeHeader({
   const search = location.pathname === '/search'
   const catalog = location.pathname === '/songs'
   const login = location.pathname === '/login'
-  const account = location.pathname === accountPath
+  const account =
+    location.pathname === accountPath || location.pathname === withdrawalPath
   const members =
     location.pathname === '/members' ||
     location.pathname.startsWith('/members/')

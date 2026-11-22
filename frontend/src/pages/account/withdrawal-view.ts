@@ -20,7 +20,7 @@ export const withdrawalViews = {
   guide: {
     label: '1 · 탈퇴 안내 및 본인 확인',
     title: '탈퇴 전 안내를 확인해 주세요',
-    body: '현재 로그인한 Google 계정으로 본인 확인이 필요합니다.',
+    body: '탈퇴 전, 현재 로그인한 Google 계정으로 본인 확인이 필요합니다.',
     tone: 'brand',
   },
   verified: {

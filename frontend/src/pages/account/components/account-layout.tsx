@@ -34,7 +34,7 @@ export function AccountCard({
     <section
       aria-label="계정 상태"
       aria-busy={loading}
-      className="flex w-full min-w-0 max-w-[640px] flex-col items-start gap-5 rounded-2xl bg-surface p-6 text-sm leading-[1.5]"
+      className="flex w-full min-w-0 max-w-[640px] flex-col items-start gap-4 text-sm leading-[1.5]"
     >
       {children}
     </section>
