@@ -51,17 +51,16 @@ for (const mode of ['anonymous', 'member', 'inactive', 'error'] as const) {
 
 test('ACTIVE ADMIN의 헤더·모바일 메뉴 진입과 작업함 집계를 연결한다', async ({
   page,
-  isMobile,
 }) => {
   const state = await mockAdmin(page)
   await page.goto('/account')
   await expect(
     page.getByRole('heading', { name: '계정 관리', exact: true }),
   ).toBeVisible()
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page
     .getByRole('link', {
-      name: isMobile ? '관리자 작업함' : '관리자',
+      name: '관리자',
       exact: true,
     })
     .click()

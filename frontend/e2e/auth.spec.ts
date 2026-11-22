@@ -35,10 +35,17 @@ test('로그인 화면·원본 Google 아이콘·내부 복귀 경로를 제공�
   await page.goto('/search?q=hello&sort=LATEST#results')
   await accountMenu(page)
   await page.getByRole('link', { name: '로그인', exact: true }).click()
-  const title = page.getByRole('heading', {
-    name: /나만의 노래를\s*모아보세요/,
-  })
+  const title = page.getByRole('heading', { name: '로그인', exact: true })
   await expect(title).toBeVisible()
+  await expect(
+    page.getByText(
+      /즐겨찾기와 플레이리스트 저장으로\s*내 취향 곡을 모아보세요/,
+    ),
+  ).toBeVisible()
+  await expect(page.getByRole('search', { name: '노래 검색' })).toBeVisible()
+  await expect(page.locator('footer')).toContainText(
+    '화면 검수용 예시 데이터 · 공식 서비스가 아닙니다',
+  )
   const button = page.getByRole('link', {
     name: 'Google로 로그인',
     exact: true,
@@ -51,7 +58,7 @@ test('로그인 화면·원본 Google 아이콘·내부 복귀 경로를 제공�
   expect(callback.searchParams.get('returnTo')).toBe(
     '/search?q=hello&sort=LATEST#results',
   )
-  expect(await button.boundingBox()).toMatchObject({ height: 48 })
+  expect(await button.boundingBox()).toMatchObject({ height: 52 })
   const mark = button.locator('img')
   expect(await mark.boundingBox()).toMatchObject({ width: 20, height: 20 })
   expect(

@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { YouTubeConnection } from '@/features/youtube/api'
+import { youtubePath, type YouTubeConnection } from '@/features/youtube/api'
 import { useYouTubeActions } from '@/features/youtube/queries'
 import { ApiError } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/button'
@@ -7,17 +7,19 @@ import { Dialog } from '@/shared/ui/dialog'
 
 export function DisconnectDialog({
   user,
+  returnTo = youtubePath,
   onClose,
   onVerify,
   onComplete,
 }: {
   user: string
+  returnTo?: string
   onClose: () => void
   onVerify: () => Promise<YouTubeConnection>
   onComplete: (connection: YouTubeConnection) => void
 }) {
   const titleId = useId()
-  const action = useYouTubeActions(user)
+  const action = useYouTubeActions(user, returnTo)
   const [error, setError] = useState(false)
   const [uncertain, setUncertain] = useState(false)
   const [checking, setChecking] = useState(false)
