@@ -728,6 +728,53 @@ class DiscoveryCollectorIntegrationTest {
   }
 
   @Test
+  void unregisteredParenthesizedSpellingPublishesUploadsAndCompletedPremieresOnce() {
+    enableAuto();
+    writer.execute("DELETE FROM app.member_alias");
+    String title = "HELP!! / 아오쿠모 린 (Aokumo Rin) Cover";
+    page(null, null, 1);
+    clearCovers(title, "none", "PT3M9S", "2026-09-01T00:00:00Z", 1);
+    assertThat(autoRun(NOW, true, true, false).status()).isEqualTo("SUCCEEDED");
+    observePremiere(2, title, NOW, false, false);
+    observePremiere(2, title, NOW.plusSeconds(360), true, false);
+    assertThat(
+            writer.queryForObject(
+                "SELECT review_status FROM app.review_item WHERE youtube_id=?",
+                String.class,
+                yt(2)))
+        .isEqualTo("PENDING");
+    observePremiere(2, title, NOW.plusSeconds(420), true, true);
+    observePremiere(2, title, NOW.plusSeconds(480), true, true);
+
+    assertThat(count("song_entry")).isEqualTo(2);
+    assertThat(count("cover_auto_registration")).isEqualTo(1);
+    assertThat(count("premiere_auto_registration")).isEqualTo(1);
+    assertThat(writer.queryForList("SELECT title FROM app.song_entry", String.class))
+        .containsOnly("HELP!!");
+    assertThat(writer.queryForList("SELECT source_title FROM app.video", String.class))
+        .containsOnly(title);
+    assertThat(writer.queryForList("SELECT visibility FROM app.song_entry", String.class))
+        .containsOnly("PUBLISHED");
+    assertThat(writer.queryForList("SELECT review_status FROM app.review_item", String.class))
+        .containsOnly("REGISTERED");
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.song_member WHERE confirmed AND member_id='00000000-0000-0000-0000-000000000010'",
+                Integer.class))
+        .isEqualTo(2);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.cover_auto_registration WHERE original_lookup_after IS NOT NULL",
+                Integer.class))
+        .isEqualTo(1);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.premiere_auto_registration WHERE original_lookup_after IS NOT NULL",
+                Integer.class))
+        .isEqualTo(1);
+  }
+
+  @Test
   void collectedCoversPublishWithCleanTitleAndShareVerifiedOriginal() {
     enableAuto();
     String title = "발랄라이카 [ BALALAIKA / 9Lana ] / 아오쿠모 린 Cover";

@@ -59,4 +59,13 @@ class PremierePublicationRulesTest {
     assertThat(eligible("아오쿠모 린 신곡 Original", NOW.minusSeconds(300), NOW.minusSeconds(10)))
         .isTrue();
   }
+
+  @Test
+  void completedCoverAcceptsUnregisteredParenthesizedSpellingButNotAnotherMember() {
+    assertThat(
+            eligible("노래 / 아오쿠모 린 (Aokumo Rin) Cover", NOW.minusSeconds(300), NOW.minusSeconds(10)))
+        .isTrue();
+    assertThat(eligible("노래 / 아오쿠모 린 (텐코 시부키) Cover", NOW.minusSeconds(300), NOW.minusSeconds(10)))
+        .isFalse();
+  }
 }
