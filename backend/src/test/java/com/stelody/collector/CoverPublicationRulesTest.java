@@ -52,6 +52,41 @@ class CoverPublicationRulesTest {
   @ParameterizedTest
   @ValueSource(
       strings = {
+        "HELP!! [Kobo Kanaeru] / 시즈키 토아 (Shizuki Toa) Cover",
+        "HELP!! [Kobo Kanaeru] Covered by 시즈키 토아 (Shizuki Toa)"
+      })
+  void parenthesizedSpellingDoesNotRequireAnAdditionalRegisteredAlias(String title) {
+    var toa = new CoverPublicationRules.Member(new UUID(0, 4), 2, List.of("시즈키 토아"));
+    assertThat(decide(video(title, 189L, "none", NOW), List.of(toa)).member()).isEqualTo(toa);
+    assertThat(CollectedSongTitle.display(title, toa, true)).isEqualTo("HELP!! [Kobo Kanaeru]");
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "노래 / 아오쿠모 린 (Guest & Rin) Cover",
+        "노래 / 아오쿠모 린 (feat. Guest) Cover",
+        "노래 / 아오쿠모 린 (Guest / Rin) Cover",
+        "노래 / 아오쿠모 린 (Aokumo Rin) Guest Cover",
+        "노래 / 아오쿠모 린 (Aokumo Rin) (Guest) Cover",
+        "노래 / 아오쿠모 린 () Cover"
+      })
+  void parenthesizedSpellingCannotHideAdditionalCredits(String title) {
+    assertThat(decide(video(title, 240L, "none", NOW), List.of(member)).eligible()).isFalse();
+  }
+
+  @Test
+  void anotherKnownMemberInsideParenthesesStillRequiresReview() {
+    var other = new CoverPublicationRules.Member(new UUID(0, 2), 0, List.of("유즈하 리코"));
+    assertThat(
+            decide(video("노래 / 아오쿠모 린 (유즈하 리코) Cover", 240L, "none", NOW), List.of(member, other))
+                .eligible())
+        .isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
         "노래 Cover",
         "아오쿠모 린의 채널 노래 Cover",
         "아오쿠모 린 Cover #Shorts",

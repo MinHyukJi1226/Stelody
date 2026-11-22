@@ -112,6 +112,32 @@ class YouTubeVideoClientTest {
   }
 
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "live,public",
+    "none,public",
+    "live,private",
+    "none,unlisted"
+  })
+  void startedPublicBroadcastRetainsItsScheduledStart(String broadcast, String privacy) {
+    response(
+        200,
+        video(
+                ",\"liveStreamingDetails\":{\"scheduledStartTime\":\"2026-10-01T00:00:00Z\",\"actualStartTime\":\"2026-10-01T00:00:09Z\"}",
+                "")
+            .replace("\"privacyStatus\":\"public\"", "\"privacyStatus\":\"" + privacy + "\"")
+            .replace(
+                "\"title\":\"테스트 영상\"",
+                "\"title\":\"테스트 영상\",\"liveBroadcastContent\":\"" + broadcast + "\""));
+    var value =
+        new YouTubeVideoClient(settings(1, Duration.ofSeconds(1)), d -> {})
+            .fetch(List.of(ID), new CollectionBudget(Duration.ofSeconds(5)))
+            .get(ID);
+    assertThat(value.publicScheduledStartAt())
+        .isEqualTo(privacy.equals("public") ? Instant.parse("2026-10-01T00:00:00Z") : null);
+    assertThat(value.actualStartAt()).isEqualTo(Instant.parse("2026-10-01T00:00:09Z"));
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"public", "private", "unlisted"})
   void onlyPublicUpcomingVideosExposeTheScheduledStart(String privacy) {
     response(

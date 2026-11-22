@@ -57,22 +57,13 @@ public final class CoverPublicationRules {
         members.stream().filter(m -> m.names().stream().anyMatch(n -> contains(title, n))).toList();
     if (mentioned.size() != 1) return no("PARTICIPANTS_UNCONFIRMED");
     Member member = mentioned.getFirst();
-    // Only complete suffix credits, including redundant Korean/English aliases of the same person.
-    for (String name : member.names()) {
-      String quoted = Pattern.quote(SearchText.normalize(name));
-      String alternate =
-          member.names().stream()
-              .map(SearchText::normalize)
-              .map(Pattern::quote)
-              .reduce((a, b) -> a + "|" + b)
-              .orElse(quoted);
-      String credit = quoted + "(?:\\s*\\((?:" + alternate + ")\\))?";
-      String segment = title.substring(title.lastIndexOf('/') + 1).strip();
-      if (Pattern.compile(credit + "\\s+cover").matcher(segment).matches()
-          || Pattern.compile("(?<![\\p{L}\\p{N}])covered\\s+by\\s+" + credit + "\\s*$")
-              .matcher(title)
-              .find()) return new Result(member, "EXPLICIT_SOLO_COVER_CREDIT");
-    }
+    // Keep the complete solo suffix check, without requiring a display spelling to be an alias.
+    String credit = MemberCredit.pattern(member.names());
+    String segment = title.substring(title.lastIndexOf('/') + 1).strip();
+    if (Pattern.compile(credit + "\\s+cover").matcher(segment).matches()
+        || Pattern.compile("(?<![\\p{L}\\p{N}])covered\\s+by\\s+" + credit + "\\s*$")
+            .matcher(title)
+            .find()) return new Result(member, "EXPLICIT_SOLO_COVER_CREDIT");
     return no("PARTICIPANTS_UNCONFIRMED");
   }
 
