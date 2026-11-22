@@ -147,6 +147,7 @@ test('분류는 하나만 선택하고 같은 분류를 다시 누르면 해제�
     await expect.poll(() => requests.at(-1)?.get('groupBy')).toBe(groupBy)
     expect(requests.at(-1)?.get('sort')).toBe('OLDEST')
     expect(requests.at(-1)?.has('cursor')).toBe(false)
+    await expect(page).toHaveURL('/songs?sort=OLDEST')
   }
   await page.getByRole('button', { name: /정렬 선택:/ }).click()
   await page.getByRole('menuitemradio', { name: '인기순', exact: true }).click()
@@ -162,6 +163,85 @@ test('분류는 하나만 선택하고 같은 분류를 다시 누르면 해제�
   await expect(
     page.getByRole('button', { name: '원곡 가수별', exact: true }),
   ).toHaveAttribute('aria-pressed', 'false')
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem('stelody-catalog-grouping'),
+    ),
+  ).toBeNull()
+})
+
+test('분류 선택은 주소에서 숨기고 뒤로·앞으로 이동 시 선택을 복원한다', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/songs/groups?*', (route) =>
+    route.fulfill({ json: emptyPage }),
+  )
+  await page.goto('/songs')
+  const type = page.getByRole('button', {
+    name: '오리지널 / 커버',
+    exact: true,
+  })
+  const member = page.getByRole('button', { name: '멤버별', exact: true })
+  await type.click()
+  await expect(type).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveURL('/songs')
+  await member.click()
+  await expect(member).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveURL('/songs')
+  await page.goBack()
+  await expect(type).toHaveAttribute('aria-pressed', 'true')
+  await page.goForward()
+  await expect(member).toHaveAttribute('aria-pressed', 'true')
+  await page.reload()
+  await expect(member).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveURL('/songs')
+})
+
+test('다른 화면에서 재진입하면 같은 탭의 분류를 유지하고 새 탭에는 적용하지 않는다', async ({
+  page,
+  context,
+}) => {
+  await page.route('**/api/v1/songs/groups?*', (route) =>
+    route.fulfill({ json: emptyPage }),
+  )
+  await page.goto('/songs')
+  await page.getByRole('button', { name: '원곡 가수별', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: '원곡 가수별', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await page.goto('/search?q=test')
+  await page.goto('/songs')
+  await expect(
+    page.getByRole('button', { name: '원곡 가수별', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  const other = await context.newPage()
+  await other.route('**/api/v1/**', (route) =>
+    route.fulfill({ status: 404, json: { code: 'NOT_FOUND' } }),
+  )
+  await other.goto('/songs')
+  await expect(
+    other.getByRole('button', { name: '원곡 가수별', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false')
+  await other.close()
+})
+
+test('기존 분류 URL도 정렬·해시를 보존하며 주소를 정리하고 서버에는 분류를 전달한다', async ({
+  page,
+}) => {
+  const requests: URLSearchParams[] = []
+  await page.route('**/api/v1/songs/groups?*', (route) => {
+    requests.push(new URL(route.request().url()).searchParams)
+    return route.fulfill({ json: emptyPage })
+  })
+  await page.goto('/songs?groupBy=TYPE&sort=VIEWS#songs')
+  await expect(page).toHaveURL('/songs?sort=VIEWS#songs')
+  await expect.poll(() => requests.at(-1)?.get('groupBy')).toBe('TYPE')
+  expect(requests.at(-1)?.get('sort')).toBe('VIEWS')
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: '오리지널 / 커버', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(page).toHaveURL('/songs?sort=VIEWS#songs')
 })
 
 const groupPage = (name: string, id: string, index: number) => ({
@@ -818,10 +898,19 @@ test('분류 선택 여부와 화면 폭에 관계없이 카드 크기가 일치
     : [390]) {
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/songs')
-    const flat = await page.getByRole('article').first().boundingBox()
-    await page
-      .getByRole('button', { name: '오리지널 / 커버', exact: true })
-      .click()
+    const classification = page.getByRole('button', {
+      name: '오리지널 / 커버',
+      exact: true,
+    })
+    if ((await classification.getAttribute('aria-pressed')) === 'true')
+      await classification.click()
+    const flatRegion = page.getByRole('region', {
+      name: '전체곡 목록',
+      exact: true,
+    })
+    await expect(flatRegion).toBeVisible()
+    const flat = await flatRegion.getByRole('article').first().boundingBox()
+    await classification.click()
     const region = page.getByRole('region', {
       name: '오리지널 곡 목록',
       exact: true,
