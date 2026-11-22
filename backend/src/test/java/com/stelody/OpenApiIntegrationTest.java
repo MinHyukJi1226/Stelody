@@ -61,6 +61,25 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void youtubeSongAddressIsPublicAndKeepsUuidOperations() throws Exception {
+    var api = contract();
+    var operation = api.at("/paths/~1api~1v1~1songs~1by-youtube~1{youtubeId}/get");
+    assertThat(operation.path("security").isEmpty()).isTrue();
+    assertThat(operation.path("description").asText()).contains("404", "song.id", "11자");
+    assertThat(api.path("paths").has("/api/v1/songs/{id}")).isTrue();
+    assertThat(api.path("paths").has("/api/v1/songs/{id}/views")).isTrue();
+    assertThat(
+            api.path("components")
+                .path("schemas")
+                .path("com.stelody.song.dto.SongDtos.Card")
+                .path("properties")
+                .path("youtubeId")
+                .path("pattern")
+                .asText())
+        .isEqualTo("^[A-Za-z0-9_-]{11}$");
+  }
+
+  @Test
   void documentsNullableUpcomingThumbnail() throws Exception {
     var api = contract();
     var response = api.at("/paths/~1api~1v1~1songs~1upcoming/get/responses/200");

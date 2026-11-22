@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 import type { ApiSchemas, ApiPaths } from '@/shared/api/types'
+import { isYoutubeId } from './song-path'
 
 export type SongDetail = ApiSchemas['com.stelody.song.dto.SongDtos.Detail']
 export type SongViews =
@@ -14,9 +15,10 @@ export const songDetailOptions = (id: string) =>
   queryOptions({
     queryKey: ['songs', 'detail', id],
     queryFn: ({ signal }) =>
-      apiClient.request<SongDetail>(`/songs/${encodeURIComponent(id)}`, {
-        signal,
-      }),
+      apiClient.request<SongDetail>(
+        `/songs/${isYoutubeId(id) ? 'by-youtube/' : ''}${encodeURIComponent(id)}`,
+        { signal },
+      ),
   })
 
 export const songViewsOptions = (

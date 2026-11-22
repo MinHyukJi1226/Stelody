@@ -143,6 +143,7 @@ public class SecurityConfiguration {
                         "/api/v1/songs/groups",
                         "/api/v1/songs/groups/{groupId}/songs",
                         "/api/v1/songs/{id}",
+                        "/api/v1/songs/by-youtube/{youtubeId}",
                         "/api/v1/songs/{id}/views",
                         "/api/v1/members",
                         "/api/v1/members/{id}",

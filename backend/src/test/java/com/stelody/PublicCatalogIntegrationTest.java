@@ -812,6 +812,52 @@ class PublicCatalogIntegrationTest {
   }
 
   @Test
+  void youtubeAddressReturnsSamePublicSongAndAddsRepresentativeIdToCards() throws Exception {
+    var uuidDetail = request("/api/v1/songs/" + S1);
+    var youtubeId = uuidDetail.path("representativeVideo").path("youtubeId").asText();
+    assertThat(request("/api/v1/songs/by-youtube/" + youtubeId)).isEqualTo(uuidDetail);
+    assertThat(uuidDetail.path("song").path("youtubeId").asText()).isEqualTo(youtubeId);
+    var cards = request("/api/v1/songs").path("items");
+    for (var card : cards) {
+      var detail = request("/api/v1/songs/" + card.path("id").asText());
+      assertThat(card.path("youtubeId").asText())
+          .isEqualTo(detail.path("representativeVideo").path("youtubeId").asText());
+    }
+    mvc.perform(post("/api/v1/songs/by-youtube/" + youtubeId)).andExpect(status().isForbidden());
+  }
+
+  @Test
+  void retainedVideoAddressStillResolvesAfterRepresentativeReplacement() throws Exception {
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,video_kind,availability,source_title,published_at,source_observed_at) VALUES (?,?,'aB12cd-E_34','OFFICIAL_COVER','PUBLIC','Replacement','2026-01-02T00:00:00Z',CURRENT_TIMESTAMP)",
+        id(999),
+        S1);
+    writer.update("UPDATE app.song_entry SET representative_video_id=? WHERE id=?", id(999), S1);
+    writer.update("UPDATE app.video SET availability='DELETED' WHERE id=?", id(1101));
+    var detail = request("/api/v1/songs/" + S1);
+    assertThat(request("/api/v1/songs/by-youtube/00000000101")).isEqualTo(detail);
+    assertThat(request("/api/v1/songs/by-youtube/aB12cd-E_34")).isEqualTo(detail);
+    assertThat(detail.path("song").path("youtubeId").asText()).isEqualTo("aB12cd-E_34");
+    mvc.perform(get("/api/v1/songs/by-youtube/ab12cd-e_34")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void youtubeAddressKeepsDraftHiddenAndUnavailableSongsInaccessible() throws Exception {
+    for (var visibility : List.of("DRAFT", "HIDDEN")) {
+      writer.update("UPDATE app.song_entry SET visibility=? WHERE id=?", visibility, S1);
+      mvc.perform(get("/api/v1/songs/by-youtube/00000000101")).andExpect(status().isNotFound());
+    }
+    writer.update("UPDATE app.song_entry SET visibility='PUBLISHED' WHERE id=?", S1);
+    for (var availability : List.of("PRIVATE", "DELETED", "UNAVAILABLE")) {
+      writer.update("UPDATE app.video SET availability=? WHERE id=?", availability, id(1101));
+      mvc.perform(get("/api/v1/songs/by-youtube/00000000101")).andExpect(status().isNotFound());
+    }
+    for (var invalid : List.of("short", "123456789012", "bad!value11", "unknown1234")) {
+      mvc.perform(get("/api/v1/songs/by-youtube/" + invalid)).andExpect(status().isNotFound());
+    }
+  }
+
+  @Test
   void relatedCoversExcludeMemberOnlyMatchesAndOriginalsBeforeLimiting() throws Exception {
     song(id(201), "Same work cover", "COVER", W1, "2026-01-10T00:00:00Z", M3);
     song(id(202), "Same work multiple participants", "COVER", W1, "2026-01-10T00:00:00Z", M3);

@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+  '/api/v1/songs/by-youtube/{youtubeId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * YouTube 영상 ID로 공개 곡 상세 조회
+     * @description 대소문자를 구분하는 영문·숫자·밑줄·하이픈 11자 영상 ID로 연결된 공개 곡을 조회합니다. 대표 영상 이외의 연결 영상 ID도 지원하며 응답은 UUID 상세와 동일합니다. 형식 오류·미등록 영상·공개 조건을 만족하지 않는 곡은 404입니다. 응답 song.youtubeId는 현재 대표 영상 ID이고 song.id는 조회수·즐겨찾기·플레이리스트에 사용하는 기존 곡 UUID입니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_by_youtube_youtubeId']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/members/by-slug/{slug}': {
     parameters: {
       query?: never
@@ -2940,6 +2962,8 @@ export interface components {
       name: string
     }
     'com.stelody.song.dto.SongDtos.Card': {
+      /** @description 현재 대표 YouTube 영상 ID. 공개 페이지 주소 /songs/{youtubeId}에 사용합니다. id는 기존 곡 UUID로 유지합니다. */
+      youtubeId?: string
       /** Format: uuid */
       id: string
       /** @description 관리자가 확정한 기념·특별 목적 곡 여부입니다. 생일·데뷔·주년·신의상·게임 협업 등을 모두 포함하므로 true만으로 게임 콜라보를 의미하지 않습니다. 곡별 표시 문구는 specialEventLabel입니다. */
@@ -3183,6 +3207,37 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  get_songs_by_youtube_youtubeId: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        youtubeId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Detail']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_members_by_slug_slug: {
     parameters: {
       query?: never

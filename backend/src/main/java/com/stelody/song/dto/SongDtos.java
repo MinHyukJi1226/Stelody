@@ -69,7 +69,12 @@ public final class SongDtos {
                   "관리자가 정한 자유 입력 문구입니다. 예: 생일 기념, 데뷔 기념, 게임 콜라보 기념. 고정 유형 enum이나 문구 파싱으로 협업 여부를 자동 판정하지 않습니다. isSpecialEvent=false이면 null입니다.")
           String specialEventLabel,
       @Schema(nullable = true) Long viewCount,
-      @Schema(nullable = true) Instant viewsObservedAt) {}
+      @Schema(nullable = true) Instant viewsObservedAt,
+      @Schema(
+              pattern = "^[A-Za-z0-9_-]{11}$",
+              description =
+                  "현재 대표 YouTube 영상 ID. 공개 페이지 주소 /songs/{youtubeId}에 사용합니다. id는 기존 곡 UUID로 유지합니다.")
+          String youtubeId) {}
 
   @Schema(requiredProperties = {"id", "youtubeId", "kind", "url", "embeddable"})
   public record Video(

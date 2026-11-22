@@ -424,3 +424,5 @@ GET /api/v1/members/{id}/songs?type=COVER&participation=MULTIPLE&sort=VIEWS
 참여 인원·멤버·곡 유형·정렬을 바꾸면 기존 커서는 400 INVALID_CATALOG_QUERY이며 첫 페이지부터 다시 조회합니다. ALL·MULTIPLE은 같은 의미의 기존 불리언 커서와 호환됩니다. VIEWS에서 조회수 집계가 바뀌면 기존과 같이 409 VIEW_PUBLICATION_CHANGED입니다. 요청 예시의 {id}에는 멤버 UUID를 사용합니다.
 
 멤버의 공개 주소는 응답의 `slug`로 만듭니다. `GET /api/v1/members/by-slug/{slug}`로 상세를 조회한 뒤 반환된 `member.id`로 기존 곡 목록 API를 호출합니다. slug는 소문자 영문으로 시작하는 소문자·숫자·하이픈 1~40자이며, 일치하는 주소가 없으면 404입니다. 기존 UUID 상세·곡 목록 API와 커서는 계속 지원합니다. V34는 기존 15명의 영문 주소를 지정하며 미지정 멤버는 null입니다. 관리자 입력란은 추가하지 않습니다. 프론트는 UUID 주소에 접속하면 slug 주소로 전환하고 검색 조건과 해시를 보존합니다.
+
+공개 곡 주소는 카드의 `youtubeId`를 사용한 `/songs/{youtubeId}`입니다. `GET /api/v1/songs/by-youtube/{youtubeId}`는 기존 UUID 상세와 같은 응답을 반환하며 대소문자를 구분하는 영문·숫자·밑줄·하이픈 11자만 허용합니다. 형식 오류·미등록 영상·비공개 곡은 404 `CATALOG_NOT_FOUND`입니다. 대표 영상 교체 후에도 이전 영상과 곡의 연결이 DB에 남아 있으면 이전 영상 주소로 조회할 수 있습니다. 응답의 `youtubeId`는 항상 현재 대표 영상 ID이며 기존 UUID 주소와 이전 영상 주소는 프론트에서 현재 대표 영상 주소로 전환하고 검색 조건·해시를 보존합니다. 조회수·즐겨찾기·플레이리스트·관리자 API는 기존 곡 UUID를 유지합니다. 이 곡 주소 변경 자체에는 새 식별자·DB 마이그레이션이 필요하지 않습니다.

@@ -1,3 +1,4 @@
+import { songPath } from '@/features/songs/song-path'
 import { Link } from 'react-router'
 import type { MemberCard } from '@/shared/api/types'
 import type { Song } from '@/features/songs/api'
@@ -13,7 +14,7 @@ export function PlaylistSong({
 }) {
   return (
     <Link
-      to={`/songs/${song.id}`}
+      to={songPath(song)}
       className="flex min-w-0 flex-1 items-center gap-3 rounded-lg md:gap-4"
       aria-label={`${song.title} 상세 보기`}
     >

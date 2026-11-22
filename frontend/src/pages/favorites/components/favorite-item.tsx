@@ -1,3 +1,4 @@
+import { songPath } from '@/features/songs/song-path'
 import { Link } from 'react-router'
 import type { FavoriteItem as Item } from '@/features/favorites/api'
 import { useFavoriteChange } from '@/features/favorites/use-favorite-change'
@@ -27,7 +28,7 @@ export function FavoriteItem({
     <article className="flex min-w-0 items-center justify-between gap-3 md:gap-4">
       {song ? (
         <Link
-          to={`/songs/${song.id}`}
+          to={songPath(song)}
           aria-label={`${song.title} 상세 보기`}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl md:gap-4"
         >
