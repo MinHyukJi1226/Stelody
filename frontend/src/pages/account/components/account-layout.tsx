@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { SiteFooter } from '@/shared/ui/site-footer'
 
 export function AccountLayout({
   title,
@@ -9,14 +8,17 @@ export function AccountLayout({
   children: ReactNode
 }) {
   return (
-    <div className="favorites-page flex min-w-0 flex-col gap-12">
-      <section className="flex min-w-0 flex-1 flex-col items-center gap-6">
-        <h1 className="w-full break-words text-[32px] font-bold leading-[1.5]">
+    <div className="flex min-w-0 flex-1 flex-col px-5 md:px-8">
+      <section className="flex min-w-0 flex-1 flex-col items-start gap-8 py-8 md:py-10">
+        <h1 className="w-full break-words text-2xl font-bold leading-[1.5] md:text-[32px]">
           {title}
         </h1>
         {children}
       </section>
-      <SiteFooter />
+      <footer className="grid gap-1 px-2 pt-5 pb-6 text-xs leading-[1.5] text-muted">
+        <p>Stelody · 팬이 만드는 노래 아카이브</p>
+        <p>화면 검수용 예시 데이터 · 공식 서비스가 아닙니다</p>
+      </footer>
     </div>
   )
 }
@@ -41,9 +43,9 @@ export function AccountCard({
 
 export function AccountEmail({ email }: { email: string }) {
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2 rounded-xl bg-bg p-3">
-      <p className="text-xs text-muted">로그인한 계정</p>
-      <p className="break-all font-medium">{email}</p>
+    <div className="flex w-full min-w-0 flex-col gap-3">
+      <h2 className="text-lg font-bold md:text-xl">내계정</h2>
+      <p className="break-all text-base">{email}</p>
     </div>
   )
 }

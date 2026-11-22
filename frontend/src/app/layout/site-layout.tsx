@@ -11,6 +11,7 @@ export function SiteLayout() {
   const home = pathname === '/'
   const search = pathname === '/search'
   const login = pathname === '/login'
+  const account = pathname === '/account'
   const catalog = pathname === '/songs'
   const songDetail = !!matchPath('/songs/:songId', pathname)
   const members = pathname === '/members' || pathname.startsWith('/members/')
@@ -21,6 +22,7 @@ export function SiteLayout() {
   const compact =
     home ||
     login ||
+    account ||
     search ||
     catalog ||
     songDetail ||
@@ -54,6 +56,7 @@ export function SiteLayout() {
             home
               ? 'w-full flex-1 px-5 pt-3 md:px-10'
               : login ||
+                  account ||
                   search ||
                   catalog ||
                   songDetail ||

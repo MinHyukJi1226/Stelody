@@ -212,32 +212,84 @@ async function verified(page: Page) {
 
 test('계정 관리 진입·이메일·탈퇴 안내를 표시하고 메뉴 포커스를 복원한다', async ({
   page,
-}, info) => {
+}) => {
   const state = await setup(page)
   await page.goto('/account')
   await expect(panel(page).getByText(user.email, { exact: true })).toBeVisible()
-  if (info.project.name === 'mobile') {
-    const trigger = page.getByRole('button', { name: '메뉴 열기' })
-    await trigger.click()
-    const drawer = page.getByRole('dialog', { name: '메뉴' })
-    await expect(drawer).toBeVisible()
-    await expect(drawer.getByRole('link', { name: '계정 관리' })).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(drawer).toHaveCount(0)
-    await expect(trigger).toBeFocused()
-    await trigger.click()
-    await page.mouse.click(10, 200)
-    await expect(drawer).toHaveCount(0)
-  } else
-    await expect(
-      page
-        .getByRole('navigation', { name: '주 메뉴', exact: true })
-        .getByRole('link', { name: '계정 관리' }),
-    ).toBeVisible()
-  await panel(page).getByRole('link', { name: '회원 탈퇴 안내' }).click()
+  await expect(page.locator('footer')).toContainText(
+    'Stelody · 팬이 만드는 노래 아카이브',
+  )
+  await expect(page.locator('footer')).toContainText('공식 서비스가 아닙니다')
+  await expect(page.getByRole('search', { name: '노래 검색' })).toBeVisible()
   await expect(
-    panel(page).getByRole('heading', { name: '탈퇴 전 안내를 확인해 주세요' }),
+    page
+      .getByRole('banner')
+      .getByRole('link', { name: '내 계정', exact: true }),
+  ).toHaveAttribute('href', '/account')
+  const trigger = page.getByRole('button', { name: '메뉴 열기' })
+  await trigger.click()
+  const drawer = page.getByRole('dialog', { name: '메뉴' })
+  await expect(drawer).toBeVisible()
+  await expect(drawer.getByRole('link', { name: '내 보관함' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await page.mouse.click(10, 200)
+  await expect(drawer).toHaveCount(0)
+  await panel(page).getByRole('link', { name: '회원 탈퇴 하기' }).click()
+  await expect(
+    panel(page).getByRole('button', { name: 'Google 재인증', exact: true }),
   ).toBeVisible()
+  await expect(
+    panel(page).getByRole('region', { name: '회원 탈퇴', exact: true }),
+  ).toHaveCount(0)
+  await expect(page.locator('footer')).toContainText('공식 서비스가 아닙니다')
+  expect(state.authorizations).toHaveLength(0)
+  expect(state.deletes).toBe(0)
+})
+
+test('계정의 YouTube 요약은 실제 연결 상태를 표시하고 조회 실패 후 재시도한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  const connection = page.getByRole('region', {
+    name: 'YouTube 연결',
+    exact: true,
+  })
+  for (const [status, label] of [
+    ['DISCONNECTED', '미연결됨'],
+    ['CONNECTED', '연결 완료'],
+    ['RECONNECT_REQUIRED', '재연결 필요'],
+    ['REVOKING', '해제 처리 중'],
+    ['DISABLED', '현재 사용 불가'],
+  ] as const) {
+    state.connection = status
+    await page.goto('/account')
+    await expect(connection.getByRole('status')).toHaveText(label)
+    const action = connection.getByRole('button')
+    if (status === 'DISABLED' || status === 'REVOKING')
+      await expect(action).toBeDisabled()
+    else await expect(action).toBeEnabled()
+  }
+  let unavailable = true
+  await page.route('**/api/v1/me/youtube/connection', (route) =>
+    route.fulfill(
+      unavailable
+        ? { status: 503, json: { code: 'UNAVAILABLE' } }
+        : { json: { status: 'CONNECTED' } },
+    ),
+  )
+  await page.reload()
+  await expect(connection.getByRole('alert')).toHaveText(
+    '연결 상태를 불러오지 못했어요.',
+  )
+  await expect(panel(page).getByText(user.email, { exact: true })).toBeVisible()
+  unavailable = false
+  await connection
+    .getByRole('button', { name: '다시 시도', exact: true })
+    .click()
+  await expect(connection.getByRole('status')).toHaveText('연결 완료')
   expect(state.authorizations).toHaveLength(0)
   expect(state.deletes).toBe(0)
 })
@@ -288,7 +340,7 @@ test('인증 시작 응답을 기다리는 중 취소하면 늦은 응답으로 
   await panel(page).getByRole('link', { name: '취소' }).click()
   await expect(page).toHaveURL(/\/account$/)
   release()
-  await expect(panel(page).getByText('내 계정', { exact: true })).toBeVisible()
+  await expect(panel(page).getByText('내계정', { exact: true })).toBeVisible()
   expect(state.authorizations).toHaveLength(1)
 })
 

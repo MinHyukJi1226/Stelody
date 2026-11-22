@@ -94,6 +94,121 @@ async function confirm(page: Page) {
   return page.getByRole('dialog')
 }
 
+test('계정 화면에서 직접 인증을 시작하고 같은 화면으로 돌아와 실제 연결을 확인한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  let release!: () => void
+  state.writeGate = new Promise<void>((resolve) => (release = resolve))
+  await page.goto('/account')
+  const accountConnection = page.getByRole('region', {
+    name: 'YouTube 연결',
+    exact: true,
+  })
+  await accountConnection
+    .getByRole('button', { name: 'YouTube 연결', exact: true })
+    .click()
+  await expect(page).toHaveURL('/account')
+  await expect(accountConnection.getByRole('button')).toBeDisabled()
+  await expect
+    .poll(() => state.posts)
+    .toEqual([{ returnTo: '/account', callbackClient: 'default' }])
+  release()
+  await expect(page.getByRole('heading', { name: '테스트 인증' })).toBeVisible()
+  state.status = 'CONNECTED'
+  await page.goto(
+    '/account?keep=1&youtubeResult=success&code=SECRET&state=SECRET',
+  )
+  await expect(page).toHaveURL('/account?keep=1')
+  await expect(
+    accountConnection.getByRole('status', {
+      name: 'YouTube 연결 상태',
+      exact: true,
+    }),
+  ).toHaveText('연결 완료')
+  await expect(
+    accountConnection.getByText('YouTube 계정을 연결했습니다.', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(
+    accountConnection.getByRole('button', { name: '연결 해제', exact: true }),
+  ).toBeEnabled()
+  expect(state.posts).toHaveLength(1)
+  expect(state.deletes).toBe(0)
+})
+
+for (const [result, status, label, message] of [
+  ['success', 'DISCONNECTED', '미연결됨', 'YouTube 연결 상태를 확인해 주세요.'],
+  [
+    'cancelled',
+    'CONNECTED',
+    '연결 완료',
+    '연결을 취소했습니다. 필요할 때 다시 연결해 주세요.',
+  ],
+  [
+    'failed',
+    'CONNECTED',
+    '연결 완료',
+    'YouTube 연결에 실패했습니다. 다시 시도해 주세요.',
+  ],
+] as const) {
+  test(`계정의 ${result} 복귀는 실제 ${status} 상태를 유지하고 인증을 자동 재시작하지 않는다`, async ({
+    page,
+  }) => {
+    const state = await setup(page, status)
+    await page.goto(
+      `/account?youtubeResult=${result}&ACCESS_TOKEN=SECRET#connection`,
+    )
+    await expect(page).toHaveURL('/account#connection')
+    const connection = page.getByRole('region', {
+      name: 'YouTube 연결',
+      exact: true,
+    })
+    await expect(
+      connection.getByRole('status', {
+        name: 'YouTube 연결 상태',
+        exact: true,
+      }),
+    ).toHaveText(label)
+    await expect(connection.getByText(message, { exact: true })).toBeVisible()
+    expect(state.posts).toHaveLength(0)
+    expect(state.deletes).toBe(0)
+  })
+}
+
+test('계정 화면에서 연결 해제를 확인하고 실제 미연결 상태로 갱신한다', async ({
+  page,
+}) => {
+  const state = await setup(page, 'CONNECTED')
+  await page.goto('/account')
+  const connection = page.getByRole('region', {
+    name: 'YouTube 연결',
+    exact: true,
+  })
+  await connection
+    .getByRole('button', { name: '연결 해제', exact: true })
+    .click()
+  let dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: '취소', exact: true }).click()
+  expect(state.deletes).toBe(0)
+  await connection
+    .getByRole('button', { name: '연결 해제', exact: true })
+    .click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: '해제', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page).toHaveURL('/account')
+  await expect(
+    connection.getByRole('status', { name: 'YouTube 연결 상태', exact: true }),
+  ).toHaveText('미연결됨')
+  await expect(
+    connection.getByRole('button', { name: 'YouTube 연결', exact: true }),
+  ).toBeEnabled()
+  expect(state.deletes).toBe(1)
+  expect(state.posts).toHaveLength(0)
+})
+
 for (const [status, title, action, disabled] of [
   ['DISCONNECTED', 'YouTube 계정을 연결하세요', 'YouTube 연결', false],
   ['CONNECTED', 'YouTube가 연결되어 있어요', '연결 해제', false],
@@ -205,37 +320,48 @@ for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
     const state = await setup(page)
     let release!: () => void
     state.writeGate = new Promise<void>((resolve) => (release = resolve))
-    await page.goto('/account')
-    await page.getByRole('link', { name: 'YouTube 연결 관리' }).click()
-    await expect(panel(page)).toBeVisible()
-    const connectionUrl = page.url()
+    await page.goto('/songs')
     await page
+      .getByRole('banner')
+      .getByRole('link', { name: '내 계정', exact: true })
+      .click()
+    const connection = page.getByRole('region', {
+      name: 'YouTube 연결',
+      exact: true,
+    })
+    await connection
       .getByRole('button', { name: 'YouTube 연결', exact: true })
       .click()
-    await expect(page.getByText('Google 인증을 여는 중이에요')).toBeVisible()
+    await expect(
+      connection.getByText('Google 인증을 여는 중이에요', { exact: true }),
+    ).toBeVisible()
+    await expect.poll(() => state.posts.length).toBe(1)
     if (destination === 'header') {
-      if (test.info().project.name === 'mobile')
-        await page.getByRole('button', { name: '메뉴 열기' }).click()
+      const search = page.getByRole('search', { name: '노래 검색' })
+      await search.getByRole('searchbox').fill('late')
+      await search.getByRole('button', { name: '검색', exact: true }).click()
+    } else if (destination === 'back') {
+      await page.goBack()
+    } else if (destination === 'playlist') {
+      await page.getByRole('button', { name: '메뉴 열기' }).click()
       await page
-        .getByRole('navigation', {
-          name:
-            test.info().project.name === 'mobile'
-              ? '모바일 주 메뉴'
-              : '주 메뉴',
-          exact: true,
-        })
-        .getByRole('link', { name: '검색', exact: true })
+        .getByRole('dialog')
+        .getByRole('link', { name: '내 보관함', exact: true })
         .click()
-    } else if (destination === 'back') await page.goBack()
-    else await page.getByRole('link', { name: '계정 관리로 돌아가기' }).click()
-    if (destination === 'revisit')
-      await page.getByRole('link', { name: 'YouTube 연결 관리' }).click()
-    const expected =
-      destination === 'header'
-        ? '/search'
-        : destination === 'revisit'
-          ? connectionUrl
-          : '/account'
+    } else {
+      await page.getByRole('link', { name: 'Stelody 홈', exact: true }).click()
+      await page
+        .getByRole('banner')
+        .getByRole('link', { name: '내 계정', exact: true })
+        .click()
+    }
+    const destinations = {
+      header: '/search?q=late',
+      back: '/songs',
+      playlist: '/library',
+      revisit: '/account',
+    }
+    const expected = destinations[destination]
     await expect(page).toHaveURL(expected)
     const response = page.waitForResponse(
       (r) =>
@@ -253,10 +379,10 @@ for (const destination of ['playlist', 'header', 'back', 'revisit'] as const) {
     await expect(page).toHaveURL(expected)
     if (destination === 'revisit') {
       await expect(
-        page.getByRole('button', { name: 'YouTube 연결', exact: true }),
+        connection.getByRole('button', { name: 'YouTube 연결', exact: true }),
       ).toBeEnabled()
       expect(state.posts).toHaveLength(1)
-      await page
+      await connection
         .getByRole('button', { name: 'YouTube 연결', exact: true })
         .click()
       await expect(
