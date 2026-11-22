@@ -22,9 +22,9 @@ export function PlaylistAddress({
     enabled: short && !!user,
   })
   if (!short) return children(address)
-  if (query.isError) {
-    const denied =
-      query.error instanceof ApiError && [403, 404].includes(query.error.status)
+  const denied =
+    query.error instanceof ApiError && [403, 404].includes(query.error.status)
+  if (query.isError && (!query.data || denied)) {
     return (
       <PageState
         kind={denied ? 'unavailable' : 'error'}
