@@ -1,9 +1,9 @@
 import { usePageActions } from '@/shared/lib/page-action-guard'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useLocation } from 'react-router'
+import { useLocation } from 'react-router'
 import { Button } from '@/shared/ui/button'
 import { logout } from './api'
-import { loginPath } from './return-path'
+import { LoginLink } from './login-navigation'
 import { clearPrivateQueries, endLocalSession, sessionOptions } from './session'
 
 export function AccountControl({ onNavigate }: { onNavigate?: () => void }) {
@@ -47,14 +47,12 @@ export function AccountControl({ onNavigate }: { onNavigate?: () => void }) {
         </Button>
       ) : (
         <Button asChild>
-          <Link
+          <LoginLink
             onClick={onNavigate}
-            to={loginPath(
-              `${location.pathname}${location.search}${location.hash}`,
-            )}
+            returnTo={`${location.pathname}${location.search}${location.hash}`}
           >
             로그인
-          </Link>
+          </LoginLink>
         </Button>
       )}
       {mutation.isError && session.data !== null && (

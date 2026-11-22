@@ -82,6 +82,12 @@ public class MemberService {
     return new MemberDtos.Detail(card, members.channels(id));
   }
 
+  public MemberDtos.Detail detailBySlug(String slug) {
+    if (slug == null || !slug.matches("[a-z][a-z0-9-]{0,39}")) throw CatalogException.missing();
+    var card = members.findBySlug(slug).orElseThrow(CatalogException::missing);
+    return new MemberDtos.Detail(card, members.channels(card.id()));
+  }
+
   public SongDtos.Page songs(
       UUID id, String type, String participation, String sort, int size, String cursor) {
     members.find(id).orElseThrow(CatalogException::missing);

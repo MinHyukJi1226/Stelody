@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router'
+import { Link, Navigate, useLocation, useParams } from 'react-router'
 import { z } from 'zod'
 import {
   songDetailOptions,
@@ -19,14 +19,29 @@ import { SearchHelp } from './components/search-help'
 import { SongViews } from './components/song-views'
 import { PlaylistButton } from '@/features/playlists/playlist-button'
 import { FavoriteButton } from '@/features/favorites/favorite-button'
+import { isYoutubeId, songPath } from '@/features/songs/song-path'
 
 export function SongDetailPage() {
   const { songId = '' } = useParams()
-  const valid = z.uuid().safeParse(songId).success
+  const location = useLocation()
+  const valid = z.uuid().safeParse(songId).success || isYoutubeId(songId)
   const query = useQuery({ ...songDetailOptions(songId), enabled: valid })
   const unavailable =
     !valid ||
     (query.error instanceof ApiError && [403, 404].includes(query.error.status))
+  if (
+    !unavailable &&
+    query.data?.song.youtubeId &&
+    isYoutubeId(query.data.song.youtubeId) &&
+    songId !== query.data.song.youtubeId
+  ) {
+    return (
+      <Navigate
+        replace
+        to={`${songPath(query.data.song)}${location.search}${location.hash}`}
+      />
+    )
+  }
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       {unavailable || !query.data ? (

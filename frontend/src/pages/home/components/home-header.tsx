@@ -5,7 +5,7 @@ import { MenuIcon } from '@/app/layout/menu-icon'
 import { accountPath, withdrawalPath } from '@/features/account/api'
 import { AdminLink } from '@/features/admin/admin-link'
 import { AccountControl } from '@/features/auth/account-control'
-import { loginPath } from '@/features/auth/return-path'
+import { rememberLoginReturn } from '@/features/auth/return-path'
 import { sessionOptions } from '@/features/auth/session'
 import logo from '@/shared/assets/logo.svg'
 import type { Theme } from '@/shared/lib/theme'
@@ -95,11 +95,13 @@ export function HomeHeader({
       ) : (
         <Button asChild className="h-11 min-h-11 px-3 py-0">
           <Link
-            to={
-              session.data
-                ? accountPath
-                : loginPath(location.pathname + location.search + location.hash)
-            }
+            to={session.data ? accountPath : '/login'}
+            onClick={() => {
+              if (!session.data)
+                rememberLoginReturn(
+                  location.pathname + location.search + location.hash,
+                )
+            }}
           >
             {session.data ? '내 계정' : '로그인'}
           </Link>

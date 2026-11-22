@@ -55,9 +55,11 @@ test('로그인 화면·원본 Google 아이콘·내부 복귀 경로를 제공�
   expect(link.searchParams.has('loginClient')).toBe(false)
   const callback = new URL(link.searchParams.get('returnTo')!, page.url())
   expect(callback.pathname).toBe('/login')
-  expect(callback.searchParams.get('returnTo')).toBe(
-    '/search?q=hello&sort=LATEST#results',
-  )
+  expect(callback.search).toBe('')
+  await expect(page).toHaveURL('/login')
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('stelody-login-return')),
+  ).toBe('/search?q=hello&sort=LATEST#results')
   expect(await button.boundingBox()).toMatchObject({ height: 52 })
   const mark = button.locator('img')
   expect(await mark.boundingBox()).toMatchObject({ width: 20, height: 20 })
@@ -138,7 +140,7 @@ test('임의의 성공 파라미터는 로그인으로 취급하지 않고 취�
   ]) {
     await page.goto(`/login?returnTo=%2Flibrary&loginResult=${result}`)
     await expect(page.getByText(text, { exact: true })).toBeVisible()
-    await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
+    await expect(page).toHaveURL('/login')
     await expect(
       page.getByRole('link', { name: 'Google로 로그인' }),
     ).toBeVisible()
@@ -191,9 +193,7 @@ test('세션 로딩·장애·재시도를 구분하며 보호 경로는 비로�
   await page.getByRole('button', { name: '로그인 상태 다시 확인' }).click()
   await expect(page.getByRole('alert')).toHaveCount(0)
   await page.goto('/library?tab=favorites#saved')
-  await expect(page).toHaveURL(
-    '/login?returnTo=%2Flibrary%3Ftab%3Dfavorites%23saved',
-  )
+  await expect(page).toHaveURL('/login')
   await expect(
     page.getByRole('link', { name: 'Google로 로그인' }),
   ).toBeVisible()
@@ -248,7 +248,7 @@ test('로그아웃은 CSRF를 받아 한 번 전송하고 세션 만료 시 보�
   await expect(page.getByRole('heading', { name: '내 보관함' })).toBeVisible()
   await accountMenu(page)
   await page.getByRole('button', { name: '로그아웃', exact: true }).click()
-  await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
+  await expect(page).toHaveURL('/login')
   await expect(
     page.getByRole('link', { name: 'Google로 로그인' }),
   ).toBeVisible()
@@ -258,6 +258,72 @@ test('로그아웃은 CSRF를 받아 한 번 전송하고 세션 만료 시 보�
   await expect(
     page.getByRole('heading', { name: '내 보관함', exact: true }),
   ).toHaveCount(0)
+})
+
+test('보호 화면의 복귀 경로는 주소에 노출하지 않고 새로고침 후에도 보관한다', async ({
+  page,
+}) => {
+  await page.goto('/library/playlists')
+  await expect(page).toHaveURL('/login')
+  await expect(
+    page.getByRole('heading', { name: '로그인', exact: true }),
+  ).toBeVisible()
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('stelody-login-return')),
+  ).toBe('/library/playlists')
+  await page.reload()
+  await expect(
+    page.getByRole('heading', { name: '로그인', exact: true }),
+  ).toBeVisible()
+  await expect(page).toHaveURL('/login')
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('stelody-login-return')),
+  ).toBe('/library/playlists')
+})
+
+test('저장된 외부 주소를 신뢰하지 않고 기본 화면으로 복귀한 뒤 삭제한다', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    sessionStorage.setItem('stelody-login-return', 'https://evil.example'),
+  )
+  await page.route('**/api/v1/me', (route) => route.fulfill({ json: user }))
+  await page.goto('/login')
+  await expect(page).toHaveURL('/library')
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('stelody-login-return')),
+  ).toBeNull()
+})
+
+test('브라우저 저장소가 차단돼도 Google 로그인 후 기본 화면으로 복귀한다', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'sessionStorage', {
+      get: () => {
+        throw new Error('Storage blocked')
+      },
+    })
+  })
+  let loggedIn = false
+  await page.route('**/api/v1/me', (route) =>
+    route.fulfill(
+      loggedIn
+        ? { json: user }
+        : { status: 401, json: { code: 'AUTHENTICATION_REQUIRED' } },
+    ),
+  )
+  await page.route('**/api/v1/auth/google?*', (route) => {
+    loggedIn = true
+    return route.fulfill({
+      status: 302,
+      headers: { Location: '/login?loginResult=success' },
+    })
+  })
+  await page.goto('/login?returnTo=%2Faccount')
+  await expect(page).toHaveURL('/login')
+  await page.getByRole('link', { name: 'Google로 로그인' }).click()
+  await expect(page).toHaveURL('/library')
 })
 
 test('로그아웃 403은 자동 재전송하지 않고 다음 사용자 재시도에서 새 CSRF를 쓴다', async ({
@@ -319,7 +385,7 @@ test('다시 활성화한 화면에서 만료된 세션을 확인하면 보호 �
   await page.evaluate(() =>
     document.dispatchEvent(new Event('visibilitychange', { bubbles: true })),
   )
-  await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
+  await expect(page).toHaveURL('/login')
   await expect(
     page.getByRole('heading', { name: '내 보관함', exact: true }),
   ).toHaveCount(0)
@@ -359,7 +425,7 @@ test('CSRF 조회 실패는 로그아웃을 전송하지 않으며 응답 유실
   expect(logoutCalls).toBe(0)
   csrfFails = false
   await page.getByRole('button', { name: '로그아웃', exact: true }).click()
-  await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
+  await expect(page).toHaveURL('/login')
   await expect(
     page.getByRole('link', { name: 'Google로 로그인' }),
   ).toBeVisible()
@@ -395,9 +461,7 @@ for (const path of ['/search', '/library']) {
     await page.goto(path)
     await accountMenu(page)
     await page.getByRole('button', { name: '로그아웃', exact: true }).click()
-    await expect(page).toHaveURL(
-      path === '/library' ? '/login?returnTo=%2Flibrary' : path,
-    )
+    await expect(page).toHaveURL(path === '/library' ? '/login' : path)
     await expect(
       page.getByRole('link', {
         name: path === '/library' ? 'Google로 로그인' : '로그인',

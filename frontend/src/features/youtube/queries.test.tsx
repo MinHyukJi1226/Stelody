@@ -67,9 +67,8 @@ for (const kind of ['authorize', 'disconnect'] as const)
         })
       })
       expect(result.current.location.pathname).toBe('/login')
-      expect(
-        new URLSearchParams(result.current.location.search).get('returnTo'),
-      ).toBe(returnTo)
+      expect(result.current.location.search).toBe('')
+      expect(sessionStorage.getItem('stelody-login-return')).toBe(returnTo)
       expect(client.getQueryData(sessionOptions.queryKey)).toBeNull()
       expect(client.getQueriesData({ queryKey: ['private'] })).toHaveLength(0)
       expect(writes).toBe(1)

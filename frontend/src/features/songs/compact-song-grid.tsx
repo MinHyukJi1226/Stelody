@@ -1,3 +1,4 @@
+import { songPath } from '@/features/songs/song-path'
 import { cn } from '@/shared/lib/utils'
 import { Link } from 'react-router'
 import { useMemberDirectory } from '@/features/members/use-member-directory'
@@ -24,7 +25,7 @@ export function CompactSongGrid({
       {songs.map((song) => (
         <article key={song.id} className="min-w-0">
           <Link
-            to={`/songs/${song.id}`}
+            to={songPath(song)}
             aria-label={`${song.title} 상세 보기`}
             className="grid gap-2 rounded-lg"
           >

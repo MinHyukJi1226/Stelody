@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { sessionOptions } from '@/features/auth/session'
-import { loginPath } from '@/features/auth/return-path'
+import { LoginLink } from '@/features/auth/login-navigation'
 import { accountPath, withdrawalPath } from '@/features/account/api'
 import { Button } from '@/shared/ui/button'
 import {
@@ -40,7 +40,7 @@ export function AccountPage() {
           <div className="flex flex-col items-start gap-3">
             <h2 className="text-lg font-bold">다시 로그인해 주세요</h2>
             <Button variant="primary" asChild>
-              <Link to={loginPath(accountPath)}>다시 로그인</Link>
+              <LoginLink returnTo={accountPath}>다시 로그인</LoginLink>
             </Button>
           </div>
         ) : (

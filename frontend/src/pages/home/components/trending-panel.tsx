@@ -1,3 +1,4 @@
+import { songPath } from '@/features/songs/song-path'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { useMemberDirectory } from '@/features/members/use-member-directory'
@@ -53,7 +54,7 @@ export function TrendingPanel() {
               ? [
                   <li key={song.id} value={rank} className="min-w-0">
                     <Link
-                      to={`/songs/${song.id}`}
+                      to={songPath(song)}
                       className="grid min-h-[72px] min-w-0 content-start gap-2 rounded-lg md:min-h-14 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4"
                     >
                       <span className="flex min-w-0 items-center gap-2 md:gap-4">

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Outlet, useLocation, useMatches } from 'react-router'
 import { sessionOptions, endLocalSession } from '@/features/auth/session'
-import { loginPath } from '@/features/auth/return-path'
+import { LoginLink } from '@/features/auth/login-navigation'
 import { adminPaths, isActiveAdmin } from '@/features/admin/api'
 import { ApiError } from '@/shared/api/errors'
 import { formatAdminTime, isAdminAccessError } from '@/features/admin/format'
@@ -98,13 +98,11 @@ export function AdminAccess({
         <p className="text-sm text-muted">{copy[1]}</p>
         {state === 'login' && (
           <Button asChild variant="primary">
-            <Link
-              to={loginPath(
-                `${location.pathname}${location.search}${location.hash}`,
-              )}
+            <LoginLink
+              returnTo={`${location.pathname}${location.search}${location.hash}`}
             >
               로그인
-            </Link>
+            </LoginLink>
           </Button>
         )}
         {state === 'forbidden' && (

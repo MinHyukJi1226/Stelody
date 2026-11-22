@@ -571,9 +571,7 @@ for (const operation of ['read', 'write']) {
         .getByRole('button', { name: 'YouTube 연결', exact: true })
         .click()
     }
-    await expect(page).toHaveURL(
-      new RegExp('/login\\?returnTo=%2Flibrary%2Fyoutube$'),
-    )
+    await expect(page).toHaveURL('/login')
     const writes = state.posts.length
     state.loggedIn = true
     state.readFailure = 0

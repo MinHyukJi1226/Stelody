@@ -8,9 +8,22 @@ import { PageState } from '@/shared/ui/page-state'
 import { SiteFooter } from '@/shared/ui/site-footer'
 import { PlaylistLoading } from './components/playlist-loading'
 import { PlaylistEditor } from './components/playlist-editor'
+import {
+  PlaylistAddress,
+  PlaylistCanonicalAddress,
+} from '@/features/playlists/playlist-address'
 
 export function PlaylistDetailPage() {
   const { playlistId = '' } = useParams()
+  const session = useQuery({ ...sessionOptions, refetchOnMount: false })
+  return (
+    <PlaylistAddress user={session.data?.id ?? ''} address={playlistId}>
+      {(id) => <PlaylistDetailScreen key={id} playlistId={id} />}
+    </PlaylistAddress>
+  )
+}
+
+function PlaylistDetailScreen({ playlistId }: { playlistId: string }) {
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
   const user = session.data?.id ?? ''
   const valid = z.uuid().safeParse(playlistId).success
@@ -24,56 +37,60 @@ export function PlaylistDetailPage() {
   const conflict =
     query.error instanceof ApiError && query.error.code === 'PLAYLIST_CHANGED'
   return (
-    <div className="flex min-w-0 flex-1 flex-col px-4 md:px-6">
-      <section
-        className={`flex min-w-0 flex-1 flex-col gap-4 py-6 md:py-8 ${denied || (!query.data && query.isError) ? 'justify-center' : ''}`}
-      >
-        {denied || (!query.data && query.isError) ? (
-          <>
-            <h1 className="sr-only">플레이리스트</h1>
-            <PageState
-              kind={denied ? 'unavailable' : 'error'}
-              title={
-                denied
-                  ? '이 목록에 접근할 수 없습니다'
-                  : conflict
-                    ? '목록이 변경되었습니다'
-                    : '불러오지 못했어요'
-              }
-              description={
-                denied
-                  ? '목록이 없거나 현재 계정에서 볼 수 없습니다.'
-                  : conflict
-                    ? '전체 목록을 다시 불러와 최신 내용을 확인해 주세요.'
-                    : '연결 상태를 확인한 뒤 다시 시도해 주세요.'
-              }
-              action={{ to: '/library/playlists', label: '내 플레이리스트' }}
-              {...(!denied ? { onRetry: () => void query.refetch() } : {})}
-            />
-          </>
-        ) : query.isPending ? (
-          <>
-            <h1 className="sr-only">플레이리스트</h1>
-            <PlaylistLoading />
-          </>
-        ) : (
-          query.data && (
-            <PlaylistEditor
-              key={`${user}:${playlistId}`}
-              userId={user}
-              snapshot={query.data}
-              fetching={query.isFetching}
-              readError={query.error}
-              onReload={async () => {
-                const result = await query.refetch()
-                if (result.error) throw result.error
-                return result.data!
-              }}
-            />
-          )
-        )}
-      </section>
-      <SiteFooter className="mx-0 mb-0 bg-transparent px-0 md:mx-0 md:px-0" />
-    </div>
+    <PlaylistCanonicalAddress
+      playlist={denied ? undefined : query.data?.playlist}
+    >
+      <div className="flex min-w-0 flex-1 flex-col px-4 md:px-6">
+        <section
+          className={`flex min-w-0 flex-1 flex-col gap-4 py-6 md:py-8 ${denied || (!query.data && query.isError) ? 'justify-center' : ''}`}
+        >
+          {denied || (!query.data && query.isError) ? (
+            <>
+              <h1 className="sr-only">플레이리스트</h1>
+              <PageState
+                kind={denied ? 'unavailable' : 'error'}
+                title={
+                  denied
+                    ? '이 목록에 접근할 수 없습니다'
+                    : conflict
+                      ? '목록이 변경되었습니다'
+                      : '불러오지 못했어요'
+                }
+                description={
+                  denied
+                    ? '목록이 없거나 현재 계정에서 볼 수 없습니다.'
+                    : conflict
+                      ? '전체 목록을 다시 불러와 최신 내용을 확인해 주세요.'
+                      : '연결 상태를 확인한 뒤 다시 시도해 주세요.'
+                }
+                action={{ to: '/library/playlists', label: '내 플레이리스트' }}
+                {...(!denied ? { onRetry: () => void query.refetch() } : {})}
+              />
+            </>
+          ) : query.isPending ? (
+            <>
+              <h1 className="sr-only">플레이리스트</h1>
+              <PlaylistLoading />
+            </>
+          ) : (
+            query.data && (
+              <PlaylistEditor
+                key={`${user}:${playlistId}`}
+                userId={user}
+                snapshot={query.data}
+                fetching={query.isFetching}
+                readError={query.error}
+                onReload={async () => {
+                  const result = await query.refetch()
+                  if (result.error) throw result.error
+                  return result.data!
+                }}
+              />
+            )
+          )}
+        </section>
+        <SiteFooter className="mx-0 mb-0 bg-transparent px-0 md:mx-0 md:px-0" />
+      </div>
+    </PlaylistCanonicalAddress>
   )
 }

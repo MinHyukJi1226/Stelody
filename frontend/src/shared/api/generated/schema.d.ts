@@ -4,6 +4,72 @@
  */
 
 export interface paths {
+  '/api/v1/me/playlists/by-public-id/{publicId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 짧은 주소 ID로 개인 플레이리스트 상세 조회
+     * @description publicId는 대소문자를 구분하는 영문·숫자 10자입니다. 로그인한 소유자의 목록만 기존 UUID 상세와 같은 응답으로 반환합니다. 형식 오류·미등록·다른 사용자의 목록은 모두 404 PLAYLIST_NOT_FOUND입니다. 조회는 읽기 전용이며 세션 만료 등 개인 API 오류 계약을 유지합니다. 응답 id는 기존 항목·변경·내보내기 API에 사용하는 UUID입니다.
+     *
+     *     현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_me_playlists_by_public_id_publicId']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/songs/by-youtube/{youtubeId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * YouTube 영상 ID로 공개 곡 상세 조회
+     * @description 대소문자를 구분하는 영문·숫자·밑줄·하이픈 11자 영상 ID로 연결된 공개 곡을 조회합니다. 대표 영상 이외의 연결 영상 ID도 지원하며 응답은 UUID 상세와 동일합니다. 형식 오류·미등록 영상·공개 조건을 만족하지 않는 곡은 404입니다. 응답 song.youtubeId는 현재 대표 영상 ID이고 song.id는 조회수·즐겨찾기·플레이리스트에 사용하는 기존 곡 UUID입니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_songs_by_youtube_youtubeId']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/members/by-slug/{slug}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 영문 주소로 멤버 상세 조회
+     * @description 멤버 slug는 소문자 영문으로 시작하며 소문자 영문·숫자·하이픈 1~40자입니다. 일치하지 않으면 404입니다. 반환된 member.id로 곡 목록을 조회합니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_members_by_slug_slug']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/admin/artist-registrations/{requestId}': {
     parameters: {
       query?: never
@@ -2660,6 +2726,8 @@ export interface components {
       id: string
       name: string
       profileImageUrl: string | null
+      /** @description 공개 멤버 주소. 미지정 멤버는 null이며 UUID로 조회할 수 있습니다. 이름 변경과 무관하게 유지됩니다. */
+      slug?: string | null
       songCounts: components['schemas']['com.stelody.member.dto.MemberDtos.Counts']
       /** @description 기수와 별도로 관리하는 유닛명. 미등록이면 null. */
       unitName: string | null
@@ -2797,6 +2865,8 @@ export interface components {
       version: number
     }
     'com.stelody.playlist.dto.PlaylistDtos.Summary': {
+      /** @description 서버가 자동 발급한 대소문자 구분 영문·숫자 10자 주소 ID. 이름 변경·내보내기 후에도 유지됩니다. UUID id는 기존 변경·항목·내보내기 API에 사용합니다. publicId를 알아도 로그인과 소유자 검증이 필요합니다. */
+      publicId?: string
       /** Format: int64 */
       availableCount: number
       /** @description 목록 조회에서 지정한 songId의 저장 여부. 이용 불가 곡도 포함합니다. songId 생략 및 생성·상세·변경 응답에서는 null입니다. 조회 시점의 값이며 추가 시 중복 검증은 별도로 수행합니다. */
@@ -2916,6 +2986,8 @@ export interface components {
       name: string
     }
     'com.stelody.song.dto.SongDtos.Card': {
+      /** @description 현재 대표 YouTube 영상 ID. 공개 페이지 주소 /songs/{youtubeId}에 사용합니다. id는 기존 곡 UUID로 유지합니다. */
+      youtubeId?: string
       /** Format: uuid */
       id: string
       /** @description 관리자가 확정한 기념·특별 목적 곡 여부입니다. 생일·데뷔·주년·신의상·게임 협업 등을 모두 포함하므로 true만으로 게임 콜라보를 의미하지 않습니다. 곡별 표시 문구는 specialEventLabel입니다. */
@@ -3159,6 +3231,120 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  get_me_playlists_by_public_id_publicId: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        publicId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.playlist.dto.PlaylistDtos.Summary']
+        }
+      }
+      /** @description INVALID_PLAYLIST_REQUEST: 이름·항목·버전·커서를 확인합니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_songs_by_youtube_youtubeId: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        youtubeId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.song.dto.SongDtos.Detail']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
+  get_members_by_slug_slug: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        slug: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.member.dto.MemberDtos.Detail']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_admin_artist_registrations_requestId: {
     parameters: {
       query?: never

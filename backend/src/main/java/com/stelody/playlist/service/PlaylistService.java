@@ -64,6 +64,12 @@ public class PlaylistService {
     return queries.summary(userId, playlistId);
   }
 
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public PlaylistDtos.Summary detailByPublicId(UUID userId, String publicId) {
+    if (publicId == null || !publicId.matches("[A-Za-z0-9]{10}")) throw PlaylistException.missing();
+    return queries.summaryByPublicId(userId, publicId);
+  }
+
   @Transactional(isolation = Isolation.READ_COMMITTED)
   public PlaylistDtos.Summary rename(UUID userId, UUID playlistId, long version, String name) {
     String validName = name(name);

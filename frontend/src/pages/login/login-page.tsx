@@ -3,14 +3,23 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { apiClient } from '@/shared/api/client'
 import { sessionOptions } from '@/features/auth/session'
-import { safeReturnPath } from '@/features/auth/return-path'
+import {
+  clearLoginReturn,
+  readLoginReturn,
+  rememberLoginReturn,
+  safeReturnPath,
+} from '@/features/auth/return-path'
 import { LoginCard, LoginSkeleton } from './components/login-card'
 import { LoginReturn } from './components/login-return'
 import { preparePendingAction } from '@/features/auth/pending-action'
 
 export function LoginPage() {
   const [params, setParams] = useSearchParams()
-  const returnTo = safeReturnPath(params.get('returnTo'))
+  const [returnTo] = useState(() =>
+    params.has('returnTo')
+      ? safeReturnPath(params.get('returnTo'))
+      : readLoginReturn(),
+  )
   const [result] = useState(() => params.get('loginResult'))
   const session = useQuery(sessionOptions)
   useEffect(() => {
@@ -18,13 +27,19 @@ export function LoginPage() {
     apiClient.invalidateCsrf()
   }, [result])
   useEffect(() => {
-    if (!params.has('loginResult')) return
+    if (!params.has('loginResult') && !params.has('returnTo')) return
+    if (params.has('returnTo')) rememberLoginReturn(returnTo)
     const clean = new URLSearchParams(params)
     clean.delete('loginResult')
+    clean.delete('returnTo')
     setParams(clean, { replace: true })
-  }, [params, setParams])
+  }, [params, returnTo, setParams])
 
-  const checking = session.isPending || session.isFetching
+  const checking =
+    session.isPending ||
+    session.isFetching ||
+    params.has('returnTo') ||
+    params.has('loginResult')
   const failed =
     result !== null && result !== 'success' && result !== 'cancelled'
   if (
@@ -65,6 +80,7 @@ export function LoginPage() {
             canContinue={!!session.data && !session.isError}
             onContinue={() => {
               if (session.data) preparePendingAction(session.data.id, returnTo)
+              clearLoginReturn()
             }}
             retry={session.isError ? () => void session.refetch() : undefined}
           />

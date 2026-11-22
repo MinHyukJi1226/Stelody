@@ -1,3 +1,4 @@
+import { playlistPath } from '@/features/playlists/playlist-path'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -43,10 +44,7 @@ export function PlaylistEditor({
   const playlist = base.playlist
   const items = draft?.items ?? snapshot.items
   const dirty = !!draft
-  const action = usePlaylistManagement(
-    userId,
-    `/library/playlists/${playlist.id}`,
-  )
+  const action = usePlaylistManagement(userId, playlistPath(playlist))
   const blocker = usePlaylistLeaveLock(userId, dirty)
   const conflict =
     (dirty && snapshot.playlist.version !== playlist.version) ||
@@ -148,9 +146,7 @@ export function PlaylistEditor({
             className="size-9 rounded-xl border-0 bg-[#00e600] text-white"
             disabled={disabled || dirty}
             aria-label="이름 수정"
-            onClick={() =>
-              void navigate(`/library/playlists/${playlist.id}/edit`)
-            }
+            onClick={() => void navigate(`${playlistPath(playlist)}/edit`)}
           >
             <PlaylistActionIcon kind="edit" />
           </Button>
@@ -184,7 +180,7 @@ export function PlaylistEditor({
             className="min-h-10 rounded-lg px-3 py-2"
             disabled={disabled || dirty}
             onClick={() =>
-              void navigate(`/library/playlists/${playlist.id}/youtube-export`)
+              void navigate(`${playlistPath(playlist)}/youtube-export`)
             }
           >
             YouTube로 내보내기

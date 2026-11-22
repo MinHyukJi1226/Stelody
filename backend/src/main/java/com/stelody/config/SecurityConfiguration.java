@@ -143,9 +143,11 @@ public class SecurityConfiguration {
                         "/api/v1/songs/groups",
                         "/api/v1/songs/groups/{groupId}/songs",
                         "/api/v1/songs/{id}",
+                        "/api/v1/songs/by-youtube/{youtubeId}",
                         "/api/v1/songs/{id}/views",
                         "/api/v1/members",
                         "/api/v1/members/{id}",
+                        "/api/v1/members/by-slug/{slug}",
                         "/api/v1/members/{id}/songs")
                     .permitAll()
                     .requestMatchers(
@@ -257,6 +259,7 @@ public class SecurityConfiguration {
                         HttpMethod.GET,
                         "/api/v1/me/playlists",
                         "/api/v1/me/playlists/{id}",
+                        "/api/v1/me/playlists/by-public-id/{publicId}",
                         "/api/v1/me/playlists/{id}/items")
                     .authenticated()
                     .requestMatchers(

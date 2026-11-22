@@ -225,6 +225,31 @@ class PublicCatalogIntegrationTest {
     return mapper.readTree(response.getContentAsString());
   }
 
+  @Test
+  void memberSlugResolvesSameIdentityCountsAndSongsAndEnforcesUniqueAddresses() throws Exception {
+    writer.update("UPDATE app.member SET slug='yuni' WHERE id=?", M1);
+    var byId = request("/api/v1/members/" + M1);
+    var bySlug = request("/api/v1/members/by-slug/yuni");
+    assertThat(bySlug).isEqualTo(byId);
+    assertThat(bySlug.path("member").path("slug").asText()).isEqualTo("yuni");
+    assertThat(request("/api/v1/members?size=50").path("items").toString()).contains("yuni");
+    mvc.perform(get("/api/v1/members/" + bySlug.path("member").path("id").asText() + "/songs"))
+        .andExpect(status().isOk());
+    writer.update("UPDATE app.member SET name='수정된 이름' WHERE id=?", M1);
+    assertThat(request("/api/v1/members/by-slug/yuni").path("member").path("id").asText())
+        .isEqualTo(M1.toString());
+    for (String missing : List.of("unknown", "Yuni", "bad_slug"))
+      mvc.perform(get("/api/v1/members/by-slug/" + missing)).andExpect(status().isNotFound());
+    assertThatThrownBy(() -> writer.update("UPDATE app.member SET slug='yuni' WHERE id=?", M2))
+        .isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> writer.update("UPDATE app.member SET slug='bad_slug' WHERE id=?", M2))
+        .isInstanceOf(DataAccessException.class);
+    writer.update("UPDATE app.member SET slug='kanna',activity_status='GRADUATED' WHERE id=?", M2);
+    assertThat(request("/api/v1/members/by-slug/kanna").path("member").path("id").asText())
+        .isEqualTo(M2.toString());
+    assertThat(request("/api/v1/members/" + M3).path("member").path("slug").isNull()).isTrue();
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"LATEST", "RELEVANCE", "VIEWS"})
   void whitespaceAndCaseShareMatchingRankingCountsFiltersAndCursorPages(String sort)
@@ -784,6 +809,52 @@ class PublicCatalogIntegrationTest {
     assertThat(
             request("/api/v1/songs/" + S1).get("representativeVideo").get("embeddable").asBoolean())
         .isFalse();
+  }
+
+  @Test
+  void youtubeAddressReturnsSamePublicSongAndAddsRepresentativeIdToCards() throws Exception {
+    var uuidDetail = request("/api/v1/songs/" + S1);
+    var youtubeId = uuidDetail.path("representativeVideo").path("youtubeId").asText();
+    assertThat(request("/api/v1/songs/by-youtube/" + youtubeId)).isEqualTo(uuidDetail);
+    assertThat(uuidDetail.path("song").path("youtubeId").asText()).isEqualTo(youtubeId);
+    var cards = request("/api/v1/songs").path("items");
+    for (var card : cards) {
+      var detail = request("/api/v1/songs/" + card.path("id").asText());
+      assertThat(card.path("youtubeId").asText())
+          .isEqualTo(detail.path("representativeVideo").path("youtubeId").asText());
+    }
+    mvc.perform(post("/api/v1/songs/by-youtube/" + youtubeId)).andExpect(status().isForbidden());
+  }
+
+  @Test
+  void retainedVideoAddressStillResolvesAfterRepresentativeReplacement() throws Exception {
+    writer.update(
+        "INSERT INTO app.video(id,song_id,youtube_id,video_kind,availability,source_title,published_at,source_observed_at) VALUES (?,?,'aB12cd-E_34','OFFICIAL_COVER','PUBLIC','Replacement','2026-01-02T00:00:00Z',CURRENT_TIMESTAMP)",
+        id(999),
+        S1);
+    writer.update("UPDATE app.song_entry SET representative_video_id=? WHERE id=?", id(999), S1);
+    writer.update("UPDATE app.video SET availability='DELETED' WHERE id=?", id(1101));
+    var detail = request("/api/v1/songs/" + S1);
+    assertThat(request("/api/v1/songs/by-youtube/00000000101")).isEqualTo(detail);
+    assertThat(request("/api/v1/songs/by-youtube/aB12cd-E_34")).isEqualTo(detail);
+    assertThat(detail.path("song").path("youtubeId").asText()).isEqualTo("aB12cd-E_34");
+    mvc.perform(get("/api/v1/songs/by-youtube/ab12cd-e_34")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void youtubeAddressKeepsDraftHiddenAndUnavailableSongsInaccessible() throws Exception {
+    for (var visibility : List.of("DRAFT", "HIDDEN")) {
+      writer.update("UPDATE app.song_entry SET visibility=? WHERE id=?", visibility, S1);
+      mvc.perform(get("/api/v1/songs/by-youtube/00000000101")).andExpect(status().isNotFound());
+    }
+    writer.update("UPDATE app.song_entry SET visibility='PUBLISHED' WHERE id=?", S1);
+    for (var availability : List.of("PRIVATE", "DELETED", "UNAVAILABLE")) {
+      writer.update("UPDATE app.video SET availability=? WHERE id=?", availability, id(1101));
+      mvc.perform(get("/api/v1/songs/by-youtube/00000000101")).andExpect(status().isNotFound());
+    }
+    for (var invalid : List.of("short", "123456789012", "bad!value11", "unknown1234")) {
+      mvc.perform(get("/api/v1/songs/by-youtube/" + invalid)).andExpect(status().isNotFound());
+    }
   }
 
   @Test

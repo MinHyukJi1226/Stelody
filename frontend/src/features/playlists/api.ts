@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { apiClient } from '@/shared/api/client'
 import { ApiResponseError } from '@/shared/api/errors'
 import type { ApiSchemas, PlaylistSummary } from '@/shared/api/types'
+import { isPlaylistPublicId } from './playlist-path'
 
 export type Playlist = PlaylistSummary
 export type PlaylistPage =
@@ -36,7 +37,7 @@ export function getPlaylists(
 }
 export function getPlaylist(id: string, signal?: AbortSignal) {
   return apiClient.request<Playlist>(
-    `/me/playlists/${encodeURIComponent(id)}`,
+    `/me/playlists/${isPlaylistPublicId(id) ? 'by-public-id/' : ''}${encodeURIComponent(id)}`,
     signal ? { signal } : {},
   )
 }

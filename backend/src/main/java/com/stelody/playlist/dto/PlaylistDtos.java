@@ -55,7 +55,12 @@ public final class PlaylistDtos {
               description =
                   "목록 조회에서 지정한 songId의 저장 여부. 이용 불가 곡도 포함합니다. "
                       + "songId 생략 및 생성·상세·변경 응답에서는 null입니다. 조회 시점의 값이며 추가 시 중복 검증은 별도로 수행합니다.")
-          Boolean containsSong) {}
+          Boolean containsSong,
+      @Schema(
+              pattern = "^[A-Za-z0-9]{10}$",
+              description =
+                  "서버가 자동 발급한 대소문자 구분 영문·숫자 10자 주소 ID. 이름 변경·내보내기 후에도 유지됩니다. UUID id는 기존 변경·항목·내보내기 API에 사용합니다. publicId를 알아도 로그인과 소유자 검증이 필요합니다.")
+          String publicId) {}
 
   @Schema(requiredProperties = {"items", "nextCursor", "hasNext", "totalCount"})
   public record Page(

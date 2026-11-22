@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import googleMark from '@/shared/assets/google-mark.png'
 import { Button } from '@/shared/ui/button'
-import { loginPath } from '@/features/auth/return-path'
+import { LoginLink } from '@/features/auth/login-navigation'
 import { accountPath, withdrawalPath } from '@/features/account/api'
 import { youtubePath } from '@/features/youtube/api'
 import { AccountCard, AccountEmail, AccountSkeleton } from './account-layout'
@@ -148,7 +148,7 @@ export function WithdrawalPanel({
         {view === 'session' && (
           <>
             <Button variant="primary" asChild>
-              <Link to={loginPath(withdrawalPath)}>다시 로그인</Link>
+              <LoginLink returnTo={withdrawalPath}>다시 로그인</LoginLink>
             </Button>
             {home()}
           </>

@@ -48,7 +48,7 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31})
+  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35})
   void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
       throws Exception {
     String source = "backup_source_v" + version, target = "backup_restore_v" + version;
@@ -144,6 +144,11 @@ class BackupSchemaIntegrationTest {
     var videos = owner.queryForList("SELECT * FROM app.video ORDER BY id");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
+    String publicId =
+        version >= 35
+            ? owner.queryForObject(
+                "SELECT public_id FROM app.playlist WHERE name='keep list'", String.class)
+            : null;
     String directory = "/tmp/backups-v" + version;
     var backup =
         postgres.execInContainer(
@@ -205,6 +210,20 @@ class BackupSchemaIntegrationTest {
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
     var runtime = jdbc(target, "stelody_app", "test-runtime");
+    if (version >= 35) {
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT public_id FROM app.playlist WHERE name='keep list'", String.class))
+          .isEqualTo(publicId);
+      runtime.update(
+          "INSERT INTO app.playlist(id,user_id,name,created_at,updated_at) VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000001','restored default',now(),now())");
+      assertThat(
+              runtime.queryForObject(
+                  "SELECT public_id FROM app.playlist WHERE name='restored default'", String.class))
+          .matches("[A-Za-z0-9]{10}")
+          .isNotEqualTo(publicId);
+      runtime.update("DELETE FROM app.playlist WHERE name='restored default'");
+    }
     if (version >= 30) {
       assertThat(
               runtime.queryForObject(

@@ -59,7 +59,12 @@ public final class MemberDtos {
               description = "ACTIVE: 활동 중, GRADUATED: 졸업. 졸업 멤버의 공개 곡도 조회할 수 있습니다.")
           String activityStatus,
       @Schema(nullable = true) String profileImageUrl,
-      Counts songCounts) {}
+      Counts songCounts,
+      @Schema(
+              nullable = true,
+              pattern = "^[a-z][a-z0-9-]{0,39}$",
+              description = "공개 멤버 주소. 미지정 멤버는 null이며 UUID로 조회할 수 있습니다. 이름 변경과 무관하게 유지됩니다.")
+          String slug) {}
 
   @Schema(requiredProperties = {"name", "youtubeId", "url"})
   public record Channel(String name, String youtubeId, String url) {}

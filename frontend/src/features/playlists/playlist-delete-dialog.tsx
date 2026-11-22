@@ -1,3 +1,4 @@
+import { playlistPath } from '@/features/playlists/playlist-path'
 import { useId, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ApiError } from '@/shared/api/errors'
@@ -25,10 +26,7 @@ export function PlaylistDeleteDialog({
   const titleId = useId()
   const navigate = useNavigate()
   const notify = useToast()
-  const action = usePlaylistManagement(
-    userId,
-    `/library/playlists/${playlist.id}`,
-  )
+  const action = usePlaylistManagement(userId, playlistPath(playlist))
   async function remove() {
     if (action.pending || reloadRequired) return
     setError(undefined)

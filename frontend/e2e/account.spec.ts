@@ -701,7 +701,7 @@ for (const operation of ['read', 'authorize'])
     }
     await expect(
       panel(page).getByRole('link', { name: '다시 로그인' }),
-    ).toHaveAttribute('href', `/login?returnTo=${encodeURIComponent(path)}`)
+    ).toHaveAttribute('href', '/login')
     await expect(panel(page).getByText(user.email)).toHaveCount(0)
   })
 

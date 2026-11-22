@@ -52,6 +52,15 @@ public class SongController {
     return songs.detail(id);
   }
 
+  @GetMapping("/api/v1/songs/by-youtube/{youtubeId}")
+  @Operation(
+      summary = "YouTube 영상 ID로 공개 곡 상세 조회",
+      description =
+          "대소문자를 구분하는 영문·숫자·밑줄·하이픈 11자 영상 ID로 연결된 공개 곡을 조회합니다. 대표 영상 이외의 연결 영상 ID도 지원하며 응답은 UUID 상세와 동일합니다. 형식 오류·미등록 영상·공개 조건을 만족하지 않는 곡은 404입니다. 응답 song.youtubeId는 현재 대표 영상 ID이고 song.id는 조회수·즐겨찾기·플레이리스트에 사용하는 기존 곡 UUID입니다.")
+  public SongDtos.Detail detailByYoutube(@PathVariable String youtubeId) {
+    return songs.detailByYoutube(youtubeId);
+  }
+
   @GetMapping("/api/v1/songs/years")
   @Operation(
       summary = "공개 곡의 검색 연도 선택지",
