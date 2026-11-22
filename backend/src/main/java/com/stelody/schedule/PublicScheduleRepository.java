@@ -109,8 +109,12 @@ public class PublicScheduleRepository {
           .update();
       return;
     }
+    Instant lifecycle =
+        video.actualEndAt() != null
+            ? video.actualEndAt()
+            : video.actualStartAt() != null ? video.actualStartAt() : start;
     if (start == null
-        || !start.isAfter(now.minusSeconds(30L * 86400))
+        || !lifecycle.isAfter(now.minusSeconds(30L * 86400))
         || !youtubeChannelId.equals(video.channelId())
         || video.title() == null
         || video.title().isBlank()) {
@@ -128,14 +132,16 @@ public class PublicScheduleRepository {
     jdbc.sql(
             """
         INSERT INTO app.youtube_public_schedule(
-          youtube_id,channel_id,title,scheduled_start_at,observed_at,thumbnail_url,song_type)
-        SELECT :id,c.id,:title,:start,:now,:thumbnail,:type FROM app.channel c
+          youtube_id,channel_id,title,scheduled_start_at,observed_at,thumbnail_url,song_type,
+          actual_start_at,actual_end_at)
+        SELECT :id,c.id,:title,:start,:now,:thumbnail,:type,:started,:ended FROM app.channel c
         WHERE c.id=:channel AND c.youtube_id=:youtubeChannel AND c.collection_enabled
           AND c.channel_type IN ('GROUP','MEMBER')
         ON CONFLICT(youtube_id) DO UPDATE SET channel_id=EXCLUDED.channel_id,title=EXCLUDED.title,
           scheduled_start_at=EXCLUDED.scheduled_start_at,observed_at=EXCLUDED.observed_at,
           thumbnail_url=EXCLUDED.thumbnail_url,song_type=EXCLUDED.song_type,
-          actual_start_at=NULL,actual_end_at=NULL
+          actual_start_at=COALESCE(youtube_public_schedule.actual_start_at,EXCLUDED.actual_start_at),
+          actual_end_at=COALESCE(youtube_public_schedule.actual_end_at,EXCLUDED.actual_end_at)
         WHERE youtube_public_schedule.observed_at<=EXCLUDED.observed_at
         """)
         .param("id", video.youtubeId())
@@ -143,6 +149,9 @@ public class PublicScheduleRepository {
         .param("youtubeChannel", youtubeChannelId)
         .param("title", video.title())
         .param("start", Timestamp.from(start))
+        .param(
+            "started", video.actualStartAt() == null ? null : Timestamp.from(video.actualStartAt()))
+        .param("ended", video.actualEndAt() == null ? null : Timestamp.from(video.actualEndAt()))
         .param("now", Timestamp.from(now))
         .param("type", type)
         .param("thumbnail", video.thumbnailUrl())

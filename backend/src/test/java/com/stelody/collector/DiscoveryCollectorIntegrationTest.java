@@ -1514,6 +1514,84 @@ class DiscoveryCollectorIntegrationTest {
     assertThat(count("premiere_auto_registration")).isEqualTo(1);
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "COVER,false",
+    "COVER,true",
+    "ORIGINAL,false",
+    "ORIGINAL,true"
+  })
+  void notificationFirstSeenAfterStartIsTrackedAndPublishesOnlyAfterCompletion(
+      String type, boolean alreadyEnded) throws Exception {
+    enableAuto();
+    writer.execute("DELETE FROM app.member_alias");
+    String title =
+        type.equals("COVER")
+            ? "HELP!! / 아오쿠모 린 (Aokumo Rin) Cover"
+            : "아오쿠모 린 (Aokumo Rin) - HELP!! Original";
+    var details = new HashMap<String, Object>();
+    details.put("scheduledStartTime", NOW.minusSeconds(120).toString());
+    details.put("actualStartTime", NOW.minusSeconds(119).toString());
+    if (alreadyEnded) details.put("actualEndTime", NOW.minusSeconds(1).toString());
+    clearCovers(
+        title,
+        alreadyEnded ? "none" : "live",
+        "PT3M9S",
+        NOW.minusSeconds(119).toString(),
+        Map.of("liveStreamingDetails", details),
+        1);
+    var processor =
+        new com.stelody.collector.push.YouTubePushProcessor(
+            source, settings(), Clock.fixed(NOW, ZoneOffset.UTC), true, true, d -> {});
+    processor.receive(YTCHANNEL, Map.of(yt(1), NOW));
+    assertThat(count("youtube_public_schedule")).isEqualTo(1);
+    assertThat(upcoming()).isEmpty();
+    assertThat(count("song_entry")).isZero();
+    assertThat(
+            writer.queryForObject(
+                "SELECT actual_start_at FROM app.youtube_public_schedule",
+                java.sql.Timestamp.class))
+        .isEqualTo(java.sql.Timestamp.from(NOW.minusSeconds(119)));
+
+    details.put(
+        "actualEndTime", (alreadyEnded ? NOW.minusSeconds(1) : NOW.plusSeconds(30)).toString());
+    clearCovers(
+        title,
+        "none",
+        "PT3M9S",
+        NOW.minusSeconds(119).toString(),
+        Map.of("liveStreamingDetails", details),
+        1);
+    var refresh =
+        new com.stelody.collector.service.PublicScheduleRefresh(
+            source,
+            settings(),
+            Clock.fixed(NOW.plusSeconds(61), ZoneOffset.UTC),
+            d -> {},
+            true,
+            true);
+    refresh.refresh(new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(20)));
+    refresh.refresh(new com.stelody.collector.domain.CollectionBudget(Duration.ofSeconds(20)));
+
+    assertThat(count("song_entry")).isEqualTo(1);
+    assertThat(count("premiere_auto_registration")).isEqualTo(1);
+    assertThat(writer.queryForObject("SELECT title FROM app.song_entry", String.class))
+        .isEqualTo("HELP!!");
+    assertThat(writer.queryForObject("SELECT song_type FROM app.song_entry", String.class))
+        .isEqualTo(type);
+    assertThat(writer.queryForObject("SELECT visibility FROM app.song_entry", String.class))
+        .isEqualTo("PUBLISHED");
+    assertThat(writer.queryForObject("SELECT source_title FROM app.video", String.class))
+        .isEqualTo(title);
+    assertThat(writer.queryForObject("SELECT confirmed FROM app.song_member", Boolean.class))
+        .isTrue();
+    assertThat(
+            writer.queryForObject(
+                "SELECT original_lookup_after IS NOT NULL FROM app.premiere_auto_registration",
+                Boolean.class))
+        .isEqualTo(type.equals("COVER"));
+  }
+
   @Test
   void overdueUpcomingScheduleSurvivesUntilDelayedCompletion() {
     enableAuto();
