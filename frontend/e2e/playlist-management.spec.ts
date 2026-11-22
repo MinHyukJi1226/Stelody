@@ -83,6 +83,12 @@ async function setup(page: Page, entries = initial) {
     if (state.deleted)
       return r.fulfill({ status: 404, json: { code: 'PLAYLIST_NOT_FOUND' } })
     if (method === 'GET') {
+      if (parts[5] === 'by-public-id')
+        return r.fulfill(
+          parts[6] === state.playlist.publicId
+            ? { json: state.playlist }
+            : { status: 404, json: { code: 'PLAYLIST_NOT_FOUND' } },
+        )
       if (state.readFailure)
         return r.fulfill({
           status: state.readFailure,
@@ -168,6 +174,64 @@ async function visit(page: Page) {
 async function down(page: Page) {
   await page.getByRole('button', { name: '첫 번째 노래 아래로 이동' }).click()
 }
+
+test('짧은 주소로 목록과 이름 변경을 열고 UUID로 저장하며 주소를 유지한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  state.playlist.publicId = 'a7Kp2mX9qB'
+  const shortPath = `/library/playlists/${state.playlist.publicId}`
+  const writes: string[] = []
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH') writes.push(new URL(r.url()).pathname)
+  })
+  await page.goto(shortPath)
+  await expect(rows(page)).toHaveCount(3)
+  await page.getByRole('button', { name: '이름 수정', exact: true }).click()
+  await expect(page).toHaveURL(`${shortPath}/edit`)
+  await page.getByLabel('플레이리스트 이름').fill('이름 변경 후에도 같은 주소')
+  await page.getByRole('button', { name: '이름 저장' }).click()
+  await expect(page).toHaveURL(shortPath)
+  await expect(
+    page.getByRole('heading', {
+      name: '이름 변경 후에도 같은 주소',
+      exact: true,
+    }),
+  ).toBeVisible()
+  expect(writes).toEqual([`/api/v1/me/playlists/${id}`])
+  expect(state.playlist.publicId).toBe('a7Kp2mX9qB')
+  await page.reload()
+  await expect(rows(page)).toHaveCount(3)
+  await expect(page).toHaveURL(shortPath)
+})
+
+test('기존 UUID 상세와 수정 주소는 쿼리·해시를 보존하며 짧은 주소로 전환한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  state.playlist.publicId = 'a7Kp2mX9qB'
+  const shortPath = `/library/playlists/${state.playlist.publicId}`
+  await page.goto(`${path}?from=library#songs`)
+  await expect(page).toHaveURL(`${shortPath}?from=library#songs`)
+  await expect(rows(page)).toHaveCount(3)
+  await page.goto(`${path}/edit?from=library#name`)
+  await expect(page).toHaveURL(`${shortPath}/edit?from=library#name`)
+  await expect(page.getByLabel('플레이리스트 이름')).toHaveValue(
+    state.playlist.name,
+  )
+  expect(state.writes).toHaveLength(0)
+})
+
+test('없는 짧은 주소는 목록을 노출하거나 변경하지 않는다', async ({ page }) => {
+  const state = await setup(page)
+  state.playlist.publicId = 'a7Kp2mX9qB'
+  await page.goto('/library/playlists/unknown123')
+  await expect(
+    page.getByText('이 목록에 접근할 수 없습니다', { exact: true }),
+  ).toBeVisible()
+  await expect(rows(page)).toHaveCount(0)
+  expect(state.writes).toHaveLength(0)
+})
 
 test('전체 페이지와 이용 불가 곡을 유지하며 위아래 편집·취소·저장·새로고침을 처리한다', async ({
   page,

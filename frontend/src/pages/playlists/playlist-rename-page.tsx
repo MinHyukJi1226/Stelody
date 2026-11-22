@@ -1,3 +1,4 @@
+import { playlistPath } from '@/features/playlists/playlist-path'
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
@@ -17,9 +18,22 @@ import { PageState } from '@/shared/ui/page-state'
 import { PlaylistFormLayout } from './components/playlist-form-layout'
 import { useToast } from '@/shared/ui/toast-context'
 import { PlaylistLoading } from './components/playlist-loading'
+import {
+  PlaylistAddress,
+  PlaylistCanonicalAddress,
+} from '@/features/playlists/playlist-address'
 
 export function PlaylistRenamePage() {
   const { playlistId = '' } = useParams()
+  const session = useQuery({ ...sessionOptions, refetchOnMount: false })
+  return (
+    <PlaylistAddress user={session.data?.id ?? ''} address={playlistId}>
+      {(id) => <PlaylistRenameScreen key={id} playlistId={id} />}
+    </PlaylistAddress>
+  )
+}
+
+function PlaylistRenameScreen({ playlistId }: { playlistId: string }) {
   const [params] = useSearchParams()
   const fromLibrary = params.get('from') === 'library'
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
@@ -33,40 +47,44 @@ export function PlaylistRenamePage() {
     !valid ||
     (query.error instanceof ApiError && [403, 404].includes(query.error.status))
   return (
-    <PlaylistFormLayout>
-      {denied || (query.isError && !query.data) ? (
-        <PageState
-          kind={denied ? 'unavailable' : 'error'}
-          title={denied ? '이 목록에 접근할 수 없습니다' : '불러오지 못했어요'}
-          description={
-            denied
-              ? '목록이 없거나 현재 계정에서 볼 수 없습니다.'
-              : '연결 상태를 확인한 뒤 다시 시도해 주세요.'
-          }
-          action={{ to: '/library/playlists', label: '내 플레이리스트' }}
-          {...(!denied ? { onRetry: () => void query.refetch() } : {})}
-        />
-      ) : query.isPending ? (
-        <PlaylistLoading />
-      ) : (
-        query.data && (
-          <>
-            <h1 className="text-xl font-bold leading-[1.5]">이름 변경</h1>
-            <RenameForm
-              key={`${user}:${playlistId}`}
-              userId={user}
-              playlist={query.data}
-              fromLibrary={fromLibrary}
-              load={async () => {
-                const result = await query.refetch()
-                if (result.error) throw result.error
-                return result.data!
-              }}
-            />
-          </>
-        )
-      )}
-    </PlaylistFormLayout>
+    <PlaylistCanonicalAddress playlist={denied ? undefined : query.data}>
+      <PlaylistFormLayout>
+        {denied || (query.isError && !query.data) ? (
+          <PageState
+            kind={denied ? 'unavailable' : 'error'}
+            title={
+              denied ? '이 목록에 접근할 수 없습니다' : '불러오지 못했어요'
+            }
+            description={
+              denied
+                ? '목록이 없거나 현재 계정에서 볼 수 없습니다.'
+                : '연결 상태를 확인한 뒤 다시 시도해 주세요.'
+            }
+            action={{ to: '/library/playlists', label: '내 플레이리스트' }}
+            {...(!denied ? { onRetry: () => void query.refetch() } : {})}
+          />
+        ) : query.isPending ? (
+          <PlaylistLoading />
+        ) : (
+          query.data && (
+            <>
+              <h1 className="text-xl font-bold leading-[1.5]">이름 변경</h1>
+              <RenameForm
+                key={`${user}:${playlistId}`}
+                userId={user}
+                playlist={query.data}
+                fromLibrary={fromLibrary}
+                load={async () => {
+                  const result = await query.refetch()
+                  if (result.error) throw result.error
+                  return result.data!
+                }}
+              />
+            </>
+          )
+        )}
+      </PlaylistFormLayout>
+    </PlaylistCanonicalAddress>
   )
 }
 
@@ -91,7 +109,7 @@ function RenameForm({
   const saving = useRef(false)
   const navigate = useNavigate()
   const notify = useToast()
-  const path = `/library/playlists/${playlist.id}`
+  const path = playlistPath(playlist)
   const destination = fromLibrary ? '/library/playlists' : path
   const action = usePlaylistManagement(
     userId,

@@ -259,6 +259,7 @@ public class SecurityConfiguration {
                         HttpMethod.GET,
                         "/api/v1/me/playlists",
                         "/api/v1/me/playlists/{id}",
+                        "/api/v1/me/playlists/by-public-id/{publicId}",
                         "/api/v1/me/playlists/{id}/items")
                     .authenticated()
                     .requestMatchers(

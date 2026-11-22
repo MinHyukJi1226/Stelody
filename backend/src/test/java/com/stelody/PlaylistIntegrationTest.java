@@ -251,6 +251,53 @@ class PlaylistIntegrationTest {
         201);
   }
 
+  @Test
+  void shortAddressIsStablePrivateAndReadOnlyWhileUuidOperationsRemainCompatible()
+      throws Exception {
+    var created = create(first, "주소 테스트");
+    var id = uuid(created, "id");
+    var publicId = created.path("publicId").asText();
+    assertThat(publicId).matches("[A-Za-z0-9]{10}");
+    assertThat(create(first, "주소 테스트").path("publicId").asText()).isNotEqualTo(publicId);
+    String path = ROOT + "/by-public-id/" + publicId;
+    assertThat(response(authenticated(get(path), first), 200)).isEqualTo(detail(first, id));
+    assertThat(response(authenticated(get(path), second), 404).path("code").asText())
+        .isEqualTo("PLAYLIST_NOT_FOUND");
+    mvc.perform(get(path)).andExpect(status().isUnauthorized());
+    for (var invalid : List.of("short", "12345678901", "bad!value1")) {
+      response(authenticated(get(ROOT + "/by-public-id/" + invalid), first), 404);
+    }
+    response(
+        authenticated(patch(ROOT + "/" + id), first)
+            .contentType("application/json")
+            .content("{\"name\":\"변경한 이름\",\"version\":0}"),
+        200);
+    var renamed = response(authenticated(get(path), first), 200);
+    assertThat(renamed.path("publicId").asText()).isEqualTo(publicId);
+    assertThat(renamed.path("name").asText()).isEqualTo("변경한 이름");
+    add(first, id, renamed.path("version").asLong(), S1);
+    var beforeRead = detail(first, id);
+    assertThat(response(authenticated(get(path), first), 200)).isEqualTo(beforeRead);
+    assertThat(detail(first, id)).isEqualTo(beforeRead);
+    assertThat(list(first, "").path("items").toString()).contains(publicId);
+  }
+
+  @Test
+  void shortAddressLookupIsCaseSensitiveAndStillRequiresCsrfForWrites() throws Exception {
+    var created = create(first, "대소문자 테스트");
+    var id = uuid(created, "id");
+    writer.update("UPDATE app.playlist SET public_id='AbCdEf1234' WHERE id=?", id);
+    response(authenticated(get(ROOT + "/by-public-id/AbCdEf1234"), first), 200);
+    response(authenticated(get(ROOT + "/by-public-id/abcdef1234"), first), 404);
+    mvc.perform(
+            patch(ROOT + "/" + id)
+                .cookie(first.cookie())
+                .contentType("application/json")
+                .content("{\"name\":\"차단\",\"version\":0}"))
+        .andExpect(status().isForbidden());
+    assertThat(detail(first, id).path("name").asText()).isEqualTo("대소문자 테스트");
+  }
+
   UUID uuid(JsonNode value, String field) {
     return UUID.fromString(value.get(field).asText());
   }

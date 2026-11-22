@@ -80,6 +80,25 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void playlistShortAddressRemainsPrivateAndDocumentsUuidCompatibility() throws Exception {
+    var api = contract();
+    var operation = api.at("/paths/~1api~1v1~1me~1playlists~1by-public-id~1{publicId}/get");
+    assertThat(operation.path("security").isEmpty()).isFalse();
+    assertThat(operation.path("description").asText())
+        .contains("404 PLAYLIST_NOT_FOUND", "10자", "UUID");
+    assertThat(api.path("paths").has("/api/v1/me/playlists/{id}/items")).isTrue();
+    assertThat(
+            api.path("components")
+                .path("schemas")
+                .path("com.stelody.playlist.dto.PlaylistDtos.Summary")
+                .path("properties")
+                .path("publicId")
+                .path("pattern")
+                .asText())
+        .isEqualTo("^[A-Za-z0-9]{10}$");
+  }
+
+  @Test
   void documentsNullableUpcomingThumbnail() throws Exception {
     var api = contract();
     var response = api.at("/paths/~1api~1v1~1songs~1upcoming/get/responses/200");

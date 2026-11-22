@@ -1,3 +1,4 @@
+import { playlistPath } from '@/features/playlists/playlist-path'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { sessionOptions } from '@/features/auth/session'
@@ -17,7 +18,7 @@ export function PlaylistCreatePage() {
           returnTo="/library/playlists/new"
           onCancel={() => void navigate('/library/playlists')}
           onDone={(playlist) =>
-            void navigate(`/library/playlists/${playlist.id}`, {
+            void navigate(playlistPath(playlist), {
               replace: true,
             })
           }

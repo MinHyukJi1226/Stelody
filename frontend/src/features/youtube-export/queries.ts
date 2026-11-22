@@ -76,7 +76,11 @@ type Write =
   | { kind: 'create'; request: ExportRequest }
   | { kind: 'retry' | 'cancel'; jobId: string }
 
-export function useExportActions(user: string, playlist: string) {
+export function useExportActions(
+  user: string,
+  playlist: string,
+  returnAddress = playlist,
+) {
   const client = useQueryClient()
   const navigate = useNavigate()
   const key = exportKeys.write(user)
@@ -113,7 +117,7 @@ export function useExportActions(user: string, playlist: string) {
         error.status === 401
       ) {
         await endLocalSession(client)
-        void navigate(loginPath(exportPath(playlist)))
+        void navigate(loginPath(exportPath(returnAddress)))
       }
     },
   })

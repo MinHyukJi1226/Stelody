@@ -5,6 +5,7 @@ import { favoriteListOptions } from '@/features/favorites/queries'
 import type { Playlist } from '@/features/playlists/api'
 import { playlistListOptions } from '@/features/playlists/queries'
 import { PlaylistCover } from '@/features/playlists/playlist-cover'
+import { playlistPath } from '@/features/playlists/playlist-path'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { HomeSection } from './home-section'
 import { HomeSongGrid, HomeSongSkeleton, homeGrid } from './home-song-grid'
@@ -18,10 +19,7 @@ function PlaylistPreview({
   userId: string
 }) {
   return (
-    <Link
-      to={`/library/playlists/${playlist.id}`}
-      className="grid min-w-0 gap-2 rounded-lg"
-    >
+    <Link to={playlistPath(playlist)} className="grid min-w-0 gap-2 rounded-lg">
       <PlaylistCover playlist={playlist} userId={userId} />
       <span className="truncate text-sm" title={playlist.name}>
         {playlist.name}

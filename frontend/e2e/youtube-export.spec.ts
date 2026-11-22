@@ -36,6 +36,7 @@ async function setup(page: Page) {
     connection: 'CONNECTED' as YouTubeConnection['status'],
     source: {
       id,
+      publicId: undefined as string | undefined,
       name: '밤에 듣는 목소리',
       version: 0,
       totalCount: 3,
@@ -151,7 +152,9 @@ async function setup(page: Page) {
     const requestedId = url.pathname.split('/')[5]
     return r.fulfill({
       json:
-        requestedId === state.source.id
+        requestedId === state.source.id ||
+        (requestedId === 'by-public-id' &&
+          url.pathname.split('/')[6] === state.source.publicId)
           ? state.source
           : { ...state.source, id: requestedId, name: '다른 플레이리스트' },
     })
@@ -211,6 +214,51 @@ async function open(page: Page, url = path) {
   await page.goto(url)
   await expect(panel(page)).toBeVisible()
 }
+
+test('짧은 주소로 내보내도 원본 UUID를 사용하고 작업 ID와 주소를 유지한다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  s.source.publicId = 'a7Kp2mX9qB'
+  const shortPath = `/library/playlists/${s.source.publicId}/youtube-export`
+  await open(page, shortPath)
+  await expect(start(page)).toBeEnabled()
+  await start(page).click()
+  await expect(page).toHaveURL(`${shortPath}?jobId=${jobId}`)
+  expect(s.created).toHaveLength(1)
+  expect(s.job.playlistId).toBe(id)
+  await page.reload()
+  await expect(panel(page)).toBeVisible()
+  await expect(page).toHaveURL(`${shortPath}?jobId=${jobId}`)
+  expect(s.created).toHaveLength(1)
+})
+
+test('기존 내보내기 UUID 주소는 작업 ID와 해시를 보존해 짧은 주소로 전환한다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  s.source.publicId = 'a7Kp2mX9qB'
+  await open(page, `${jobPath}#status`)
+  await expect(page).toHaveURL(
+    `/library/playlists/${s.source.publicId}/youtube-export?jobId=${jobId}#status`,
+  )
+  expect(s.created).toHaveLength(0)
+})
+
+test('짧은 주소의 접수 응답 유실도 중복 접수 없이 기존 작업으로 복구한다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  s.source.publicId = 'a7Kp2mX9qB'
+  s.loseResponse = true
+  const shortPath = `/library/playlists/${s.source.publicId}/youtube-export`
+  await open(page, shortPath)
+  await expect(start(page)).toBeEnabled()
+  await start(page).click()
+  await expect(page).toHaveURL(`${shortPath}?jobId=${jobId}`)
+  expect(s.created).toHaveLength(1)
+  expect(s.activeReads).toBeGreaterThan(1)
+})
 
 for (const status of ['QUEUED', 'RUNNING', 'FAILED', 'UNCERTAIN'] as const)
   test(`다른 탭에서 시작한 ${status} 작업을 재접수 없이 연다`, async ({

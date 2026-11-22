@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+  '/api/v1/me/playlists/by-public-id/{publicId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 짧은 주소 ID로 개인 플레이리스트 상세 조회
+     * @description publicId는 대소문자를 구분하는 영문·숫자 10자입니다. 로그인한 소유자의 목록만 기존 UUID 상세와 같은 응답으로 반환합니다. 형식 오류·미등록·다른 사용자의 목록은 모두 404 PLAYLIST_NOT_FOUND입니다. 조회는 읽기 전용이며 세션 만료 등 개인 API 오류 계약을 유지합니다. 응답 id는 기존 항목·변경·내보내기 API에 사용하는 UUID입니다.
+     *
+     *     현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_me_playlists_by_public_id_publicId']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/songs/by-youtube/{youtubeId}': {
     parameters: {
       query?: never
@@ -2843,6 +2865,8 @@ export interface components {
       version: number
     }
     'com.stelody.playlist.dto.PlaylistDtos.Summary': {
+      /** @description 서버가 자동 발급한 대소문자 구분 영문·숫자 10자 주소 ID. 이름 변경·내보내기 후에도 유지됩니다. UUID id는 기존 변경·항목·내보내기 API에 사용합니다. publicId를 알아도 로그인과 소유자 검증이 필요합니다. */
+      publicId?: string
       /** Format: int64 */
       availableCount: number
       /** @description 목록 조회에서 지정한 songId의 저장 여부. 이용 불가 곡도 포함합니다. songId 생략 및 생성·상세·변경 응답에서는 null입니다. 조회 시점의 값이며 추가 시 중복 검증은 별도로 수행합니다. */
@@ -3207,6 +3231,58 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  get_me_playlists_by_public_id_publicId: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        publicId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.playlist.dto.PlaylistDtos.Summary']
+        }
+      }
+      /** @description INVALID_PLAYLIST_REQUEST: 이름·항목·버전·커서를 확인합니다. */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /**
+       * @description 로그인 세션이 없거나 유효하지 않습니다.
+       *     AUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_songs_by_youtube_youtubeId: {
     parameters: {
       query?: never
