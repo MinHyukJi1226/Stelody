@@ -264,26 +264,15 @@
     margin-inline: auto;
     padding: 48px clamp(24px, 8.333333vw, 120px);
   }
-  .login-page {
-    min-height: calc(100dvh - 197px);
-  }
   .favorites-page {
     min-height: calc(100dvh - 197px);
-  }
-  .login-page > section {
-    padding-bottom: 48px;
-    min-height: 0;
   }
   .login-card {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    width: 520px;
+    width: 320px;
     max-width: 100%;
-    padding: 40px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background: var(--surface);
+    text-align: center;
   }
   .google-sign-in {
     display: flex;
@@ -309,6 +298,17 @@
     width: 20px;
     height: 20px;
   }
+  .login-card .google-sign-in {
+    height: 52px;
+    padding-inline: 12px;
+    border-radius: 12px;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .login-card .google-sign-in img {
+    width: 20px;
+    height: 20px;
+  }
 
   /* Figma Header 8:30: 390 × 93, padding 20, gap 8. */
   @media (width < 768px) {
@@ -326,14 +326,8 @@
     .page-content {
       padding: 24px 20px 48px;
     }
-    .login-page {
-      min-height: calc(100dvh - 165px);
-    }
     .favorites-page {
       min-height: calc(100dvh - 165px);
-    }
-    .login-card {
-      padding: 20px;
     }
   }
   @media (width >= 768px) {

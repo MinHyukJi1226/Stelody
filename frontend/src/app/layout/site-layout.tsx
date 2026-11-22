@@ -10,6 +10,7 @@ export function SiteLayout() {
   const pathname = useLocation().pathname
   const home = pathname === '/'
   const search = pathname === '/search'
+  const login = pathname === '/login'
   const catalog = pathname === '/songs'
   const songDetail = !!matchPath('/songs/:songId', pathname)
   const members = pathname === '/members' || pathname.startsWith('/members/')
@@ -19,6 +20,7 @@ export function SiteLayout() {
     !!matchPath('/library/playlists/:playlistId/edit', pathname)
   const compact =
     home ||
+    login ||
     search ||
     catalog ||
     songDetail ||
@@ -51,7 +53,8 @@ export function SiteLayout() {
           className={
             home
               ? 'w-full flex-1 px-5 pt-3 md:px-10'
-              : search ||
+              : login ||
+                  search ||
                   catalog ||
                   songDetail ||
                   members ||

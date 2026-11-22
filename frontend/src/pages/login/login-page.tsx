@@ -4,7 +4,6 @@ import { useSearchParams } from 'react-router'
 import { apiClient } from '@/shared/api/client'
 import { sessionOptions } from '@/features/auth/session'
 import { safeReturnPath } from '@/features/auth/return-path'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { LoginCard, LoginSkeleton } from './components/login-card'
 import { LoginReturn } from './components/login-return'
 import { preparePendingAction } from '@/features/auth/pending-action'
@@ -46,9 +45,9 @@ export function LoginPage() {
         : undefined
 
   return (
-    <div className="login-page flex min-w-0 flex-col">
+    <div className="login-page flex min-w-0 flex-1 flex-col px-5 md:px-8">
       <section
-        className="flex flex-1 flex-col gap-4"
+        className="flex flex-1 flex-col items-center pb-12 pt-[clamp(48px,12dvh,160px)]"
         aria-labelledby="login-title"
       >
         {checking && (
@@ -56,45 +55,25 @@ export function LoginPage() {
             로그인 확인 중
           </h1>
         )}
-        {!checking && (
-          <>
-            <p className="text-xs leading-[1.5] text-brand">YOUR ARCHIVE</p>
-            <h1
-              id="login-title"
-              className="text-[32px] font-bold leading-[1.5]"
-            >
-              나만의 노래를<span className="block md:inline"> 모아보세요</span>
-            </h1>
-            <p className="text-muted">
-              Google 계정으로 나만의 노래를 모아보세요.
-            </p>
-          </>
+        {checking ? (
+          <LoginSkeleton />
+        ) : (
+          <LoginCard
+            returnTo={returnTo}
+            notice={notice}
+            cancelled={result === 'cancelled' && !session.isError}
+            canContinue={!!session.data && !session.isError}
+            onContinue={() => {
+              if (session.data) preparePendingAction(session.data.id, returnTo)
+            }}
+            retry={session.isError ? () => void session.refetch() : undefined}
+          />
         )}
-        <div
-          className={
-            checking
-              ? 'flex flex-1 items-center justify-center'
-              : 'flex justify-center'
-          }
-        >
-          {checking ? (
-            <LoginSkeleton />
-          ) : (
-            <LoginCard
-              returnTo={returnTo}
-              notice={notice}
-              cancelled={result === 'cancelled' && !session.isError}
-              canContinue={!!session.data && !session.isError}
-              onContinue={() => {
-                if (session.data)
-                  preparePendingAction(session.data.id, returnTo)
-              }}
-              retry={session.isError ? () => void session.refetch() : undefined}
-            />
-          )}
-        </div>
       </section>
-      <SiteFooter className="min-h-[124px] p-4 px-5 text-sm leading-[1.5] md:min-h-[75px] md:p-4 md:px-10" />
+      <footer className="grid gap-1 px-2 pt-5 pb-6 text-xs leading-[1.5] text-muted">
+        <p>Stelody · 팬이 만드는 노래 아카이브</p>
+        <p>화면 검수용 예시 데이터 · 공식 서비스가 아닙니다</p>
+      </footer>
     </div>
   )
 }
