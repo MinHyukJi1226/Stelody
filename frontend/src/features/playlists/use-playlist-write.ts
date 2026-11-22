@@ -5,7 +5,7 @@ import {
 } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { endLocalSession } from '@/features/auth/session'
-import { loginPath } from '@/features/auth/return-path'
+import { beginLogin } from '@/features/auth/return-path'
 import { ApiError } from '@/shared/api/errors'
 import { storePlaylistAction } from '@/features/auth/pending-action'
 import { addPlaylistSong, createPlaylist, type Playlist } from './api'
@@ -51,7 +51,7 @@ export function usePlaylistWrite(user: string, returnTo: string) {
             expectedUserId: user,
           })
         await endLocalSession(client)
-        void navigate(loginPath(returnTo))
+        void navigate(beginLogin(returnTo))
       } else {
         if (
           value.kind === 'add' &&

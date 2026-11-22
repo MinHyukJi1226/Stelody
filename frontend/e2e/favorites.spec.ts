@@ -243,9 +243,7 @@ test('비로그인 저장은 Google 복귀 후 한 번만 실행하며 새로고
   await page
     .getByRole('button', { name: `${song.title} 즐겨찾기 저장`, exact: true })
     .click()
-  await expect(page).toHaveURL(
-    `/login?returnTo=%2Fsongs%2F${song.id}%3Ffrom%3Dhome%23info`,
-  )
+  await expect(page).toHaveURL('/login')
   expect(mock.writes).toHaveLength(0)
   await page.getByRole('link', { name: 'Google로 로그인', exact: true }).click()
   await expect(page).toHaveURL(`/songs/${song.id}?from=home#info`)
@@ -494,7 +492,7 @@ test('변경 중 세션이 만료되면 로그인으로 이동하고 개인 목�
   mock.setError(401)
   mock.setLoggedIn(false)
   await confirmFavoriteRemoval(page)
-  await expect(page).toHaveURL('/login?returnTo=%2Flibrary')
+  await expect(page).toHaveURL('/login')
   await expect(
     page.getByRole('heading', { name: song.title, exact: true }),
   ).toHaveCount(0)

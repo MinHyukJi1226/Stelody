@@ -16,6 +16,8 @@ npm run dev
 
 `VITE_API_BASE_URL`은 브라우저 요청 주소이며 기본값은 `/api/v1`입니다. 배포 구조가 정해지면 이 값과 호스팅 프록시·CORS·쿠키·OAuth 콜백을 함께 검증합니다. Vite 환경변수는 사용자에게 공개되므로 비밀키를 넣지 않습니다. Google 로그인은 실제 브라우저 이동으로 연결하며 세션 쿠키를 JavaScript로 읽지 않습니다.
 
+로그인 화면은 `/login`으로 열고 복귀할 내부 경로만 같은 탭의 `sessionStorage`(`stelody-login-return`)에 보관합니다. 링크 렌더링은 저장소를 변경하지 않으며 실제 로그인 이동 또는 Google 인증 시작 시 저장합니다. OAuth 요청의 `returnTo`는 `/login`으로 고정하고 기존 서버의 state·세션·CSRF 검증은 유지합니다. 프론트는 실제 세션 확인 후 저장 경로를 검증해 이동하고 삭제합니다. 취소·실패에는 재시도를 위해 유지하며, 저장소가 차단되거나 값이 없거나 유효하지 않으면 `/library`로 복귀합니다. 기존 `?returnTo=...` 링크는 검증·보관 후 주소에서 제거하고 `loginResult` 안내 파라미터도 정리합니다. 인증 코드·토큰·세션 ID는 이 저장소에 보관하지 않습니다.
+
 ## 구조
 
 - `src/app`: 앱 시작, 라우터, Query 설정, 전역 스타일
@@ -85,7 +87,7 @@ Tailwind Vite 플러그인과 shadcn/ui의 `components.json`·경로 별칭을 �
 ## Google 로그인
 
 - `/login`: PC·모바일 / 라이트·다크 Google 로그인 카드, 확인 중 스켈레톤, 실패·취소 인라인 안내를 제공합니다. Google 아이콘은 Figma의 `140:10871` 자산을 사용합니다.
-- 브라우저를 `/api/v1/auth/google?returnTo=...`로 이동시켜 인증을 시작합니다. Vite 개발 실행에서만 `loginClient=local`을 추가하고 프로덕션 빌드에서는 생략합니다. fetch로 OAuth를 실행하거나 Google 토큰을 보관하지 않습니다. `/login?returnTo=원래경로&loginResult=...`로 복귀하면 안내 파라미터를 주소에서 제거하고 `/me`로 세션을 확인합니다.
+- 브라우저를 `/api/v1/auth/google?returnTo=%2Flogin`으로 이동시켜 인증을 시작합니다. Vite 개발 실행에서만 `loginClient=local`을 추가하고 프로덕션 빌드에서는 생략합니다. fetch로 OAuth를 실행하거나 Google 토큰을 보관하지 않습니다. `/login?loginResult=...`로 복귀하면 안내 파라미터를 주소에서 제거하고 `/me`로 세션을 확인한 뒤 탭 저장소의 검증된 경로로 복귀합니다.
 - `loginResult=success`만으로 인증을 판단하지 않습니다. 취소·실패 시 기존 세션은 유지하고 현재 계정으로 계속하기를 제공합니다. 세션 조회 장애는 비로그인과 구분해 재시도를 안내합니다.
 - `returnTo`는 내부 UI 경로만 허용하며 검색 조건·중복 파라미터·해시를 유지합니다. 외부 URL·API·actuator·로그인 루프·경로 우회·서버 길이 제한 초과는 보관함으로 대체합니다.
 - `/library`는 세션 확인 후 진입합니다. 비로그인은 현재 경로를 보관해 로그인으로 안내합니다. 즐겨찾기 목록은 `/library`, 플레이리스트 목록은 `/library/playlists`에서 제공합니다.

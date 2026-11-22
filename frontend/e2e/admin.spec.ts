@@ -40,7 +40,7 @@ for (const mode of ['anonymous', 'member', 'inactive', 'error'] as const) {
     if (mode === 'anonymous')
       await expect(
         page.getByRole('link', { name: '로그인', exact: true }).last(),
-      ).toHaveAttribute('href', '/login?returnTo=%2Fadmin%2Freviews%3Fpage%3D1')
+      ).toHaveAttribute('href', '/login')
     if (mode === 'error') {
       state.sessionError = 0
       await page.getByRole('button', { name: '다시 조회' }).click()
@@ -157,10 +157,7 @@ for (const [status, title] of [
     if (status === 401)
       await expect(
         page.getByRole('link', { name: '로그인', exact: true }).last(),
-      ).toHaveAttribute(
-        'href',
-        '/login?returnTo=%2Fadmin%2Fregistrations%3Fpage%3D1',
-      )
+      ).toHaveAttribute('href', '/login')
     if (status === 503) {
       state.error = 0
       await page.getByRole('button', { name: '다시 조회' }).click()

@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { apiClient } from '@/shared/api/client'
 import { ApiError, ApiResponseError } from '@/shared/api/errors'
 import type { CurrentUser } from '@/shared/api/types'
-import { oauthReturnPath } from './return-path'
 
 const currentUserSchema = z.object({
   id: z.uuid(),
@@ -28,8 +27,8 @@ export async function getSession(
   }
 }
 
-export function googleLoginUrl(returnTo: string) {
-  const query = new URLSearchParams({ returnTo: oauthReturnPath(returnTo) })
+export function googleLoginUrl() {
+  const query = new URLSearchParams({ returnTo: '/login' })
   if (import.meta.env.DEV) query.set('loginClient', 'local')
   return apiClient.url(`/auth/google?${query}`)
 }

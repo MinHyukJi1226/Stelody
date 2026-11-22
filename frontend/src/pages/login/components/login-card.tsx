@@ -3,6 +3,7 @@ import googleMark from '@/shared/assets/google-mark.png'
 import logo from '@/shared/assets/logo.svg'
 import { Button } from '@/shared/ui/button'
 import { googleLoginUrl } from '@/features/auth/api'
+import { rememberLoginReturn } from '@/features/auth/return-path'
 
 export function LoginCard({
   returnTo,
@@ -38,7 +39,11 @@ export function LoginCard({
         즐겨찾기와 플레이리스트 저장으로
         <br />내 취향 곡을 모아보세요
       </p>
-      <a className="google-sign-in mt-8" href={googleLoginUrl(returnTo)}>
+      <a
+        className="google-sign-in mt-8"
+        href={googleLoginUrl()}
+        onClick={() => rememberLoginReturn(returnTo)}
+      >
         <img src={googleMark} alt="" width={20} height={20} />
         <span>Google로 로그인</span>
       </a>

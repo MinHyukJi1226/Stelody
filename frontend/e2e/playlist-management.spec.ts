@@ -655,7 +655,7 @@ test('변경 요청 401은 로그인으로 이동하고 개인 편집 내용을 
   state.failure = { status: 401, code: 'SESSION_EXPIRED' }
   state.loggedIn = false
   await page.getByRole('button', { name: '변경 순서 저장' }).click()
-  await expect(page).toHaveURL(`/login?returnTo=${encodeURIComponent(path)}`)
+  await expect(page).toHaveURL('/login')
   await expect(order(page)).toHaveCount(0)
   expect(state.writes).toHaveLength(1)
   await expect(

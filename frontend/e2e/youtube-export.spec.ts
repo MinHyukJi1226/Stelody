@@ -432,7 +432,7 @@ test('활성 작업 조회 401은 로그인으로 이동하며 접수하지 않�
   const s = await setup(page)
   s.activeFailure = 401
   await page.goto(path)
-  await expect(page).toHaveURL(/\/login\?returnTo=/)
+  await expect(page).toHaveURL('/login')
   await expect(panel(page)).toHaveCount(0)
   expect(s.created).toHaveLength(0)
 })
@@ -748,12 +748,14 @@ test('내보내기 재로그인 복귀는 연결 관리의 원래 작업 경로�
   const managementPath = `/library/youtube?${new URLSearchParams({ returnTo: jobPath })}`
   s.authorizationFailure = { status: 401, code: 'SESSION_EXPIRED' }
   await page.getByRole('button', { name: '다시 연결', exact: true }).click()
-  await expect(page).toHaveURL(/\/login\?returnTo=/)
-  expect(new URL(page.url()).searchParams.get('returnTo')).toBe(managementPath)
+  await expect(page).toHaveURL('/login')
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('stelody-login-return')),
+  ).toBe(managementPath)
   const attempts = s.authorizations.length
   s.loggedIn = true
   s.authorizationFailure = null
-  await page.goto(`${page.url()}&loginResult=success`)
+  await page.goto('/login?loginResult=success')
   await expect(
     page.getByRole('heading', { name: 'YouTube 연결 관리', exact: true }),
   ).toBeVisible()
@@ -915,7 +917,7 @@ test('상태 조회 중 세션이 만료되면 개인 정보를 지우고 로그
   const s = await setup(page)
   s.readFailure = 401
   await page.goto(jobPath)
-  await expect(page).toHaveURL(/\/login\?returnTo=/)
+  await expect(page).toHaveURL('/login')
   await expect(panel(page)).toHaveCount(0)
   expect(s.created).toHaveLength(0)
   expect(s.changed).toHaveLength(0)

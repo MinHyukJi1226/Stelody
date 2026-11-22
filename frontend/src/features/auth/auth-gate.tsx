@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Navigate, Outlet, useLocation } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
 import { StatePanel } from '@/shared/ui/state-panel'
-import { loginPath } from './return-path'
+import { LoginRedirect } from './login-navigation'
 import { sessionOptions } from './session'
 
 export function AuthGate() {
@@ -17,9 +17,8 @@ export function AuthGate() {
     )
   if (!session.data)
     return (
-      <Navigate
-        replace
-        to={loginPath(`${location.pathname}${location.search}${location.hash}`)}
+      <LoginRedirect
+        returnTo={`${location.pathname}${location.search}${location.hash}`}
       />
     )
   return <Outlet />
