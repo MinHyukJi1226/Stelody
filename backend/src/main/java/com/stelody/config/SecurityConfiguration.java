@@ -146,6 +146,7 @@ public class SecurityConfiguration {
                         "/api/v1/songs/{id}/views",
                         "/api/v1/members",
                         "/api/v1/members/{id}",
+                        "/api/v1/members/by-slug/{slug}",
                         "/api/v1/members/{id}/songs")
                     .permitAll()
                     .requestMatchers(

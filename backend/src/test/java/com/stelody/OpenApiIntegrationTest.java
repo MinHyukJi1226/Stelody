@@ -52,6 +52,15 @@ class OpenApiIntegrationTest {
   }
 
   @Test
+  void memberSlugContractIsPublicAndKeepsUuidSongLookup() throws Exception {
+    var api = contract();
+    var operation = api.at("/paths/~1api~1v1~1members~1by-slug~1{slug}/get");
+    assertThat(operation.path("security").isEmpty()).isTrue();
+    assertThat(operation.path("description").asText()).contains("404", "member.id");
+    assertThat(api.path("paths").has("/api/v1/members/{id}/songs")).isTrue();
+  }
+
+  @Test
   void documentsNullableUpcomingThumbnail() throws Exception {
     var api = contract();
     var response = api.at("/paths/~1api~1v1~1songs~1upcoming/get/responses/200");

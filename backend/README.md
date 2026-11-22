@@ -422,3 +422,5 @@ GET /api/v1/members/{id}/songs?type=COVER&participation=MULTIPLE&sort=VIEWS
 ```
 
 참여 인원·멤버·곡 유형·정렬을 바꾸면 기존 커서는 400 INVALID_CATALOG_QUERY이며 첫 페이지부터 다시 조회합니다. ALL·MULTIPLE은 같은 의미의 기존 불리언 커서와 호환됩니다. VIEWS에서 조회수 집계가 바뀌면 기존과 같이 409 VIEW_PUBLICATION_CHANGED입니다. 요청 예시의 {id}에는 멤버 UUID를 사용합니다.
+
+멤버의 공개 주소는 응답의 `slug`로 만듭니다. `GET /api/v1/members/by-slug/{slug}`로 상세를 조회한 뒤 반환된 `member.id`로 기존 곡 목록 API를 호출합니다. slug는 소문자 영문으로 시작하는 소문자·숫자·하이픈 1~40자이며, 일치하는 주소가 없으면 404입니다. 기존 UUID 상세·곡 목록 API와 커서는 계속 지원합니다. V34는 기존 15명의 영문 주소를 지정하며 미지정 멤버는 null입니다. 관리자 입력란은 추가하지 않습니다. 프론트는 UUID 주소에 접속하면 slug 주소로 전환하고 검색 조건과 해시를 보존합니다.

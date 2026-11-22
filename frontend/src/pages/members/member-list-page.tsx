@@ -9,7 +9,7 @@ import { StatePanel } from '@/shared/ui/state-panel'
 function MemberPortrait({ member }: { member: MemberCard }) {
   return (
     <Link
-      to={`/members/${member.id}`}
+      to={`/members/${member.slug ?? member.id}`}
       className="grid w-24 min-w-0 justify-items-center gap-2 rounded-lg text-center text-xs leading-[1.5] transition-colors hover:text-brand focus-visible:text-brand"
     >
       <Artwork

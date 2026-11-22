@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+  '/api/v1/members/by-slug/{slug}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * 영문 주소로 멤버 상세 조회
+     * @description 멤버 slug는 소문자 영문으로 시작하며 소문자 영문·숫자·하이픈 1~40자입니다. 일치하지 않으면 404입니다. 반환된 member.id로 곡 목록을 조회합니다.
+     *
+     *     업무 오류는 application/problem+json의 code와 traceId로 확인합니다.
+     */
+    get: operations['get_members_by_slug_slug']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/admin/artist-registrations/{requestId}': {
     parameters: {
       query?: never
@@ -2660,6 +2682,8 @@ export interface components {
       id: string
       name: string
       profileImageUrl: string | null
+      /** @description 공개 멤버 주소. 미지정 멤버는 null이며 UUID로 조회할 수 있습니다. 이름 변경과 무관하게 유지됩니다. */
+      slug?: string | null
       songCounts: components['schemas']['com.stelody.member.dto.MemberDtos.Counts']
       /** @description 기수와 별도로 관리하는 유닛명. 미등록이면 null. */
       unitName: string | null
@@ -3159,6 +3183,37 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  get_members_by_slug_slug: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        slug: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['com.stelody.member.dto.MemberDtos.Detail']
+        }
+      }
+      /** @description 요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다. */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ApiProblem']
+        }
+      }
+    }
+  }
   get_admin_artist_registrations_requestId: {
     parameters: {
       query?: never

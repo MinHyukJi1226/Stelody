@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router'
+import { Navigate, useLocation, useParams } from 'react-router'
 import { z } from 'zod'
 import { memberDetailOptions } from '@/features/members/queries'
 import { ApiError } from '@/shared/api/errors'
@@ -11,11 +11,22 @@ import { MemberSongs } from './components/member-songs'
 
 export function MemberDetailPage() {
   const { memberId = '' } = useParams()
-  const valid = z.uuid().safeParse(memberId).success
+  const location = useLocation()
+  const valid =
+    z.uuid().safeParse(memberId).success ||
+    /^[a-z][a-z0-9-]{0,39}$/.test(memberId)
   const query = useQuery({ ...memberDetailOptions(memberId), enabled: valid })
   const unavailable =
     !valid ||
     (query.error instanceof ApiError && [403, 404].includes(query.error.status))
+  if (query.data?.member.slug && memberId !== query.data.member.slug) {
+    return (
+      <Navigate
+        replace
+        to={`/members/${query.data.member.slug}${location.search}${location.hash}`}
+      />
+    )
+  }
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex min-w-0 flex-1 flex-col gap-8 px-5 py-8 md:px-8">
@@ -54,7 +65,10 @@ export function MemberDetailPage() {
               />
             )}
             <MemberProfile detail={query.data} />
-            <MemberSongs key={memberId} memberId={memberId} />
+            <MemberSongs
+              key={query.data.member.id}
+              memberId={query.data.member.id}
+            />
           </>
         )}
       </div>

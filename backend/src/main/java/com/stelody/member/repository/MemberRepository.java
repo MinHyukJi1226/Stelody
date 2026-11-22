@@ -93,6 +93,14 @@ public class MemberRepository {
         .map(Row::card);
   }
 
+  public Optional<MemberDtos.Card> findBySlug(String slug) {
+    return jdbc.sql(CARDS + " AND m.slug = :slug")
+        .param("slug", slug)
+        .query(this::map)
+        .optional()
+        .map(Row::card);
+  }
+
   public List<MemberDtos.Channel> channels(UUID member) {
     return jdbc.sql(
             "SELECT name, youtube_id FROM app.channel WHERE member_id = :id AND channel_type = 'MEMBER' ORDER BY name, id")
@@ -122,7 +130,8 @@ public class MemberRepository {
                 rs.getLong("total"),
                 rs.getLong("originals"),
                 rs.getLong("covers"),
-                rs.getLong("multiple_participants"))),
+                rs.getLong("multiple_participants")),
+            rs.getString("slug")),
         rs.getString("search_name"),
         rs.getInt("activity_order"),
         rs.getInt("generation_order"),

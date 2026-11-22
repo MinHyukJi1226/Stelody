@@ -11,9 +11,10 @@ export const memberDetailOptions = (id: string) =>
   queryOptions({
     queryKey: ['members', 'detail', id],
     queryFn: ({ signal }) =>
-      apiClient.request<MemberDetail>(`/members/${encodeURIComponent(id)}`, {
-        signal,
-      }),
+      apiClient.request<MemberDetail>(
+        `/members/${/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? '' : 'by-slug/'}${encodeURIComponent(id)}`,
+        { signal },
+      ),
   })
 
 export const memberSongsOptions = (id: string, filters: MemberSongFilters) =>

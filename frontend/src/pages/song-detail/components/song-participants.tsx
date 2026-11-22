@@ -23,7 +23,7 @@ export function SongParticipants({
           return participant.kind === 'MEMBER' ? (
             <Link
               key={`${participant.kind}-${participant.id}`}
-              to={`/members/${participant.id}`}
+              to={`/members/${members?.find(({ id }) => id === participant.id)?.slug ?? participant.id}`}
               aria-label={name}
               title={name}
               className="rounded-full"

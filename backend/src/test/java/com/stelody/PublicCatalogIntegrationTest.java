@@ -225,6 +225,31 @@ class PublicCatalogIntegrationTest {
     return mapper.readTree(response.getContentAsString());
   }
 
+  @Test
+  void memberSlugResolvesSameIdentityCountsAndSongsAndEnforcesUniqueAddresses() throws Exception {
+    writer.update("UPDATE app.member SET slug='yuni' WHERE id=?", M1);
+    var byId = request("/api/v1/members/" + M1);
+    var bySlug = request("/api/v1/members/by-slug/yuni");
+    assertThat(bySlug).isEqualTo(byId);
+    assertThat(bySlug.path("member").path("slug").asText()).isEqualTo("yuni");
+    assertThat(request("/api/v1/members?size=50").path("items").toString()).contains("yuni");
+    mvc.perform(get("/api/v1/members/" + bySlug.path("member").path("id").asText() + "/songs"))
+        .andExpect(status().isOk());
+    writer.update("UPDATE app.member SET name='수정된 이름' WHERE id=?", M1);
+    assertThat(request("/api/v1/members/by-slug/yuni").path("member").path("id").asText())
+        .isEqualTo(M1.toString());
+    for (String missing : List.of("unknown", "Yuni", "bad_slug"))
+      mvc.perform(get("/api/v1/members/by-slug/" + missing)).andExpect(status().isNotFound());
+    assertThatThrownBy(() -> writer.update("UPDATE app.member SET slug='yuni' WHERE id=?", M2))
+        .isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> writer.update("UPDATE app.member SET slug='bad_slug' WHERE id=?", M2))
+        .isInstanceOf(DataAccessException.class);
+    writer.update("UPDATE app.member SET slug='kanna',activity_status='GRADUATED' WHERE id=?", M2);
+    assertThat(request("/api/v1/members/by-slug/kanna").path("member").path("id").asText())
+        .isEqualTo(M2.toString());
+    assertThat(request("/api/v1/members/" + M3).path("member").path("slug").isNull()).isTrue();
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"LATEST", "RELEVANCE", "VIEWS"})
   void whitespaceAndCaseShareMatchingRankingCountsFiltersAndCursorPages(String sort)
