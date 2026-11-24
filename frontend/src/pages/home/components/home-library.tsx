@@ -89,7 +89,7 @@ export function HomeLibrary({ userId }: { userId: string }) {
                   let hasNext = playlists.hasNextPage
                   while (count < (page + 1) * 6 && hasNext) {
                     const result = await playlists.fetchNextPage()
-                    if (result.isError) return false
+                    if (result.isError) return count > page * 6
                     count =
                       result.data?.pages.flatMap(({ items }) => items).length ??
                       0
@@ -150,7 +150,7 @@ export function HomeLibrary({ userId }: { userId: string }) {
                   let hasNext = favorites.hasNextPage
                   while (count < (page + 1) * 6 && hasNext) {
                     const result = await favorites.fetchNextPage()
-                    if (result.isError) return false
+                    if (result.isError) return count > page * 6
                     count =
                       result.data?.pages.flatMap(({ items }) =>
                         items.filter((item) => item.available && item.song),

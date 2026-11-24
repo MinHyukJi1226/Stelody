@@ -1,5 +1,130 @@
 import { test, expect, makeSong, emptyPage } from './fixtures'
 
+for (const kind of ['playlists', 'favorites'] as const)
+  for (const navigation of ['화살표', '스크롤'] as const)
+    test(`홈 ${kind === 'playlists' ? '플레이리스트' : '좋아하는 곡'}는 ${navigation}로 추가 조회 실패 후에도 받은 마지막 항목을 열 수 있다`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      const songs = Array.from({ length: 23 }, (_, index) =>
+        makeSong(2001 + index),
+      )
+      let fail = true
+      let nextReads = 0
+      const name =
+        kind === 'playlists' ? '나의 플레이리스트' : '내가 좋아하는 곡'
+      const items = songs.map((song, index) =>
+        kind === 'playlists'
+          ? {
+              id: song.id,
+              name: `목록 ${index + 1}`,
+              totalCount: 0,
+              availableCount: 0,
+              version: 1,
+            }
+          : { songId: song.id, song, available: true },
+      )
+      await page.route('**/api/v1/me', (route) =>
+        route.fulfill({
+          json: {
+            id: makeSong(1999).id,
+            role: 'USER',
+            status: 'ACTIVE',
+            email: 'test@example.com',
+          },
+        }),
+      )
+      await page.route(`**/api/v1/me/${kind}?*`, (route) => {
+        const cursor = new URL(route.request().url()).searchParams.get('cursor')
+        if (cursor) {
+          nextReads++
+          expect(cursor).toBe('remaining')
+          if (fail)
+            return route.fulfill({ status: 503, json: { code: 'UNAVAILABLE' } })
+        }
+        return route.fulfill({
+          json: {
+            items: cursor ? items.slice(20) : items.slice(0, 20),
+            totalCount: 23,
+            availableCount: 23,
+            hasNext: !cursor,
+            nextCursor: cursor ? null : 'remaining',
+          },
+        })
+      })
+      await page.goto('/')
+      const section = page.getByRole('region', { name, exact: true })
+      const scroller = section.getByRole('group', {
+        name: `${name} 가로 스크롤`,
+        exact: true,
+      })
+      const next = section.getByRole('button', {
+        name: `${name} 다음 곡 보기`,
+        exact: true,
+      })
+      await next.click()
+      await expect(
+        section.getByText(`${name} 2 / 4페이지`, { exact: true }),
+      ).toBeAttached()
+      await next.click()
+      await expect(
+        section.getByText(`${name} 3 / 4페이지`, { exact: true }),
+      ).toBeAttached()
+      if (navigation === '화살표') await next.click()
+      else {
+        await scroller.hover()
+        await page.mouse.wheel(
+          await scroller.evaluate((element) => element.clientWidth),
+          0,
+        )
+      }
+      await expect(
+        section.getByText(
+          kind === 'playlists'
+            ? '플레이리스트를 더 불러오지 못했습니다'
+            : '좋아하는 곡을 더 불러오지 못했습니다',
+          { exact: true },
+        ),
+      ).toBeVisible()
+      const cached = section.getByRole('link', {
+        name:
+          kind === 'playlists'
+            ? '목록 19 0곡'
+            : `${songs[18]!.title} 상세 보기`,
+        exact: true,
+      })
+      await expect(cached).toBeVisible()
+      await cached.focus()
+      await expect(cached).toBeFocused()
+      await expect(
+        section.getByText(`${name} 4 / 4페이지`, { exact: true }),
+      ).toBeAttached()
+      await expect(next).toBeEnabled()
+      // A wholly unloaded page must still stay blocked after the next failure.
+      const before = nextReads
+      await next.click()
+      await expect.poll(() => nextReads).toBeGreaterThan(before)
+      await expect(next).toBeEnabled()
+      await expect(
+        section.getByText(`${name} 4 / 4페이지`, { exact: true }),
+      ).toBeAttached()
+      await expect(cached).toBeVisible()
+      fail = false
+      await section
+        .getByRole('button', { name: '다시 시도', exact: true })
+        .click()
+      await expect(
+        section.getByRole('link', {
+          name:
+            kind === 'playlists'
+              ? '목록 23 0곡'
+              : `${songs[22]!.title} 상세 보기`,
+          exact: true,
+        }),
+      ).toBeVisible()
+      await expect(next).toHaveCount(0)
+    })
+
 test('홈의 곡·플레이리스트는 가로 스크롤과 화살표 위치를 공유하고 부족한 페이지를 채운다', async ({
   page,
   isMobile,
