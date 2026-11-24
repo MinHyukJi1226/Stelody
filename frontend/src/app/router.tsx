@@ -310,7 +310,7 @@ export const router = createBrowserRouter([
           return { Component: LoginPage }
         },
       },
-      { path: '*', element: <NotFoundPage /> },
+      { id: 'not-found', path: '*', element: <NotFoundPage /> },
     ],
   },
 ])

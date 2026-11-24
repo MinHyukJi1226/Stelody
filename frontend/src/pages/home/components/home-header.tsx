@@ -16,9 +16,11 @@ import { Input } from '@/shared/ui/input'
 export function HomeHeader({
   theme,
   toggleTheme,
+  pageLayout = false,
 }: {
   theme: Theme
   toggleTheme: () => void
+  pageLayout?: boolean
 }) {
   const location = useLocation()
   const search = location.pathname === '/search'
@@ -47,7 +49,7 @@ export function HomeHeader({
 
   return (
     <header
-      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search || catalog || members || library || login || account ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
+      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search || catalog || members || library || login || account || pageLayout ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
     >
       <Link
         to="/"

@@ -77,9 +77,13 @@ export function FlatCatalog({ sort }: { sort: CatalogSort }) {
           className="grid-cols-2 gap-x-4 md:grid-cols-3 lg:grid-cols-6 md:gap-x-6"
         />
       ) : !query.data && query.isError ? (
-        <StatePanel title="노래를 불러오지 못했습니다" onRetry={retry} />
+        <div className="pt-8 md:pt-[72px]">
+          <StatePanel title="노래를 불러오지 못했습니다" onRetry={retry} />
+        </div>
       ) : songs.length === 0 ? (
-        <StatePanel title="아직 공개된 노래가 없습니다" />
+        <div className="pt-8 md:pt-[72px]">
+          <StatePanel title="아직 공개된 노래가 없습니다" />
+        </div>
       ) : (
         <CompactSongGrid
           songs={songs}
