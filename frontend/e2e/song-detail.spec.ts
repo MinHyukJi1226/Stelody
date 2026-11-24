@@ -229,10 +229,28 @@ test('권장 검색어 복사 성공과 실패를 안내한다', async ({ page }
     })
   })
   await page.goto(`/songs/${song.id}`)
-  await page.getByRole('button', { name: '검색어 복사', exact: true }).click()
+  const help = page.getByRole('region', { name: 'YouTube 검색 도움말' })
+  const copyButton = help.getByRole('button', {
+    name: '검색어 복사',
+    exact: true,
+  })
+  const searchLink = help.getByRole('link', { name: 'YouTube 검색 ↗' })
+  await copyButton.scrollIntoViewIfNeeded()
+  const beforeCopy = await copyButton.boundingBox()
+  const beforeSearch = await searchLink.boundingBox()
+  await copyButton.click()
   await expect(
     page.getByText('검색어를 복사했습니다.', { exact: true }),
   ).toBeVisible()
+  await expect
+    .poll(async () => (await copyButton.boundingBox())?.x)
+    .toBe(beforeCopy?.x)
+  expect((await searchLink.boundingBox())?.x).toBe(beforeSearch?.x)
+  const notice = help.getByRole('status')
+  expect((await notice.boundingBox())!.y).toBeGreaterThanOrEqual(
+    (await searchLink.boundingBox())!.y +
+      (await searchLink.boundingBox())!.height,
+  )
   expect(
     await page.evaluate(() => (window as Window & { copied?: string }).copied),
   ).toBe(detail.searchHelp.recommendedQuery)
@@ -251,13 +269,20 @@ test('권장 검색어 복사 성공과 실패를 안내한다', async ({ page }
       },
     })
   })
-  await page.getByRole('button', { name: '검색어 복사', exact: true }).click()
+  await copyButton.click()
   await expect(
     page.getByText(
       '복사하지 못했습니다. 권장 검색어를 직접 선택해 복사해 주세요.',
       { exact: true },
     ),
   ).toBeVisible()
+  expect((await copyButton.boundingBox())?.x).toBe(beforeCopy?.x)
+  expect((await searchLink.boundingBox())?.x).toBe(beforeSearch?.x)
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true)
 })
 
 test('유효하지 않은 주소·비공개 곡·요청 실패와 재시도를 처리한다', async ({

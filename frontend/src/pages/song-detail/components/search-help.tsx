@@ -51,7 +51,7 @@ export function SearchHelp({ detail }: { detail: SongDetail }) {
         </Button>
       </div>
       {notice && (
-        <p role="status" className="text-sm text-muted">
+        <p role="status" className="w-full wrap-anywhere text-sm text-muted">
           {notice}
         </p>
       )}
