@@ -25,6 +25,8 @@ export const playlistKeys = {
     [...playlistKeys.all(user), 'detail', id] as const,
   items: (user: string, id: string) =>
     [...playlistKeys.all(user), 'items', id] as const,
+  preview: (user: string, id: string, version: number) =>
+    [...playlistKeys.all(user), 'preview', id, version] as const,
   editor: (user: string, id: string) =>
     [...playlistKeys.all(user), 'editor', id] as const,
   write: (user: string) => [...playlistKeys.all(user), 'write'] as const,
@@ -70,6 +72,21 @@ export const playlistDetailOptions = (user: string, id: string) =>
     queryKey: playlistKeys.detail(user, id),
     queryFn: ({ signal, client }) =>
       read(client, user, () => getPlaylist(id, signal)),
+  })
+export const playlistPreviewOptions = (
+  user: string,
+  id: string,
+  version: number,
+) =>
+  queryOptions({
+    queryKey: playlistKeys.preview(user, id, version),
+    queryFn: ({ signal, client }) =>
+      read(client, user, async () => {
+        const page = await getPlaylistItems(id, null, signal)
+        if (page.version !== version)
+          throw new ApiError(409, { code: 'PLAYLIST_CHANGED' })
+        return page
+      }),
   })
 export const playlistEditorOptions = (user: string, id: string) =>
   queryOptions({
