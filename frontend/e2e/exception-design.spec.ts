@@ -21,6 +21,31 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme })
     })
 
+    test('렌더링 오류도 내부 오류 원문 대신 공통 화면을 표시하고 재시도로 복구한다', async ({
+      page,
+    }, info) => {
+      let invalid = true
+      await page.route('**/api/v1/members?*', (route) =>
+        route.fulfill({
+          json: invalid ? { ...emptyPage, items: null } : emptyPage,
+        }),
+      )
+      await page.goto('/members')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        '화면을 불러오지 못했습니다',
+      )
+      await expect(page.getByText('Unexpected Application Error!')).toHaveCount(
+        0,
+      )
+      await expect(page.locator('main footer')).toHaveCount(1)
+      await capture(page, info, `route-error-${scheme}`)
+      invalid = false
+      await page.getByRole('button', { name: '다시 시도', exact: true }).click()
+      await expect(
+        page.getByRole('heading', { name: '전체 멤버', exact: true }),
+      ).toBeVisible()
+    })
+
     test('긴 검색어가 있는 오류 화면도 검색 조건을 보존하며 화면을 넘치지 않는다', async ({
       page,
     }, info) => {
