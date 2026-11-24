@@ -19,7 +19,10 @@ function PlaylistPreview({
   userId: string
 }) {
   return (
-    <Link to={playlistPath(playlist)} className="grid min-w-0 gap-2 rounded-lg">
+    <Link
+      to={playlistPath(playlist)}
+      className="grid w-4/5 min-w-0 gap-2 rounded-lg"
+    >
       <PlaylistCover playlist={playlist} userId={userId} />
       <span className="truncate text-sm" title={playlist.name}>
         {playlist.name}
@@ -64,7 +67,7 @@ export function HomeLibrary({ userId }: { userId: string }) {
               aria-label="플레이리스트 불러오는 중"
               className={homeGrid}
             >
-              <div className="aspect-square rounded-lg bg-line" />
+              <div className="aspect-square w-4/5 rounded-lg bg-line" />
             </div>
           ) : playlists.isError && !playlists.data ? (
             <StatePanel
@@ -76,12 +79,24 @@ export function HomeLibrary({ userId }: { userId: string }) {
               <HomeCarousel
                 label="나의 플레이리스트"
                 square
+                layout="home"
+                scrollable
                 hasMore={playlists.hasNextPage}
                 lastPageFull={lists.length % 6 === 0}
                 loadingMore={playlists.isFetchingNextPage}
-                onLoadMore={async () =>
-                  !(await playlists.fetchNextPage()).isError
-                }
+                onBeforeNext={async (page) => {
+                  let count = lists.length
+                  let hasNext = playlists.hasNextPage
+                  while (count < (page + 1) * 6 && hasNext) {
+                    const result = await playlists.fetchNextPage()
+                    if (result.isError) return count > page * 6
+                    count =
+                      result.data?.pages.flatMap(({ items }) => items).length ??
+                      0
+                    hasNext = result.hasNextPage
+                  }
+                  return count > page * 6
+                }}
                 pages={Array.from(
                   { length: Math.ceil(lists.length / 6) },
                   (_, index) => (
@@ -122,15 +137,28 @@ export function HomeLibrary({ userId }: { userId: string }) {
             <>
               <HomeCarousel
                 label="내가 좋아하는 곡"
+                layout="home"
+                scrollable
                 hasMore={
                   favorites.hasNextPage &&
                   (favorites.data?.pages[0]?.availableCount ?? songs.length) > 6
                 }
                 lastPageFull={songs.length % 6 === 0}
                 loadingMore={favorites.isFetchingNextPage}
-                onLoadMore={async () =>
-                  !(await favorites.fetchNextPage()).isError
-                }
+                onBeforeNext={async (page) => {
+                  let count = songs.length
+                  let hasNext = favorites.hasNextPage
+                  while (count < (page + 1) * 6 && hasNext) {
+                    const result = await favorites.fetchNextPage()
+                    if (result.isError) return count > page * 6
+                    count =
+                      result.data?.pages.flatMap(({ items }) =>
+                        items.filter((item) => item.available && item.song),
+                      ).length ?? 0
+                    hasNext = result.hasNextPage
+                  }
+                  return count > page * 6
+                }}
                 pages={Array.from(
                   { length: Math.ceil(songs.length / 6) },
                   (_, index) => (
