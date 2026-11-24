@@ -16,4 +16,9 @@ final class CollectionSql {
         AND EXISTS (SELECT 1 FROM app.channel c WHERE c.id = v.channel_id AND c.youtube_id = :channelId
           AND c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER'))
       """;
+
+  static final String UPDATE_REGISTERED_METADATA =
+      UPDATE_VIDEO.replace(
+          "c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER')",
+          "NOT (c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER'))");
 }

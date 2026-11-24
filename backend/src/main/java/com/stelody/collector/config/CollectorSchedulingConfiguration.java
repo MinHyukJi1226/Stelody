@@ -4,6 +4,7 @@ import com.stelody.collector.scheduling.CollectionScheduleState;
 import com.stelody.collector.scheduling.ScheduledCollector;
 import com.stelody.collector.service.CollectorExecution;
 import com.stelody.collector.service.PremiereMonitor;
+import com.stelody.collector.service.RegisteredVideoMetadataRefresh;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -37,6 +38,16 @@ public class CollectorSchedulingConfiguration {
         environment.getProperty("DISCOVERY_ENABLED", Boolean.class, false),
         environment.getProperty("DISCOVERY_CLASSIFICATION_ALLOWED", Boolean.class, false),
         environment.getProperty("PREMIERE_AUTO_PUBLICATION_ENABLED", Boolean.class, false));
+  }
+
+  @Bean(destroyMethod = "close")
+  RegisteredVideoMetadataRefresh registeredVideoMetadataRefresh(Environment environment) {
+    var settings = CollectorSettings.from(environment);
+    return new RegisteredVideoMetadataRefresh(
+        CollectorExecution.createDataSource(settings),
+        settings,
+        Clock.systemUTC(),
+        duration -> Thread.sleep(duration));
   }
 
   @Bean(destroyMethod = "close")
