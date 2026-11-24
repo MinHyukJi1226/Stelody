@@ -1,5 +1,163 @@
 import { test, expect, makeSong, emptyPage } from './fixtures'
 
+test('홈의 곡·플레이리스트는 가로 스크롤과 화살표 위치를 공유하고 부족한 페이지를 채운다', async ({
+  page,
+  isMobile,
+}, info) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const songs = Array.from({ length: 23 }, (_, index) => makeSong(1001 + index))
+  const lists = songs.map((song, index) => ({
+    id: song.id,
+    name: `목록 ${index + 1}`,
+    totalCount: 0,
+    availableCount: 0,
+    version: 1,
+  }))
+  const reads = {
+    playlists: [] as (string | null)[],
+    favorites: [] as (string | null)[],
+  }
+  await page.route('**/api/v1/me', (route) =>
+    route.fulfill({
+      json: {
+        id: makeSong(999).id,
+        role: 'USER',
+        status: 'ACTIVE',
+        email: 'test@example.com',
+      },
+    }),
+  )
+  await page.route('**/api/v1/songs?*', (route) =>
+    route.fulfill({
+      json: { ...emptyPage, items: songs.slice(0, 20), totalCount: 23 },
+    }),
+  )
+  await page.route('**/api/v1/songs/recommendations?*', (route) =>
+    route.fulfill({ json: { items: songs.slice(0, 20) } }),
+  )
+  await page.route('**/api/v1/me/playlists?*', (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    reads.playlists.push(cursor)
+    return route.fulfill({
+      json: {
+        items: cursor ? lists.slice(20) : lists.slice(0, 20),
+        hasNext: !cursor,
+        nextCursor: cursor ? null : 'later-playlists',
+        totalCount: 23,
+      },
+    })
+  })
+  await page.route('**/api/v1/me/favorites?*', (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    reads.favorites.push(cursor)
+    return route.fulfill({
+      json: {
+        items: (cursor ? songs.slice(20) : songs.slice(0, 20)).map((song) => ({
+          songId: song.id,
+          available: true,
+          song,
+        })),
+        hasNext: !cursor,
+        nextCursor: cursor ? null : 'later-favorites',
+        totalCount: 23,
+        availableCount: 23,
+      },
+    })
+  })
+  await page.goto('/')
+  const playlist = page.getByRole('region', {
+    name: '나의 플레이리스트',
+    exact: true,
+  })
+  const latest = page.getByRole('region', { name: '최신 곡', exact: true })
+  const card = playlist.getByRole('link', { name: '목록 1 0곡', exact: true })
+  await expect(card).toBeVisible()
+  await expect(latest.getByRole('article').first()).toBeVisible()
+  const playlistBox = await card.boundingBox()
+  const songBox = await latest.getByRole('article').first().boundingBox()
+  expect(playlistBox!.width / songBox!.width).toBeCloseTo(0.8, 2)
+  for (const name of [
+    '나의 플레이리스트',
+    '내가 좋아하는 곡',
+    '최신 곡',
+    '오늘의 추천 곡',
+  ]) {
+    const section = page.getByRole('region', { name, exact: true })
+    const scroller = section.getByRole('group', {
+      name: `${name} 가로 스크롤`,
+      exact: true,
+    })
+    const next = section.getByRole('button', {
+      name: `${name} 다음 곡 보기`,
+      exact: true,
+    })
+    const previous = section.getByRole('button', {
+      name: `${name} 이전 곡 보기`,
+      exact: true,
+    })
+    await expect(previous).toHaveCount(0)
+    await section.scrollIntoViewIfNeeded()
+    if (name === '나의 플레이리스트') {
+      const arrow = await next.boundingBox()
+      const artwork = await card.locator('div').first().boundingBox()
+      const viewport = await scroller.boundingBox()
+      const center = isMobile
+        ? viewport!.y + viewport!.height / 2
+        : artwork!.y + artwork!.height / 2
+      expect(Math.abs(arrow!.y + arrow!.height / 2 - center)).toBeLessThan(2)
+      await section.screenshot({
+        path: info.outputPath('home-playlists-compact.png'),
+      })
+    }
+    for (let index = 1; index <= 3; index++) {
+      await scroller.hover()
+      const width = await scroller.evaluate((element) => element.clientWidth)
+      await page.mouse.wheel(width, 0)
+      await expect
+        .poll(() =>
+          scroller.evaluate((element) =>
+            Math.round(element.scrollLeft / element.clientWidth),
+          ),
+        )
+        .toBe(index)
+      await expect(
+        section.getByRole('link', {
+          name:
+            name === '나의 플레이리스트'
+              ? `목록 ${index * 6 + 1} 0곡`
+              : `${songs[index * 6]!.title} 상세 보기`,
+          exact: true,
+        }),
+      ).toBeVisible()
+    }
+    await expect(next).toHaveCount(0)
+    await previous.click()
+    await expect
+      .poll(() =>
+        scroller.evaluate((element) =>
+          Math.round(element.scrollLeft / element.clientWidth),
+        ),
+      )
+      .toBe(2)
+    await next.click()
+    await expect
+      .poll(() =>
+        scroller.evaluate((element) =>
+          Math.round(element.scrollLeft / element.clientWidth),
+        ),
+      )
+      .toBe(3)
+    await expect(next).toHaveCount(0)
+  }
+  expect(reads.playlists).toEqual([null, 'later-playlists'])
+  expect(reads.favorites).toEqual([null, 'later-favorites'])
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true)
+})
+
 test('홈의 간결한 곡 카드를 표시하고 최신곡 전체 목록으로 이동한다', async ({
   page,
 }) => {

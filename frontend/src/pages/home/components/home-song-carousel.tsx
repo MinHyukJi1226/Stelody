@@ -17,6 +17,8 @@ export function HomeSongCarousel({
   return (
     <HomeCarousel
       label={label}
+      layout="home"
+      scrollable
       pages={Array.from(
         { length: Math.ceil(songs.length / pageSize) },
         (_, index) => (
@@ -34,6 +36,7 @@ export function HomeCarousel({
   pages,
   label,
   square = false,
+  layout = 'compact',
   hasMore = false,
   loadingMore = false,
   onLoadMore,
@@ -45,6 +48,7 @@ export function HomeCarousel({
   pages: ReactNode[]
   label: string
   square?: boolean
+  layout?: 'home' | 'compact'
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => Promise<boolean>
@@ -81,11 +85,16 @@ export function HomeCarousel({
     })
   }, [currentPage, pageCount, scrollable])
 
-  const position = scrollable
-    ? 'absolute top-[calc((100cqw-16px)*0.140625)] -translate-y-1/2 rounded-full shadow-md md:top-[calc((100cqw-48px)*0.09375)] lg:top-[calc((100cqw-120px)*0.046875)]'
-    : square
-      ? 'absolute top-1/2 -translate-y-1/2 rounded-full shadow-md lg:top-[calc((100cqw-160px)/12)]'
-      : arrowPosition
+  const position =
+    layout === 'home'
+      ? square
+        ? 'absolute top-1/2 -translate-y-1/2 rounded-full shadow-md lg:top-[calc((100cqw-160px)/15)]'
+        : arrowPosition
+      : scrollable
+        ? 'absolute top-[calc((100cqw-16px)*0.140625)] -translate-y-1/2 rounded-full shadow-md md:top-[calc((100cqw-48px)*0.09375)] lg:top-[calc((100cqw-120px)*0.046875)]'
+        : square
+          ? 'absolute top-1/2 -translate-y-1/2 rounded-full shadow-md lg:top-[calc((100cqw-160px)/12)]'
+          : arrowPosition
 
   async function nextPage(targetPage = currentPage + 1) {
     if (navigationPending.current || (loadingMore && !scrollable)) return
