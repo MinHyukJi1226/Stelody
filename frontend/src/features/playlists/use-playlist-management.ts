@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { endLocalSession } from '@/features/auth/session'
-import { loginPath } from '@/features/auth/return-path'
+import { beginLogin } from '@/features/auth/return-path'
 import { ApiError } from '@/shared/api/errors'
 import {
   deletePlaylist,
@@ -105,7 +105,7 @@ export function usePlaylistManagement(user: string, returnTo: string) {
       if (!isPlaylistAccount(client, user)) return
       if (error instanceof ApiError && error.status === 401) {
         await endLocalSession(client)
-        void navigate(loginPath(returnTo))
+        void navigate(beginLogin(returnTo))
       } else {
         // Keep the edited snapshot until the user explicitly reloads it.
         await client.invalidateQueries({

@@ -40,7 +40,7 @@ for (const mode of ['anonymous', 'member', 'inactive', 'error'] as const) {
     if (mode === 'anonymous')
       await expect(
         page.getByRole('link', { name: '로그인', exact: true }).last(),
-      ).toHaveAttribute('href', '/login?returnTo=%2Fadmin%2Freviews%3Fpage%3D1')
+      ).toHaveAttribute('href', '/login')
     if (mode === 'error') {
       state.sessionError = 0
       await page.getByRole('button', { name: '다시 조회' }).click()
@@ -51,17 +51,16 @@ for (const mode of ['anonymous', 'member', 'inactive', 'error'] as const) {
 
 test('ACTIVE ADMIN의 헤더·모바일 메뉴 진입과 작업함 집계를 연결한다', async ({
   page,
-  isMobile,
 }) => {
   const state = await mockAdmin(page)
   await page.goto('/account')
   await expect(
     page.getByRole('heading', { name: '계정 관리', exact: true }),
   ).toBeVisible()
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page
     .getByRole('link', {
-      name: isMobile ? '관리자 작업함' : '관리자',
+      name: '관리자',
       exact: true,
     })
     .click()
@@ -158,10 +157,7 @@ for (const [status, title] of [
     if (status === 401)
       await expect(
         page.getByRole('link', { name: '로그인', exact: true }).last(),
-      ).toHaveAttribute(
-        'href',
-        '/login?returnTo=%2Fadmin%2Fregistrations%3Fpage%3D1',
-      )
+      ).toHaveAttribute('href', '/login')
     if (status === 503) {
       state.error = 0
       await page.getByRole('button', { name: '다시 조회' }).click()

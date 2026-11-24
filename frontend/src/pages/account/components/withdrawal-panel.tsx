@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import googleMark from '@/shared/assets/google-mark.png'
 import { Button } from '@/shared/ui/button'
-import { loginPath } from '@/features/auth/return-path'
+import { LoginLink } from '@/features/auth/login-navigation'
 import { accountPath, withdrawalPath } from '@/features/account/api'
 import { youtubePath } from '@/features/youtube/api'
 import { AccountCard, AccountEmail, AccountSkeleton } from './account-layout'
@@ -43,6 +43,7 @@ export function WithdrawalPanel({
     'wrong',
     'expired',
     'starting',
+    'submitting',
   ].includes(view)
   const authorization = [
     'guide',
@@ -53,6 +54,22 @@ export function WithdrawalPanel({
     'starting',
   ].includes(view)
   const checking = ['checkingDelete', 'checkingOutcome'].includes(view)
+  const finalStep = view === 'verified' || view === 'submitting'
+  const processing = view === 'starting' || view === 'submitting'
+  const statusMessage = (
+    <>
+      {view !== 'completed' && (
+        <p
+          className={`font-medium ${{ brand: 'text-brand', green: 'text-green', warning: 'text-warning', error: 'text-error' }[content.tone]}`}
+        >
+          {content.label}
+        </p>
+      )}
+      <h2 className="text-lg font-bold">{content.title}</h2>
+      {checking && <AccountSkeleton />}
+      <p className="w-full text-muted">{content.body}</p>
+    </>
+  )
   const home = (primary = false) => (
     <Button variant={primary ? 'primary' : 'secondary'} asChild>
       <Link to="/">홈으로</Link>
@@ -65,19 +82,8 @@ export function WithdrawalPanel({
   )
   return (
     <AccountCard loading={busy}>
-      <p
-        className={`font-medium ${{ brand: 'text-brand', green: 'text-green', warning: 'text-warning', error: 'text-error' }[content.tone]}`}
-      >
-        {content.label}
-      </p>
-      <h2 className="text-lg font-bold">{content.title}</h2>
-      {checking && <AccountSkeleton />}
-      <p className="w-full text-muted">{content.body}</p>
       {identity && email && <AccountEmail email={email} />}
-      {view === 'verified' && (
-        <p className="font-medium text-green">✓ Google 본인 확인 완료</p>
-      )}
-      {((identity && view !== 'starting') || view === 'submitting') && (
+      {identity && (
         <div className="flex w-full flex-col gap-3 rounded-xl bg-rose p-4">
           <p>
             계정·즐겨찾기·사이트 플레이리스트가 삭제되며 복구할 수 없습니다.
@@ -86,6 +92,36 @@ export function WithdrawalPanel({
             YouTube 연결은 해제되지만 이미 생성한 YouTube 목록은 유지됩니다.
           </p>
         </div>
+      )}
+      {!['guide', 'verified'].includes(view) && !processing && statusMessage}
+      {(view === 'guide' || view === 'starting') && (
+        <p className="text-muted">{withdrawalViews.guide.body}</p>
+      )}
+      {finalStep && (
+        <section
+          aria-labelledby="withdrawal-final-title"
+          className="mt-6 flex w-full flex-col items-start gap-3"
+        >
+          <h2
+            id="withdrawal-final-title"
+            className="text-lg font-bold md:text-xl"
+          >
+            회원 탈퇴
+          </h2>
+          <p className="text-muted">
+            회원 탈퇴시 즐겨찾기한 곡과 플레이리스트 정보가 소실됩니다.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="destructive"
+              disabled={busy || view === 'submitting'}
+              onClick={onWithdraw}
+            >
+              회원 탈퇴 하기
+            </Button>
+            {view === 'submitting' && <Button disabled>취소</Button>}
+          </div>
+        </section>
       )}
       {view === 'completed' && (
         <p className="text-muted">
@@ -103,37 +139,16 @@ export function WithdrawalPanel({
           >
             <img src={googleMark} alt="" width={20} height={20} />
             <span>
-              {view === 'starting'
-                ? 'Google 재인증 중…'
-                : view === 'wrong'
-                  ? 'Google 계정 다시 선택'
-                  : 'Google 재인증'}
+              {view === 'wrong' ? 'Google 계정 다시 선택' : 'Google 재인증'}
             </span>
           </button>
         )}
-        {['verified', 'expired'].includes(view) && (
-          <Button
-            variant="destructive"
-            disabled={busy || view === 'expired'}
-            onClick={onWithdraw}
-          >
-            회원 탈퇴
-          </Button>
-        )}
-        {view === 'submitting' && (
-          <>
-            <Button variant="destructive" disabled>
-              탈퇴 처리 중…
-            </Button>
-            <Button disabled>취소</Button>
-          </>
-        )}
-        {identity && cancel}
+        {authorization && cancel}
         {view === 'completed' && home(true)}
         {view === 'session' && (
           <>
             <Button variant="primary" asChild>
-              <Link to={loginPath(withdrawalPath)}>다시 로그인</Link>
+              <LoginLink returnTo={withdrawalPath}>다시 로그인</LoginLink>
             </Button>
             {home()}
           </>
@@ -199,6 +214,11 @@ export function WithdrawalPanel({
           </>
         )}
       </div>
+      {processing && (
+        <span role="status" className="sr-only">
+          {content.label}
+        </span>
+      )}
     </AccountCard>
   )
 }

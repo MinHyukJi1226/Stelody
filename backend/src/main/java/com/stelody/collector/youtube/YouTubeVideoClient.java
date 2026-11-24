@@ -88,8 +88,13 @@ public final class YouTubeVideoClient {
         // An absent part means no broadcast history. A malformed present part is not absence.
         var liveStreamingDetails = item.path("liveStreamingDetails");
         if (!liveStreamingDetails.isMissingNode() && !liveStreamingDetails.isObject()) invalid();
+        Instant actualStart = optionalInstant(liveStreamingDetails, "actualStartTime");
+        Instant actualEnd = optionalInstant(liveStreamingDetails, "actualEndTime");
+        // A notification may first arrive after the scheduled broadcast has started or ended.
+        // Keep its public schedule evidence so completion monitoring does not require a prior row.
         Instant scheduledStart =
-            publicUpcoming && optionalInstant(liveStreamingDetails, "actualStartTime") == null
+            (publicUpcoming && actualStart == null)
+                    || (availability.equals("PUBLIC") && actualStart != null)
                 ? optionalInstant(liveStreamingDetails, "scheduledStartTime")
                 : null;
         result.put(
@@ -107,8 +112,8 @@ public final class YouTubeVideoClient {
                 broadcast,
                 !liveStreamingDetails.isMissingNode(),
                 scheduledStart,
-                optionalInstant(liveStreamingDetails, "actualStartTime"),
-                optionalInstant(liveStreamingDetails, "actualEndTime")));
+                actualStart,
+                actualEnd));
       }
       for (String id : ids) result.putIfAbsent(id, VideoObservation.unavailable(id));
       return Map.copyOf(result);

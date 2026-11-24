@@ -482,17 +482,16 @@ test('선택 목록 권한 오류도 관리자 공통 화면으로 즉시 전환
 
 test('관리자 캐시가 있어도 새 진입에서는 최신 권한 확인 전 관리자 API 요청 없음', async ({
   page,
-  isMobile,
 }) => {
   const state = await mockSongEditor(page)
   await page.goto('/account')
   await expect(
     page.getByRole('heading', { name: '계정 관리', exact: true }),
   ).toBeVisible()
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await expect(
     page.getByRole('link', {
-      name: isMobile ? '관리자 작업함' : '관리자',
+      name: '관리자',
       exact: true,
     }),
   ).toBeVisible()
@@ -503,7 +502,7 @@ test('관리자 캐시가 있어도 새 진입에서는 최신 권한 확인 전
   const calls = state.gets.length
   await page
     .getByRole('link', {
-      name: isMobile ? '관리자 작업함' : '관리자',
+      name: '관리자',
       exact: true,
     })
     .click()

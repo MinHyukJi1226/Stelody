@@ -690,3 +690,72 @@ test('마지막 캐러셀 페이지에서도 섹션의 모든 곡을 펼칠 수 
   await cover.getByRole('button', { name: '커버 전체 곡 모두 펼치기' }).click()
   await expect(cover.getByRole('article')).toHaveCount(8)
 })
+
+test('영문 멤버 주소는 상세를 조회하고 UUID로 곡을 조회한다', async ({
+  page,
+}) => {
+  let uuidSongs = 0
+  await page.route('**/api/v1/members/by-slug/tabi', (route) =>
+    route.fulfill({
+      json: { ...memberDetail, member: { ...member, slug: 'tabi' } },
+    }),
+  )
+  await page.route(`**/api/v1/members/${member.id}/songs?*`, (route) => {
+    uuidSongs++
+    return route.fulfill({ json: memberSongs })
+  })
+  await page.goto('/members/tabi')
+  await expect(
+    page.getByRole('heading', { name: member.name, exact: true }),
+  ).toBeVisible()
+  await expect.poll(() => uuidSongs).toBeGreaterThan(0)
+  await expect(page).toHaveURL(/\/members\/tabi$/)
+})
+
+test('기존 UUID 주소는 조건과 해시를 보존하며 영문 주소로 전환한다', async ({
+  page,
+}) => {
+  const detail = { ...memberDetail, member: { ...member, slug: 'tabi' } }
+  await page.route(`**/api/v1/members/${member.id}`, (route) =>
+    route.fulfill({ json: detail }),
+  )
+  await page.route('**/api/v1/members/by-slug/tabi', (route) =>
+    route.fulfill({ json: detail }),
+  )
+  await page.goto(`/members/${member.id}?type=COVER&sort=OLDEST#songs`)
+  await expect(page).toHaveURL('/members/tabi?type=COVER&sort=OLDEST#songs')
+  await expect(
+    page.getByRole('heading', { name: member.name, exact: true }),
+  ).toBeVisible()
+})
+
+test('멤버 목록 링크는 영문 주소를 사용한다', async ({ page }) => {
+  await page.route('**/api/v1/members?*', (route) =>
+    route.fulfill({
+      json: {
+        items: [{ ...member, slug: 'tabi' }],
+        nextCursor: null,
+        hasNext: false,
+      },
+    }),
+  )
+  await page.goto('/members')
+  await expect(
+    page.getByRole('link', { name: member.name, exact: true }),
+  ).toHaveAttribute('href', '/members/tabi')
+})
+
+test('등록되지 않은 영문 주소는 접근 불가 상태를 표시한다', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/members/by-slug/unknown', (route) =>
+    route.fulfill({
+      status: 404,
+      json: { code: 'NOT_FOUND', message: '없음', fieldErrors: [] },
+    }),
+  )
+  await page.goto('/members/unknown')
+  await expect(
+    page.getByRole('heading', { name: '이 화면에 접근할 수 없습니다' }),
+  ).toBeVisible()
+})

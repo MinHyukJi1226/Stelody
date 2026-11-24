@@ -8,7 +8,7 @@ final class PlaylistSqlQueries {
   static final String SUMMARY =
       PublicCatalogSql.SONGS
           + """
-      SELECT p.id, p.name, p.version, p.created_at, p.updated_at,
+      SELECT p.id, p.public_id, p.name, p.version, p.created_at, p.updated_at,
         count(i.id) AS total_count, count(s.id) AS available_count,
         CASE WHEN CAST(:songId AS uuid) IS NULL THEN NULL
           ELSE coalesce(bool_or(i.song_id = CAST(:songId AS uuid)), false) END AS contains_song

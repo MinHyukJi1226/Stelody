@@ -101,6 +101,13 @@ public class SongRepository {
     return jdbc.sql(statement.sql()).params(statement.parameters()).query(this::map).optional();
   }
 
+  public Optional<UUID> findIdByYoutubeId(String youtubeId) {
+    return jdbc.sql("SELECT song_id FROM app.video WHERE youtube_id = :youtubeId")
+        .param("youtubeId", youtubeId)
+        .query(UUID.class)
+        .optional();
+  }
+
   public List<Row> findAll(List<UUID> ids, UUID publication) {
     if (ids.isEmpty()) return List.of();
     var statement = SongSqlQueries.findAll(ids, publication);
@@ -136,7 +143,8 @@ public class SongRepository {
                     row.specialEvent(),
                     row.specialEventLabel(),
                     row.viewCount(),
-                    row.observedAt()))
+                    row.observedAt(),
+                    row.youtubeId()))
         .toList();
   }
 

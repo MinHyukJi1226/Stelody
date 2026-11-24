@@ -1,3 +1,4 @@
+import { songPath } from '@/features/songs/song-path'
 import {
   cloneElement,
   useEffect,
@@ -44,7 +45,7 @@ export function HomeNews() {
     feed?.approaching.map(({ song, target, viewCount }) => (
       <MilestoneLink
         key={song.id}
-        songId={song.id}
+        href={songPath(song)}
         title={song.title}
         artist={song.participants.length ? participantLabel(song) : ''}
         metric={`${number.format(target)}회까지 ${number.format(target - viewCount)}회 남았어요!`}
@@ -55,7 +56,7 @@ export function HomeNews() {
     feed?.achievements.map(({ song, target }) => (
       <MilestoneLink
         key={`${song.id}:${target}`}
-        songId={song.id}
+        href={songPath(song)}
         title={song.title}
         artist={song.participants.length ? participantLabel(song) : ''}
         metric={`${number.format(target)}회를 달성했어요! 축하합니다!`}
@@ -199,13 +200,13 @@ function PremiereLink({
 }
 
 function MilestoneLink({
-  songId,
+  href,
   title,
   artist,
   metric,
   tabIndex,
 }: {
-  songId: string
+  href: string
   title: string
   artist: string
   metric: string
@@ -213,7 +214,7 @@ function MilestoneLink({
 }) {
   return (
     <Link
-      to={`/songs/${songId}`}
+      to={href}
       tabIndex={tabIndex}
       className="flex h-full min-w-0 items-center justify-between gap-2 text-xs"
       title={[title, artist, metric].filter(Boolean).join(' · ')}

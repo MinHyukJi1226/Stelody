@@ -17,6 +17,7 @@ async function setup(page: Page) {
     email: user.email,
     sessionError: 0,
     confirmationError: 0,
+    confirmationGate: Promise.resolve(),
     confirmed: false,
     expiresAt: null as string | null,
     reads: 0,
@@ -137,8 +138,9 @@ async function setup(page: Page) {
     state.loggedIn = false
     return r.fulfill({ status: 204 })
   })
-  await page.route('**/api/v1/me/withdrawal-confirmation', (r) => {
+  await page.route('**/api/v1/me/withdrawal-confirmation', async (r) => {
     state.reads++
+    await state.confirmationGate
     if (state.confirmationError === 401) state.loggedIn = false
     return r.fulfill(
       state.confirmationError
@@ -205,39 +207,94 @@ async function verified(page: Page) {
   state.expiresAt = future()
   await page.goto(`${path}?reauthResult=success`)
   await expect(
-    panel(page).getByRole('button', { name: '회원 탈퇴', exact: true }),
+    panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
   ).toBeEnabled()
+  await expect(panel(page).getByRole('button', { name: /Google/ })).toHaveCount(
+    0,
+  )
   return state
 }
 
 test('계정 관리 진입·이메일·탈퇴 안내를 표시하고 메뉴 포커스를 복원한다', async ({
   page,
-}, info) => {
+}) => {
   const state = await setup(page)
   await page.goto('/account')
   await expect(panel(page).getByText(user.email, { exact: true })).toBeVisible()
-  if (info.project.name === 'mobile') {
-    const trigger = page.getByRole('button', { name: '메뉴 열기' })
-    await trigger.click()
-    const drawer = page.getByRole('dialog', { name: '메뉴' })
-    await expect(drawer).toBeVisible()
-    await expect(drawer.getByRole('link', { name: '계정 관리' })).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(drawer).toHaveCount(0)
-    await expect(trigger).toBeFocused()
-    await trigger.click()
-    await page.mouse.click(10, 200)
-    await expect(drawer).toHaveCount(0)
-  } else
-    await expect(
-      page
-        .getByRole('navigation', { name: '주 메뉴', exact: true })
-        .getByRole('link', { name: '계정 관리' }),
-    ).toBeVisible()
-  await panel(page).getByRole('link', { name: '회원 탈퇴 안내' }).click()
+  await expect(page.locator('footer')).toContainText(
+    'Stelody · 팬이 만드는 노래 아카이브',
+  )
+  await expect(page.locator('footer')).toContainText('공식 서비스가 아닙니다')
+  await expect(page.getByRole('search', { name: '노래 검색' })).toBeVisible()
   await expect(
-    panel(page).getByRole('heading', { name: '탈퇴 전 안내를 확인해 주세요' }),
+    page
+      .getByRole('banner')
+      .getByRole('link', { name: '내 계정', exact: true }),
+  ).toHaveAttribute('href', '/account')
+  const trigger = page.getByRole('button', { name: '메뉴 열기' })
+  await trigger.click()
+  const drawer = page.getByRole('dialog', { name: '메뉴' })
+  await expect(drawer).toBeVisible()
+  await expect(drawer.getByRole('link', { name: '내 보관함' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await page.mouse.click(10, 200)
+  await expect(drawer).toHaveCount(0)
+  await panel(page).getByRole('link', { name: '회원 탈퇴 하기' }).click()
+  await expect(
+    panel(page).getByRole('button', { name: 'Google 재인증', exact: true }),
   ).toBeVisible()
+  await expect(
+    panel(page).getByRole('region', { name: '회원 탈퇴', exact: true }),
+  ).toHaveCount(0)
+  await expect(page.locator('footer')).toContainText('공식 서비스가 아닙니다')
+  expect(state.authorizations).toHaveLength(0)
+  expect(state.deletes).toBe(0)
+})
+
+test('계정의 YouTube 요약은 실제 연결 상태를 표시하고 조회 실패 후 재시도한다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  const connection = page.getByRole('region', {
+    name: 'YouTube 연결',
+    exact: true,
+  })
+  for (const [status, label] of [
+    ['DISCONNECTED', '미연결됨'],
+    ['CONNECTED', '연결 완료'],
+    ['RECONNECT_REQUIRED', '재연결 필요'],
+    ['REVOKING', '해제 처리 중'],
+    ['DISABLED', '현재 사용 불가'],
+  ] as const) {
+    state.connection = status
+    await page.goto('/account')
+    await expect(connection.getByRole('status')).toHaveText(label)
+    const action = connection.getByRole('button')
+    if (status === 'DISABLED' || status === 'REVOKING')
+      await expect(action).toBeDisabled()
+    else await expect(action).toBeEnabled()
+  }
+  let unavailable = true
+  await page.route('**/api/v1/me/youtube/connection', (route) =>
+    route.fulfill(
+      unavailable
+        ? { status: 503, json: { code: 'UNAVAILABLE' } }
+        : { json: { status: 'CONNECTED' } },
+    ),
+  )
+  await page.reload()
+  await expect(connection.getByRole('alert')).toHaveText(
+    '연결 상태를 불러오지 못했어요.',
+  )
+  await expect(panel(page).getByText(user.email, { exact: true })).toBeVisible()
+  unavailable = false
+  await connection
+    .getByRole('button', { name: '다시 시도', exact: true })
+    .click()
+  await expect(connection.getByRole('status')).toHaveText('연결 완료')
   expect(state.authorizations).toHaveLength(0)
   expect(state.deletes).toBe(0)
 })
@@ -283,12 +340,26 @@ test('인증 시작 응답을 기다리는 중 취소하면 늦은 응답으로 
     .getByRole('button', { name: 'Google 재인증', exact: true })
     .click()
   await expect(
-    panel(page).getByRole('button', { name: 'Google 재인증 중…' }),
+    panel(page).getByRole('button', { name: 'Google 재인증', exact: true }),
   ).toBeDisabled()
+  const authorizationNotice = panel(page).getByRole('status')
+  await expect(authorizationNotice).toContainText('Google 재인증 시작 중')
+  await expect(
+    panel(page).getByRole('heading', {
+      name: 'Google 본인 확인을 시작하고 있어요',
+      exact: true,
+    }),
+  ).toHaveCount(0)
+  await expect(
+    panel(page).getByText(
+      '본인 확인을 마치면 최종 확인 화면으로 돌아옵니다. 재인증만으로는 탈퇴가 실행되지 않습니다.',
+      { exact: true },
+    ),
+  ).toHaveCount(0)
   await panel(page).getByRole('link', { name: '취소' }).click()
   await expect(page).toHaveURL(/\/account$/)
   release()
-  await expect(panel(page).getByText('내 계정', { exact: true })).toBeVisible()
+  await expect(panel(page).getByText('내계정', { exact: true })).toBeVisible()
   expect(state.authorizations).toHaveLength(1)
 })
 
@@ -321,15 +392,66 @@ for (const [query, title] of [
     expect(state.deletes).toBe(0)
   })
 
-test('성공 복귀 파라미터만으로 회원 탈퇴를 활성화하지 않는다', async ({
+test('성공 복귀 파라미터만으로 회원 탈퇴 영역을 표시하지 않는다', async ({
   page,
 }) => {
   const state = await setup(page)
   await page.goto(`${path}?reauthResult=success`)
   await expect(
-    panel(page).getByRole('button', { name: '회원 탈퇴', exact: true }),
-  ).toBeDisabled()
+    panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    panel(page).getByRole('region', { name: '회원 탈퇴', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    panel(page).getByRole('button', { name: 'Google 재인증', exact: true }),
+  ).toBeEnabled()
   expect(state.deletes).toBe(0)
+})
+
+test('서버의 재인증 확인이 끝난 뒤에만 탈퇴 영역을 표시하고 Google 인증 영역을 숨긴다', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  state.confirmed = true
+  state.expiresAt = future()
+  let release!: () => void
+  state.confirmationGate = new Promise<void>((resolve) => (release = resolve))
+  try {
+    await page.goto(path)
+    await expect(
+      panel(page).getByRole('status', { name: '계정 정보 조회 중' }),
+    ).toBeVisible()
+    await expect(
+      panel(page).getByRole('region', { name: '회원 탈퇴', exact: true }),
+    ).toHaveCount(0)
+    release()
+    await expect(
+      panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
+    ).toBeEnabled()
+    await expect(
+      panel(page).getByRole('button', { name: /Google/ }),
+    ).toHaveCount(0)
+    await expect(
+      panel(page).getByText(
+        '탈퇴 전, 현재 로그인한 Google 계정으로 본인 확인이 필요합니다.',
+        { exact: true },
+      ),
+    ).toHaveCount(0)
+    state.confirmed = false
+    state.expiresAt = null
+    await page.reload()
+    await expect(
+      panel(page).getByRole('button', { name: 'Google 재인증', exact: true }),
+    ).toBeEnabled()
+    await expect(
+      panel(page).getByRole('region', { name: '회원 탈퇴', exact: true }),
+    ).toHaveCount(0)
+    expect(state.authorizations).toHaveLength(0)
+    expect(state.deletes).toBe(0)
+  } finally {
+    release()
+  }
 })
 
 test('세션이 없거나 조회가 실패해도 복귀 인증 파라미터를 제거한다', async ({
@@ -360,7 +482,7 @@ test('탈퇴 응답 유실은 완료로 추정하거나 탈퇴를 재전송하�
   state.loseDelete = true
   state.resultStatus = 'UNKNOWN'
   await panel(page)
-    .getByRole('button', { name: '회원 탈퇴', exact: true })
+    .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
     .click()
   await expect(
     panel(page).getByRole('heading', { name: '탈퇴 결과를 확인해야 해요' }),
@@ -399,14 +521,17 @@ test('재인증 실제 상태를 새로고침에도 확인하고 명시적 최�
   expect(state.deletes).toBe(0)
   await page.reload()
   await expect(
-    panel(page).getByRole('button', { name: '회원 탈퇴', exact: true }),
+    panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
   ).toBeEnabled()
   await panel(page)
-    .getByRole('button', { name: '회원 탈퇴', exact: true })
+    .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
     .click()
   await expect(
     panel(page).getByRole('heading', { name: '회원 탈퇴가 완료됐어요' }),
   ).toBeVisible()
+  await expect(panel(page).getByText('탈퇴 완료', { exact: true })).toHaveCount(
+    0,
+  )
   await expect(panel(page).getByText(user.email)).toHaveCount(0)
   expect(state.deletes).toBe(1)
   await page.reload()
@@ -426,12 +551,26 @@ test('조회 권한 발급·탈퇴 처리 중 중복 제출과 취소를 막는�
   state.gate = new Promise<void>((resolve) => (release = resolve))
   try {
     await panel(page)
-      .getByRole('button', { name: '회원 탈퇴', exact: true })
+      .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
       .click()
     await expect.poll(() => state.preparations).toBe(1)
     await expect(
-      panel(page).getByRole('button', { name: '탈퇴 처리 중…' }),
+      panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
     ).toBeDisabled()
+    const withdrawalNotice = panel(page).getByRole('status')
+    await expect(withdrawalNotice).toContainText('탈퇴 처리 중')
+    await expect(
+      panel(page).getByRole('heading', {
+        name: '회원 탈퇴를 처리하고 있어요',
+        exact: true,
+      }),
+    ).toHaveCount(0)
+    await expect(
+      panel(page).getByText(
+        '아직 완료된 상태가 아닙니다. 중복 요청을 막기 위해 처리가 끝날 때까지 기다려 주세요.',
+        { exact: true },
+      ),
+    ).toHaveCount(0)
     await expect(
       panel(page).getByRole('button', { name: '취소' }),
     ).toBeDisabled()
@@ -440,7 +579,7 @@ test('조회 권한 발급·탈퇴 처리 중 중복 제출과 취소를 막는�
     prepare()
     await expect.poll(() => state.deletes).toBe(1)
     await expect(
-      panel(page).getByRole('button', { name: '탈퇴 처리 중…' }),
+      panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
     ).toBeDisabled()
     await expect(
       panel(page).getByRole('button', { name: '취소' }),
@@ -458,7 +597,7 @@ test('조회 권한 발급·탈퇴 처리 중 중복 제출과 취소를 막는�
   }
 })
 
-test('서버 만료 시각이 지나면 열린 화면에서도 최종 버튼을 잠근다', async ({
+test('서버 만료 시각이 지나면 탈퇴 영역을 숨기고 재인증을 다시 표시한다', async ({
   page,
 }) => {
   const state = await setup(page)
@@ -468,15 +607,21 @@ test('서버 만료 시각이 지나면 열린 화면에서도 최종 버튼을 
   state.expiresAt = new Date(now + 60_000).toISOString()
   await page.goto(path)
   await expect(
-    panel(page).getByRole('button', { name: '회원 탈퇴', exact: true }),
+    panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
   ).toBeEnabled()
   await page.clock.fastForward(60_001)
   await expect(
-    panel(page).getByRole('button', { name: '회원 탈퇴', exact: true }),
-  ).toBeDisabled()
+    panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
+  ).toHaveCount(0)
   await expect(
     panel(page).getByText('본인 확인 유효기간 만료', { exact: true }),
   ).toBeVisible()
+  await expect(
+    panel(page).getByRole('button', { name: 'Google 재인증', exact: true }),
+  ).toBeEnabled()
+  await expect(
+    panel(page).getByRole('region', { name: '회원 탈퇴', exact: true }),
+  ).toHaveCount(0)
   expect(state.deletes).toBe(0)
 })
 
@@ -494,7 +639,7 @@ for (const [status, code, title] of [
     const state = await verified(page)
     state.failure = { status, code }
     await panel(page)
-      .getByRole('button', { name: '회원 탈퇴', exact: true })
+      .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
       .click()
     await panel(page).getByRole('button', { name: '탈퇴 결과 확인' }).click()
     await expect(
@@ -511,7 +656,7 @@ test('YouTube 작업·철회 대기를 다시 확인해도 자동 탈퇴하지 �
   state.failure = { status: 409, code: 'YOUTUBE_EXPORT_BUSY' }
   state.active = exportJob()
   await panel(page)
-    .getByRole('button', { name: '회원 탈퇴', exact: true })
+    .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
     .click()
   await panel(page).getByRole('button', { name: '탈퇴 결과 확인' }).click()
   await panel(page).getByRole('button', { name: '상태 다시 확인' }).click()
@@ -533,7 +678,7 @@ test('YouTube 작업·철회 대기를 다시 확인해도 자동 탈퇴하지 �
   state.failure = null
   await panel(page).getByRole('button', { name: '처리 상태 확인' }).click()
   await expect(
-    panel(page).getByRole('button', { name: '회원 탈퇴', exact: true }),
+    panel(page).getByRole('button', { name: '회원 탈퇴 하기', exact: true }),
   ).toBeEnabled()
   expect(state.deletes).toBe(1)
 })
@@ -556,7 +701,7 @@ for (const operation of ['read', 'authorize'])
     }
     await expect(
       panel(page).getByRole('link', { name: '다시 로그인' }),
-    ).toHaveAttribute('href', `/login?returnTo=${encodeURIComponent(path)}`)
+    ).toHaveAttribute('href', '/login')
     await expect(panel(page).getByText(user.email)).toHaveCount(0)
   })
 
@@ -578,7 +723,7 @@ test('응답 유실 뒤 새로고침은 무세션에서도 같은 요청의 완�
   const state = await verified(page)
   state.loseDelete = true
   await panel(page)
-    .getByRole('button', { name: '회원 탈퇴', exact: true })
+    .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
     .click()
   await expect(
     panel(page).getByRole('button', { name: '탈퇴 결과 확인' }),
@@ -605,7 +750,7 @@ test('처리 중만 3초 간격으로 조회하고 UNKNOWN은 수동 조회만 �
   state.loseDelete = true
   state.resultStatus = 'PROCESSING'
   await panel(page)
-    .getByRole('button', { name: '회원 탈퇴', exact: true })
+    .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
     .click()
   await panel(page).getByRole('button', { name: '탈퇴 결과 확인' }).click()
   await expect.poll(() => state.resultReads).toBe(1)
@@ -635,7 +780,7 @@ for (const status of [404, 410, 503])
     state.loseDelete = true
     state.resultError = status
     await panel(page)
-      .getByRole('button', { name: '회원 탈퇴', exact: true })
+      .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
       .click()
     await panel(page).getByRole('button', { name: '탈퇴 결과 확인' }).click()
     await expect(
@@ -675,7 +820,7 @@ for (const failure of ['prepare', 'storage'])
         }
       })
     await panel(page)
-      .getByRole('button', { name: '회원 탈퇴', exact: true })
+      .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
       .click()
     await expect(
       panel(page).getByRole('heading', { name: '탈퇴를 시작할 수 없어요' }),
@@ -690,7 +835,7 @@ test('DELETE 401도 완료로 추정하지 않고 준비된 조회 권한을 유
   const state = await verified(page)
   state.failure = { status: 401, code: 'SESSION_EXPIRED' }
   await panel(page)
-    .getByRole('button', { name: '회원 탈퇴', exact: true })
+    .getByRole('button', { name: '회원 탈퇴 하기', exact: true })
     .click()
   await panel(page).getByRole('button', { name: '탈퇴 결과 확인' }).click()
   await expect(
@@ -749,7 +894,7 @@ test('다른 계정으로 로그인한 화면은 이전 계정의 결과로 로�
   await expect(panel(page).getByText(user.email)).toBeVisible()
   release()
   await expect(
-    panel(page).getByRole('heading', { name: '탈퇴 전 안내를 확인해 주세요' }),
+    panel(page).getByRole('button', { name: 'Google 재인증', exact: true }),
   ).toBeVisible()
   expect(state.deletes).toBe(0)
 })
@@ -825,8 +970,8 @@ test('계정·탈퇴 화면을 PC·모바일과 라이트·다크에 맞춰 표�
         await expect(panel(page).getByText(user.email)).toBeVisible()
       else {
         const headings: Record<string, string> = {
-          guide: '탈퇴 전 안내를 확인해 주세요',
-          verified: '마지막으로 탈퇴 여부를 확인해 주세요',
+          guide: '내계정',
+          verified: '회원 탈퇴',
           expired: 'Google 본인 확인을 다시 진행해 주세요',
           wrong: '로그인한 계정으로 다시 인증해 주세요',
           failed: '본인 확인을 완료하지 못했어요',

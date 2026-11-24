@@ -5,7 +5,7 @@ import { songSearchOptions } from '@/features/songs/search-queries'
 import { uniqueSongs } from '@/features/songs/queries'
 import { SearchSongGrid, SearchSongSkeleton } from './search-song-grid'
 import { PageState } from '@/shared/ui/page-state'
-import { loginPath } from '@/features/auth/return-path'
+import { rememberLoginReturn } from '@/features/auth/return-path'
 import { searchParams } from '@/features/songs/search-params'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { Button } from '@/shared/ui/button'
@@ -105,7 +105,9 @@ export function SearchResults({ criteria }: { criteria: SearchCriteria }) {
             detail={`검색어 '${criteria.q}'는 유지됩니다.`}
             {...(!denied ? { onRetry: retry } : {})}
             action={{
-              to: loginPath(`/search?${searchParams(criteria)}`),
+              to: '/login',
+              onClick: () =>
+                rememberLoginReturn(`/search?${searchParams(criteria)}`),
               label: '로그인',
             }}
           />

@@ -38,6 +38,15 @@ public class MemberController {
     return members.detail(id);
   }
 
+  @GetMapping("/api/v1/members/by-slug/{slug}")
+  @Operation(
+      summary = "영문 주소로 멤버 상세 조회",
+      description =
+          "멤버 slug는 소문자 영문으로 시작하며 소문자 영문·숫자·하이픈 1~40자입니다. 일치하지 않으면 404입니다. 반환된 member.id로 곡 목록을 조회합니다.")
+  public MemberDtos.Detail detailBySlug(@PathVariable String slug) {
+    return members.detailBySlug(slug);
+  }
+
   @GetMapping("/api/v1/members/{id}/songs")
   @Operation(
       summary = "멤버의 공개 곡 목록",

@@ -7,7 +7,7 @@ import {
   readPendingAction,
   storePlaylistAction,
 } from '@/features/auth/pending-action'
-import { loginPath, safeReturnPath } from '@/features/auth/return-path'
+import { beginLogin, safeReturnPath } from '@/features/auth/return-path'
 import { Button } from '@/shared/ui/button'
 import { useToast } from '@/shared/ui/toast-context'
 import { PlaylistPicker } from './playlist-picker'
@@ -53,7 +53,7 @@ export function PlaylistButton({
         ? '로그인 후 플레이리스트를 선택해 주세요.'
         : '로그인 후 플레이리스트 버튼을 다시 눌러주세요.',
     )
-    void navigate(loginPath(returnTo))
+    void navigate(beginLogin(returnTo))
   }
   return (
     <>

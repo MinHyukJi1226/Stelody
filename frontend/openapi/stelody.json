@@ -7,6 +7,155 @@
   },
   "servers": [{ "url": "/" }],
   "paths": {
+    "/api/v1/me/playlists/by-public-id/{publicId}": {
+      "get": {
+        "description": "publicId는 대소문자를 구분하는 영문·숫자 10자입니다. 로그인한 소유자의 목록만 기존 UUID 상세와 같은 응답으로 반환합니다. 형식 오류·미등록·다른 사용자의 목록은 모두 404 PLAYLIST_NOT_FOUND입니다. 조회는 읽기 전용이며 세션 만료 등 개인 API 오류 계약을 유지합니다. 응답 id는 기존 항목·변경·내보내기 API에 사용하는 UUID입니다.\n\n현재 로그인 계정의 자료만 접근합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "operationId": "get_me_playlists_by_public_id_publicId",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/com.stelody.playlist.dto.PlaylistDtos.Summary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "INVALID_PLAYLIST_REQUEST: 이름·항목·버전·커서를 확인합니다.",
+            "x-error-codes": ["INVALID_PLAYLIST_REQUEST"]
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "로그인 세션이 없거나 유효하지 않습니다.\nAUTHENTICATION_REQUIRED, SESSION_EXPIRED: 로그인이 필요하거나 세션이 만료되었습니다. 다시 로그인합니다.",
+            "x-error-codes": ["AUTHENTICATION_REQUIRED", "SESSION_EXPIRED"]
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "짧은 주소 ID로 개인 플레이리스트 상세 조회",
+        "tags": ["개인 계정·목록"]
+      }
+    },
+    "/api/v1/songs/by-youtube/{youtubeId}": {
+      "get": {
+        "description": "대소문자를 구분하는 영문·숫자·밑줄·하이픈 11자 영상 ID로 연결된 공개 곡을 조회합니다. 대표 영상 이외의 연결 영상 ID도 지원하며 응답은 UUID 상세와 동일합니다. 형식 오류·미등록 영상·공개 조건을 만족하지 않는 곡은 404입니다. 응답 song.youtubeId는 현재 대표 영상 ID이고 song.id는 조회수·즐겨찾기·플레이리스트에 사용하는 기존 곡 UUID입니다.\n\n업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "operationId": "get_songs_by_youtube_youtubeId",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "youtubeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/com.stelody.song.dto.SongDtos.Detail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
+          }
+        },
+        "security": [],
+        "summary": "YouTube 영상 ID로 공개 곡 상세 조회",
+        "tags": ["공개 카탈로그"]
+      }
+    },
+    "/api/v1/members/by-slug/{slug}": {
+      "get": {
+        "description": "멤버 slug는 소문자 영문으로 시작하며 소문자 영문·숫자·하이픈 1~40자입니다. 일치하지 않으면 404입니다. 반환된 member.id로 곡 목록을 조회합니다.\n\n업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
+        "operationId": "get_members_by_slug_slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/com.stelody.member.dto.MemberDtos.Detail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            },
+            "description": "요청 검증·업무 조건·외부 연동 오류. HTTP 상태와 code를 확인하세요. 로그인 상태 확인·복구 중 저장소 장애는 모든 API에서 503 LOGIN_STORAGE_UNAVAILABLE일 수 있으며 로그인 해제나 업무 성공으로 처리하지 않습니다."
+          }
+        },
+        "security": [],
+        "summary": "영문 주소로 멤버 상세 조회",
+        "tags": ["공개 카탈로그"]
+      }
+    },
     "/api/v1/admin/artist-registrations/{requestId}": {
       "get": {
         "description": "등록 전에 보관한 Idempotency-Key UUID로 본인이 접수한 요청만 조회합니다. 로그인한 현재 ADMIN 역할이 필요하며 다른 관리자·미접수 ID는 모두 NOT_PROCESSED이고 등록 정보는 반환하지 않습니다. 읽기 전용이며 등록·재시도·정리를 실행하지 않습니다. NOT_PROCESSED는 본인 접수 기록 없음, PROCESSING은 처리 중(3초 간격 재조회), COMPLETED는 artistId에 생성된 UUID 반환, FAILED는 errorCode로 실패를 안내합니다. NOT_PROCESSED의 createdAt/expiresAt/finishedAt은 null이며 결과 조회 장애·401·403·503과 구분해야 합니다. 완료·실패의 pollAfterSeconds는 null입니다. 결과는 최초 접수부터 24시간이며 조회·재전송으로 연장되지 않고 이후 410 ARTIST_REGISTRATION_RESULT_EXPIRED입니다. 만료 상세 정보는 정리하지만 요청 UUID·본문 해시·소유자·접수/만료 시각의 최소 기록은 유지하므로 동일 ID 재등록도 410입니다. 세션 만료 후에는 같은 관리자 계정으로 로그인해 조회할 수 있습니다. 프론트는 요청 ID와 원래 본문 전체를 보관해 새로고침 후 조회·재전송에 사용하며 오류를 미처리로 바꾸거나 새 ID로 반복 접수하지 않습니다. 중단된 PROCESSING 중 2분이 지난 비활성 요청은 1분 간격 정리에서 FAILED/ARTIST_REGISTRATION_INTERRUPTED로 전환하고 실행 중 잠긴 요청은 건너뜁니다. FAILED는 생성 트랜잭션이 반영되지 않은 상태이며 오류를 수정한 후 새 ID로 별도 요청할 수 있습니다. 저장소 장애는 503이며 결과를 단정할 수 없습니다.\n\n현재 ADMIN 역할이 필요합니다. 업무 오류는 application/problem+json의 code와 traceId로 확인합니다.",
@@ -9009,6 +9158,11 @@
           "id": { "type": "string", "format": "uuid" },
           "name": { "type": "string" },
           "profileImageUrl": { "type": ["string", "null"] },
+          "slug": {
+            "type": ["string", "null"],
+            "description": "공개 멤버 주소. 미지정 멤버는 null이며 UUID로 조회할 수 있습니다. 이름 변경과 무관하게 유지됩니다.",
+            "pattern": "^[a-z][a-z0-9-]{0,39}$"
+          },
           "songCounts": {
             "$ref": "#/components/schemas/com.stelody.member.dto.MemberDtos.Counts"
           },
@@ -9283,6 +9437,11 @@
       "com.stelody.playlist.dto.PlaylistDtos.Summary": {
         "type": "object",
         "properties": {
+          "publicId": {
+            "type": "string",
+            "description": "서버가 자동 발급한 대소문자 구분 영문·숫자 10자 주소 ID. 이름 변경·내보내기 후에도 유지됩니다. UUID id는 기존 변경·항목·내보내기 API에 사용합니다. publicId를 알아도 로그인과 소유자 검증이 필요합니다.",
+            "pattern": "^[A-Za-z0-9]{10}$"
+          },
           "availableCount": { "type": "integer", "format": "int64" },
           "containsSong": {
             "type": ["boolean", "null"],
@@ -9507,6 +9666,11 @@
       "com.stelody.song.dto.SongDtos.Card": {
         "type": "object",
         "properties": {
+          "youtubeId": {
+            "type": "string",
+            "description": "현재 대표 YouTube 영상 ID. 공개 페이지 주소 /songs/{youtubeId}에 사용합니다. id는 기존 곡 UUID로 유지합니다.",
+            "pattern": "^[A-Za-z0-9_-]{11}$"
+          },
           "id": { "type": "string", "format": "uuid" },
           "isSpecialEvent": {
             "type": "boolean",

@@ -1,7 +1,9 @@
 import { Link } from 'react-router'
 import googleMark from '@/shared/assets/google-mark.png'
+import logo from '@/shared/assets/logo.svg'
 import { Button } from '@/shared/ui/button'
 import { googleLoginUrl } from '@/features/auth/api'
+import { rememberLoginReturn } from '@/features/auth/return-path'
 
 export function LoginCard({
   returnTo,
@@ -19,52 +21,68 @@ export function LoginCard({
   onContinue?: () => void
 }) {
   return (
-    <section aria-labelledby="login-card-title" className="login-card">
-      <h2 id="login-card-title" className="text-lg font-bold leading-[1.5]">
-        Google 계정으로 로그인
-      </h2>
-      <p className="text-sm leading-[1.5] text-muted">
-        처음 로그인하면 계정이 자동으로 생성돼요.
+    <div className="login-card">
+      <img
+        src={logo}
+        alt=""
+        width={52}
+        height={52}
+        className="self-center rounded-xl bg-brand-fill"
+      />
+      <h1
+        id="login-title"
+        className="mt-6 text-[28px] font-bold leading-[1.25] md:text-[32px]"
+      >
+        로그인
+      </h1>
+      <p className="mt-4 text-base leading-[1.5]">
+        즐겨찾기와 플레이리스트 저장으로
+        <br />내 취향 곡을 모아보세요
       </p>
-      <a className="google-sign-in" href={googleLoginUrl(returnTo)}>
+      <a
+        className="google-sign-in mt-8"
+        href={googleLoginUrl()}
+        onClick={() => rememberLoginReturn(returnTo)}
+      >
         <img src={googleMark} alt="" width={20} height={20} />
         <span>Google로 로그인</span>
       </a>
       {notice && (
         <div
-          className={`rounded-lg p-3 text-sm leading-[1.5] ${cancelled ? 'bg-tint text-muted' : 'bg-rose text-error'}`}
+          className={`mt-4 rounded-lg p-3 text-sm leading-[1.5] ${cancelled ? 'bg-tint text-muted' : 'bg-rose text-error'}`}
           role={cancelled ? 'status' : 'alert'}
         >
           {notice}
         </div>
       )}
-      {retry && <Button onClick={retry}>로그인 상태 다시 확인</Button>}
+      {retry && (
+        <Button className="mt-4" onClick={retry}>
+          로그인 상태 다시 확인
+        </Button>
+      )}
       {canContinue && (
-        <Button asChild>
+        <Button asChild className="mt-4">
           <Link to={returnTo} replace onClick={onContinue}>
             현재 계정으로 계속하기
           </Link>
         </Button>
       )}
-      <p className="text-sm leading-[1.5] text-muted">
-        즐겨찾기와 플레이리스트를 내 계정에 저장해요.
-      </p>
-    </section>
+    </div>
   )
 }
 
 export function LoginSkeleton() {
   return (
     <div
-      className="login-card"
+      className="login-card gap-4"
       role="status"
       aria-label="로그인 확인 중"
       aria-busy="true"
     >
-      <div className="h-6 w-3/4 rounded-lg bg-line" />
-      <div className="h-5 w-full rounded-lg bg-line" />
-      <div className="h-5 w-[70%] rounded-lg bg-line" />
-      <div className="h-12 w-full rounded-lg bg-line" />
+      <div className="size-[52px] self-center rounded-xl bg-line" />
+      <div className="mt-2 h-10 w-24 self-center rounded-lg bg-line" />
+      <div className="h-12 w-3/4 self-center rounded-lg bg-line" />
+      <div className="mt-4 h-[52px] w-full rounded-xl bg-line" />
       <p className="text-sm leading-[1.5] text-muted">
         Google 로그인 결과를 확인하고 있어요.
       </p>

@@ -69,6 +69,16 @@ public class PlaylistController {
     return playlists.detail(user.id(), id);
   }
 
+  @GetMapping("/api/v1/me/playlists/by-public-id/{publicId}")
+  @Operation(
+      summary = "짧은 주소 ID로 개인 플레이리스트 상세 조회",
+      description =
+          "publicId는 대소문자를 구분하는 영문·숫자 10자입니다. 로그인한 소유자의 목록만 기존 UUID 상세와 같은 응답으로 반환합니다. 형식 오류·미등록·다른 사용자의 목록은 모두 404 PLAYLIST_NOT_FOUND입니다. 조회는 읽기 전용이며 세션 만료 등 개인 API 오류 계약을 유지합니다. 응답 id는 기존 항목·변경·내보내기 API에 사용하는 UUID입니다.")
+  public PlaylistDtos.Summary detailByPublicId(
+      @AuthenticationPrincipal SessionUser user, @PathVariable String publicId) {
+    return playlists.detailByPublicId(user.id(), publicId);
+  }
+
   @PatchMapping("/api/v1/me/playlists/{id}")
   @Operation(summary = "플레이리스트 이름 변경")
   public PlaylistDtos.Summary rename(

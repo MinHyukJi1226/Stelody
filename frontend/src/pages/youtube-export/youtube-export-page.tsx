@@ -10,6 +10,11 @@ import {
 import { z } from 'zod'
 import { sessionOptions } from '@/features/auth/session'
 import { playlistDetailOptions } from '@/features/playlists/queries'
+import {
+  PlaylistAddress,
+  PlaylistCanonicalAddress,
+} from '@/features/playlists/playlist-address'
+import { playlistPath } from '@/features/playlists/playlist-path'
 import { youtubeConnectionOptions } from '@/features/youtube/queries'
 import {
   exportPath,
@@ -78,20 +83,28 @@ function writeMessage(error: unknown) {
 export function YouTubeExportPage() {
   const { playlistId = '' } = useParams()
   const session = useQuery({ ...sessionOptions, refetchOnMount: false })
-  return session.data ? (
-    <ExportScreen
-      key={`${session.data.id}:${playlistId}`}
-      user={session.data.id}
-      playlistId={playlistId}
-    />
+  const user = session.data?.id
+  return user ? (
+    <PlaylistAddress user={user} address={playlistId}>
+      {(id) => (
+        <ExportScreen
+          key={`${user}:${id}`}
+          user={user}
+          playlistId={id}
+          playlistAddress={playlistId}
+        />
+      )}
+    </PlaylistAddress>
   ) : null
 }
 function ExportScreen({
   user,
   playlistId,
+  playlistAddress,
 }: {
   user: string
   playlistId: string
+  playlistAddress: string
 }) {
   const [params] = useSearchParams()
   const context = readContext(params)
@@ -103,8 +116,8 @@ function ExportScreen({
   useLayoutEffect(() => {
     leaving.current =
       !!navigation.location &&
-      navigation.location.pathname !== exportPath(playlistId)
-  }, [navigation.location, playlistId])
+      navigation.location.pathname !== exportPath(playlistAddress)
+  }, [navigation.location, playlistAddress])
   const mounted = useRef(false)
   useEffect(() => {
     mounted.current = true
@@ -133,7 +146,7 @@ function ExportScreen({
       )
     : undefined
   const jobId = context.jobId ?? confirmedRequest?.id
-  const action = useExportActions(user, playlistId)
+  const action = useExportActions(user, playlistId, playlistAddress)
   const active = useQuery({
     ...activeExportOptions(user),
     enabled: valid && !jobId && !action.pending,
@@ -144,6 +157,8 @@ function ExportScreen({
   })
   const job = query.data ?? confirmedRequest
   const playlist = source.data
+  const address = playlist?.publicId ?? playlistAddress
+  const canonical = address === playlistAddress
   const denied =
     !valid ||
     [source.error, query.error, !jobId ? active.error : null].some(
@@ -160,14 +175,20 @@ function ExportScreen({
     !leaving.current &&
     client.getQueryData(sessionOptions.queryKey)?.id === user
   useEffect(() => {
-    if (context.request && confirmedRequest && navigation.state === 'idle')
-      void navigate(exportPath(playlistId, confirmedRequest.id), {
+    if (
+      canonical &&
+      context.request &&
+      confirmedRequest &&
+      navigation.state === 'idle'
+    )
+      void navigate(exportPath(address, confirmedRequest.id), {
         replace: true,
       })
   }, [
     context.request,
     confirmedRequest,
-    playlistId,
+    address,
+    canonical,
     navigate,
     navigation.state,
   ])
@@ -175,6 +196,7 @@ function ExportScreen({
   useEffect(() => {
     if (
       !jobId &&
+      canonical &&
       activeJob &&
       !active.isError &&
       !active.isFetching &&
@@ -191,6 +213,7 @@ function ExportScreen({
     }
   }, [
     activeJob,
+    canonical,
     jobId,
     active.isError,
     active.isFetching,
@@ -210,7 +233,7 @@ function ExportScreen({
       if (result.data.job === null && clearRejectedRequest) {
         setBlocked(false)
         setError(undefined)
-        void navigate(exportPath(playlistId), { replace: true })
+        void navigate(exportPath(address), { replace: true })
       }
     } finally {
       if (live()) setRecovering(false)
@@ -242,7 +265,7 @@ function ExportScreen({
     setOperation('create')
     if (!context.request)
       await navigate(
-        `${exportPath(playlistId)}?${new URLSearchParams({ requestId: input.requestId, version: String(input.version) })}`,
+        `${exportPath(address)}?${new URLSearchParams({ requestId: input.requestId, version: String(input.version) })}`,
         { replace: true },
       )
     if (!live()) return
@@ -255,13 +278,13 @@ function ExportScreen({
       if (!live()) return
       if (failure instanceof ApiError && failure.code === 'PLAYLIST_CHANGED') {
         setSourceChanged(true)
-        void navigate(exportPath(playlistId), { replace: true })
+        void navigate(exportPath(address), { replace: true })
       } else if (
         failure instanceof ApiError &&
         failure.code === 'NO_EXPORTABLE_SONGS'
       ) {
         setNoSongs(true)
-        void navigate(exportPath(playlistId), { replace: true })
+        void navigate(exportPath(address), { replace: true })
       } else {
         setError(writeMessage(failure))
         if (
@@ -284,7 +307,7 @@ function ExportScreen({
           ].includes(failure.code)
         ) {
           void connection.refetch()
-          void navigate(exportPath(playlistId), { replace: true })
+          void navigate(exportPath(address), { replace: true })
         }
       }
     } finally {
@@ -328,7 +351,7 @@ function ExportScreen({
     setSourceChanged(false)
     setNoSongs(false)
     setError(undefined)
-    void navigate(exportPath(playlistId), { replace: true })
+    void navigate(exportPath(address), { replace: true })
   }
   const preflight: ExportView = sourceChanged
     ? 'sourcechanged'
@@ -386,66 +409,77 @@ function ExportScreen({
       connection.data?.status ?? '',
     )
   return (
-    <div className="favorites-page flex min-w-0 flex-col gap-12">
-      <section className="flex min-w-0 flex-1 flex-col items-center gap-6">
-        <h1 className="w-full text-[32px] font-bold leading-[1.5]">
-          YouTube로 내보내기
-        </h1>
-        {denied ? (
-          <PageState
-            kind="unavailable"
-            title="내보내기 정보를 확인할 수 없습니다"
-            description="목록이나 작업이 없거나 현재 계정에서 볼 수 없습니다."
-            action={{ to: '/library/playlists', label: '내 플레이리스트' }}
-          />
-        ) : (
-          <>
-            <ExportPanel
-              view={view}
-              name={playlist?.name}
-              total={playlist?.totalCount}
-              available={playlist?.availableCount}
-              job={job}
-              busy={busy}
-              connectionPath={`/library/youtube?${new URLSearchParams({
-                returnTo: jobId
-                  ? exportPath(playlistId, jobId)
-                  : `${exportPath(playlistId)}${params.size ? `?${params}` : ''}`,
-              })}`}
-              canRetry={canRetry}
-              canCancel={canCancel}
-              needsConnection={needsConnection}
-              notice={
-                error ? (
-                  <p role="alert" className="rounded-lg bg-rose p-3 text-error">
-                    {error}
-                  </p>
-                ) : undefined
-              }
-              onStart={() => void start()}
-              onRetry={() => void change('retry')}
-              onCancel={() => void change('cancel')}
-              onReload={() => void reload()}
-              onRead={() => {
-                if (jobId) void query.refetch()
-                else if (blocked || active.isError) void recover(blocked)
-                else if (context.request) void start()
-                else {
-                  void source.refetch()
-                  void connection.refetch()
-                  void active.refetch()
-                }
-              }}
+    <PlaylistCanonicalAddress playlist={denied ? undefined : playlist}>
+      <div className="favorites-page flex min-w-0 flex-col gap-12">
+        <section className="flex min-w-0 flex-1 flex-col items-center gap-6">
+          <h1 className="w-full text-[32px] font-bold leading-[1.5]">
+            YouTube로 내보내기
+          </h1>
+          {denied ? (
+            <PageState
+              kind="unavailable"
+              title="내보내기 정보를 확인할 수 없습니다"
+              description="목록이나 작업이 없거나 현재 계정에서 볼 수 없습니다."
+              action={{ to: '/library/playlists', label: '내 플레이리스트' }}
             />
-            <Button asChild>
-              <Link to={`/library/playlists/${playlistId}`}>
-                플레이리스트로 돌아가기
-              </Link>
-            </Button>
-          </>
-        )}
-      </section>
-      <SiteFooter />
-    </div>
+          ) : (
+            <>
+              <ExportPanel
+                view={view}
+                name={playlist?.name}
+                total={playlist?.totalCount}
+                available={playlist?.availableCount}
+                job={job}
+                busy={busy}
+                connectionPath={`/library/youtube?${new URLSearchParams({
+                  returnTo: jobId
+                    ? exportPath(address, jobId)
+                    : `${exportPath(address)}${params.size ? `?${params}` : ''}`,
+                })}`}
+                canRetry={canRetry}
+                canCancel={canCancel}
+                needsConnection={needsConnection}
+                notice={
+                  error ? (
+                    <p
+                      role="alert"
+                      className="rounded-lg bg-rose p-3 text-error"
+                    >
+                      {error}
+                    </p>
+                  ) : undefined
+                }
+                onStart={() => void start()}
+                onRetry={() => void change('retry')}
+                onCancel={() => void change('cancel')}
+                onReload={() => void reload()}
+                onRead={() => {
+                  if (jobId) void query.refetch()
+                  else if (blocked || active.isError) void recover(blocked)
+                  else if (context.request) void start()
+                  else {
+                    void source.refetch()
+                    void connection.refetch()
+                    void active.refetch()
+                  }
+                }}
+              />
+              <Button asChild>
+                <Link
+                  to={
+                    playlist
+                      ? playlistPath(playlist)
+                      : `/library/playlists/${playlistAddress}`
+                  }
+                >
+                  플레이리스트로 돌아가기
+                </Link>
+              </Button>
+            </>
+          )}
+        </section>
+        <SiteFooter />
+      </div>
+    </PlaylistCanonicalAddress>
   )
 }

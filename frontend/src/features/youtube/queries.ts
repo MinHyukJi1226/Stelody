@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { endLocalSession, sessionOptions } from '@/features/auth/session'
-import { loginPath } from '@/features/auth/return-path'
+import { beginLogin } from '@/features/auth/return-path'
 import { ApiError } from '@/shared/api/errors'
 import {
   authorizeYouTube,
@@ -76,7 +76,7 @@ export function useYouTubeActions(
       if (!sameAccount(client, user)) return
       if (error instanceof ApiError && error.status === 401) {
         await endLocalSession(client)
-        void navigate(loginPath(returnTo))
+        void navigate(beginLogin(returnTo))
       }
     },
   })

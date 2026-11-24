@@ -5,6 +5,26 @@ import { createQueryClient } from '@/app/query-client'
 import { songDetailOptions, songViewsOptions } from './detail-queries'
 
 const id = '00000000-0000-4000-8000-000000000001'
+it('영상 ID는 공개 연결 조회로 보내고 곡 UUID는 그대로 유지한다', async () => {
+  const youtubeId = 'aB12cd-E_34'
+  const calls: string[] = []
+  server.use(
+    http.get('*/api/v1/songs/by-youtube/:youtubeId', ({ request, params }) => {
+      calls.push(new URL(request.url).pathname)
+      return HttpResponse.json({ song: { id, youtubeId: params.youtubeId } })
+    }),
+  )
+  const client = createQueryClient()
+  try {
+    const result = await client.fetchQuery(songDetailOptions(youtubeId))
+    expect(result.song.id).toBe(id)
+    expect(result.song.youtubeId).toBe(youtubeId)
+    expect(calls).toEqual([`/api/v1/songs/by-youtube/${youtubeId}`])
+  } finally {
+    client.clear()
+  }
+})
+
 it('곡 상세·기간별 조회수를 독립된 API와 캐시로 조회한다', async () => {
   const calls: string[] = []
   server.use(

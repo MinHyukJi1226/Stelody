@@ -68,6 +68,12 @@ public class SongService {
                 row.workId(), songs.links(null, row.workId()), songs.karaoke(null, row.workId())));
   }
 
+  public SongDtos.Detail detailByYoutube(String youtubeId) {
+    if (youtubeId == null || !youtubeId.matches("[A-Za-z0-9_-]{11}"))
+      throw CatalogException.missing();
+    return detail(songs.findIdByYoutubeId(youtubeId).orElseThrow(CatalogException::missing));
+  }
+
   public SongDtos.Recommendations recommendations(int size) {
     if (size < 1 || size > 20) throw CatalogException.invalid();
     var ids = SongRecommendations.select(songs.recommendationCandidates(), size);

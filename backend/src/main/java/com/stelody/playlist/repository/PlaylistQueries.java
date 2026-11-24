@@ -52,6 +52,16 @@ public class PlaylistQueries {
         .orElseThrow(PlaylistException::missing);
   }
 
+  public PlaylistDtos.Summary summaryByPublicId(UUID userId, String publicId) {
+    return jdbc.sql(PlaylistSqlQueries.SUMMARY + " AND p.public_id = :publicId GROUP BY p.id")
+        .param("userId", userId)
+        .param("publicId", publicId)
+        .param("songId", null, Types.OTHER)
+        .query(this::summary)
+        .optional()
+        .orElseThrow(PlaylistException::missing);
+  }
+
   public List<PlaylistDtos.Summary> list(UUID userId, int size, ListPosition cursor, UUID songId) {
     String boundary = cursor == null ? "" : " AND (p.created_at, p.id) < (:createdAt, :id)";
     var statement =
@@ -124,6 +134,7 @@ public class PlaylistQueries {
         rs.getTimestamp("updated_at").toInstant(),
         rs.getLong("total_count"),
         rs.getLong("available_count"),
-        rs.getObject("contains_song", Boolean.class));
+        rs.getObject("contains_song", Boolean.class),
+        rs.getString("public_id"));
   }
 }

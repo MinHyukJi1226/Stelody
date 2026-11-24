@@ -1,3 +1,4 @@
+import { songPath } from '@/features/songs/song-path'
 import { Link } from 'react-router'
 import type { ReactNode } from 'react'
 import { cn } from '@/shared/lib/utils'
@@ -36,7 +37,7 @@ export function SongCard({
       )}
     >
       <Link
-        to={`/songs/${song.id}`}
+        to={songPath(song)}
         className="flex min-w-0 flex-col gap-3 rounded-2xl"
         aria-label={`${song.title} 상세 보기`}
       >

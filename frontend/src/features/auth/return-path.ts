@@ -24,14 +24,37 @@ export function safeReturnPath(value: string | null | undefined): string {
   }
 }
 
-export function loginPath(returnTo: string) {
-  return `/login?${new URLSearchParams({ returnTo: safeReturnPath(returnTo) })}`
+const loginReturnKey = 'stelody-login-return'
+
+export function rememberLoginReturn(returnTo: string) {
+  try {
+    sessionStorage.setItem(loginReturnKey, safeReturnPath(returnTo))
+  } catch {
+    // Storage is optional; do not reuse an older destination if writing failed.
+    clearLoginReturn()
+  }
 }
 
-export function oauthReturnPath(returnTo: string) {
-  const path = loginPath(returnTo)
-  // The nested path must also fit the server's 2,048-character limit.
-  return path.length <= 2048 ? path : loginPath('/library')
+export function readLoginReturn() {
+  try {
+    return safeReturnPath(sessionStorage.getItem(loginReturnKey))
+  } catch {
+    return '/library'
+  }
+}
+
+export function clearLoginReturn() {
+  try {
+    sessionStorage.removeItem(loginReturnKey)
+  } catch {
+    /* Login remains available when browser storage is blocked. */
+  }
+}
+
+// Call only when navigation is actually requested, never while rendering a link.
+export function beginLogin(returnTo: string) {
+  rememberLoginReturn(returnTo)
+  return '/login'
 }
 
 function hasControlCharacter(value: string) {

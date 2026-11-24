@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { preparePendingAction } from '@/features/auth/pending-action'
 import { LoginSkeleton } from './login-card'
+import { clearLoginReturn, safeReturnPath } from '@/features/auth/return-path'
 
 export function LoginReturn({
   userId,
@@ -12,8 +13,10 @@ export function LoginReturn({
 }) {
   const navigate = useNavigate()
   useEffect(() => {
-    preparePendingAction(userId, returnTo)
-    void navigate(returnTo, { replace: true })
+    const target = safeReturnPath(returnTo)
+    preparePendingAction(userId, target)
+    clearLoginReturn()
+    void navigate(target, { replace: true })
   }, [navigate, userId, returnTo])
   return <LoginSkeleton />
 }

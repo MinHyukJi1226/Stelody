@@ -32,73 +32,62 @@ test('공통 메뉴와 브랜드 링크가 이동하고 화면이 넘치지 않�
 }) => {
   await page.goto('/login')
   await page.evaluate(() => document.fonts.ready)
-  const mobile = (page.viewportSize()?.width ?? 0) < 768
   const menu = page.getByRole('button', { name: '메뉴 열기' })
-  if (mobile) {
-    const themeButton = page.getByRole('button', { name: /모드로 변경$/ })
-    const themeBounds = await themeButton.boundingBox()
-    const menuBounds = await menu.boundingBox()
-    expect(menuBounds?.width).toBe(44)
-    expect(menuBounds?.height).toBe(44)
-    expect(themeBounds?.x).toBeLessThan(menuBounds!.x)
-    expect((await page.getByRole('banner').boundingBox())?.height).toBe(93)
-    await expect(menu).toHaveCSS('border-top-width', '0px')
-    await expect(menu).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-    await expect(menu).toHaveText('')
-    await expect(menu.locator('.menu-icon')).not.toHaveCSS('mask-image', 'none')
-    await menu.focus()
-    await page.keyboard.press('Enter')
-    await expect(
-      page.getByRole('dialog', { name: '사이트 메뉴' }),
-    ).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(menu).toBeFocused()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-  }
-  const navigation = page.getByRole('navigation', {
-    name: mobile ? '모바일 주 메뉴' : '주 메뉴',
-    exact: true,
-  })
-  for (const label of ['내 보관함', '로그인']) {
-    if (mobile) await menu.click()
-    const link = navigation.getByRole('link', { name: label, exact: true })
-    await link.click()
-    await expect(
-      page.getByRole('heading', {
-        name:
-          label === '검색'
-            ? '노래 검색'
-            : label === '멤버'
-              ? '전체 멤버'
-              : label === '내 보관함' || label === '로그인'
-                ? '나만의 노래를 모아보세요'
-                : label,
-        exact: true,
-      }),
-    ).toBeVisible()
-    if (mobile) await expect(page.getByRole('dialog')).toHaveCount(0)
-    else if (label === '검색' || label === '멤버')
-      await expect(link).toHaveAttribute('aria-current', 'page')
-    if (label === '내 보관함' || label === '로그인') {
-      await expect(
-        page.getByRole('link', { name: 'Google로 로그인' }),
-      ).toBeVisible()
-    }
-  }
-  if (mobile) {
-    const originalViewport = page.viewportSize()!
+  const menuBounds = await menu.boundingBox()
+  expect(menuBounds?.width).toBe(44)
+  expect(menuBounds?.height).toBe(44)
+  await expect(menu).toHaveCSS('border-top-width', '0px')
+  await expect(menu).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(page.getByRole('search', { name: '노래 검색' })).toBeVisible()
+  await menu.focus()
+  await page.keyboard.press('Enter')
+  await expect(
+    page.getByRole('dialog', { name: '메뉴', exact: true }),
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeFocused()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  for (const [label, heading] of [
+    ['전체곡', '전체곡'],
+    ['멤버', '전체 멤버'],
+  ]) {
     await menu.click()
+    await page
+      .getByRole('navigation', { name: '주 메뉴', exact: true })
+      .getByRole('link', { name: label, exact: true })
+      .click()
     await expect(
-      page.getByRole('dialog', { name: '사이트 메뉴' }),
+      page.getByRole('heading', { name: heading, exact: true }),
     ).toBeVisible()
-    await page.setViewportSize({ width: 1024, height: 768 })
-    // CSS hides the menu before the media-query subscription unmounts it.
-    await expect(menu).not.toBeAttached()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-    await page.setViewportSize(originalViewport)
-    await expect(menu).toBeEnabled()
     await expect(page.getByRole('dialog')).toHaveCount(0)
   }
+  await page.goto('/library')
+  await expect(
+    page.getByRole('heading', { name: '로그인', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: 'Google로 로그인' }),
+  ).toBeVisible()
+  await page
+    .getByRole('banner')
+    .getByRole('link', { name: '로그인', exact: true })
+    .click()
+  await expect(
+    page.getByRole('heading', { name: '로그인', exact: true }),
+  ).toBeVisible()
+
+  const originalViewport = page.viewportSize()!
+  await menu.click()
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await expect(
+    page.getByRole('dialog', { name: '메뉴', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: /모드로 변경$/ }).click()
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeFocused()
+  await page.setViewportSize(originalViewport)
+  await expect(menu).toBeEnabled()
   await page.getByRole('link', { name: 'Stelody 홈' }).click()
   await expect(page).toHaveURL('/')
   await expect(page.getByRole('main')).toHaveCount(1)

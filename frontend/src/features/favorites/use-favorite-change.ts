@@ -7,7 +7,7 @@ import {
 import { useLocation, useNavigate } from 'react-router'
 import { sessionOptions, endLocalSession } from '@/features/auth/session'
 import { storePendingAction } from '@/features/auth/pending-action'
-import { loginPath, safeReturnPath } from '@/features/auth/return-path'
+import { beginLogin, safeReturnPath } from '@/features/auth/return-path'
 import { ApiError } from '@/shared/api/errors'
 import { useToast } from '@/shared/ui/toast-context'
 import {
@@ -47,7 +47,7 @@ export function useFavoriteChange(songId: string) {
           : '로그인 후 즐겨찾기를 해제합니다.'
         : '로그인 후 즐겨찾기를 다시 눌러주세요.',
     )
-    navigate(loginPath(returnTo))
+    navigate(beginLogin(returnTo))
   }
 
   const mutation = useMutation({

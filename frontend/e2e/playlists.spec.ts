@@ -363,7 +363,7 @@ test('비로그인 추가는 Google 복귀 후 선택창만 열고 자동으로 
   await page
     .getByRole('button', { name: '＋ 플레이리스트', exact: true })
     .click()
-  await expect(page).toHaveURL(`/login?returnTo=%2Fsongs%2F${song.id}`)
+  await expect(page).toHaveURL('/login')
   await page.getByRole('link', { name: 'Google로 로그인', exact: true }).click()
   await expect(picker(page)).toBeVisible()
   expect(state.creates).toBe(0)
@@ -445,7 +445,7 @@ test('목록 로딩·오류·재시도와 세션 만료를 구분한다', async 
   await page.evaluate(() =>
     document.dispatchEvent(new Event('visibilitychange', { bubbles: true })),
   )
-  await expect(page).toHaveURL('/login?returnTo=%2Flibrary%2Fplaylists')
+  await expect(page).toHaveURL('/login')
   await expect(
     page.getByRole('heading', { name: '밤에 듣는 목소리' }),
   ).toHaveCount(0)

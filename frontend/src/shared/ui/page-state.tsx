@@ -15,7 +15,7 @@ export function PageState({
   kind: 'empty' | 'error' | 'unavailable'
   detail?: string
   onRetry?: () => void
-  action: { to: string; label: string }
+  action: { to: string; label: string; onClick?: () => void }
 }) {
   return (
     <section
@@ -49,7 +49,9 @@ export function PageState({
           </Button>
         ) : (
           <Button asChild variant="primary">
-            <Link to={action.to}>{action.label}</Link>
+            <Link to={action.to} onClick={action.onClick}>
+              {action.label}
+            </Link>
           </Button>
         )}
         <Button asChild>

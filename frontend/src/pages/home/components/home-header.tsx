@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Form, Link, useLocation } from 'react-router'
 import { MenuIcon } from '@/app/layout/menu-icon'
-import { accountPath } from '@/features/account/api'
+import { accountPath, withdrawalPath } from '@/features/account/api'
 import { AdminLink } from '@/features/admin/admin-link'
 import { AccountControl } from '@/features/auth/account-control'
-import { loginPath } from '@/features/auth/return-path'
+import { rememberLoginReturn } from '@/features/auth/return-path'
 import { sessionOptions } from '@/features/auth/session'
 import logo from '@/shared/assets/logo.svg'
 import type { Theme } from '@/shared/lib/theme'
@@ -23,6 +23,9 @@ export function HomeHeader({
   const location = useLocation()
   const search = location.pathname === '/search'
   const catalog = location.pathname === '/songs'
+  const login = location.pathname === '/login'
+  const account =
+    location.pathname === accountPath || location.pathname === withdrawalPath
   const members =
     location.pathname === '/members' ||
     location.pathname.startsWith('/members/')
@@ -40,7 +43,7 @@ export function HomeHeader({
 
   return (
     <header
-      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search || catalog || members || library ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
+      className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 ${search || catalog || members || library || login || account ? 'md:px-8 md:py-[28.5px]' : 'md:px-10'}`}
     >
       <Link
         to="/"
@@ -92,11 +95,13 @@ export function HomeHeader({
       ) : (
         <Button asChild className="h-11 min-h-11 px-3 py-0">
           <Link
-            to={
-              session.data
-                ? accountPath
-                : loginPath(location.pathname + location.search + location.hash)
-            }
+            to={session.data ? accountPath : '/login'}
+            onClick={() => {
+              if (!session.data)
+                rememberLoginReturn(
+                  location.pathname + location.search + location.hash,
+                )
+            }}
           >
             {session.data ? '내 계정' : '로그인'}
           </Link>

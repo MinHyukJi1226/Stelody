@@ -124,7 +124,7 @@ test('검색 오류 재시도와 메뉴의 테마·로그인 복귀 경로를 �
   await expect(page.getByRole('article')).toHaveCount(1)
   await expect(
     page.getByRole('banner').getByRole('link', { name: '로그인', exact: true }),
-  ).toHaveAttribute('href', /returnTo=/)
+  ).toHaveAttribute('href', '/login')
   await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page.getByRole('button', { name: '다크 모드로 변경' }).click()
   await page.keyboard.press('Escape')

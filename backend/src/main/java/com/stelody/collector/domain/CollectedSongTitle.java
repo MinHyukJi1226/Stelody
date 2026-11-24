@@ -25,7 +25,7 @@ public final class CollectedSongTitle {
       String withoutMember = withoutCoverCredit(title, member.names());
       return originalCredit(withoutMember).map(Credit::title).orElse(withoutMember);
     }
-    String credit = memberCredit(member.names());
+    String credit = MemberCredit.pattern(member.names());
     return title
         .replaceFirst("(?iu)^" + credit + "\\s+[-–—]\\s+", "")
         .replaceFirst("(?iu)\\s*/\\s*" + credit + "(?:\\s+(?:original|오리지널))?$", "")
@@ -35,7 +35,7 @@ public final class CollectedSongTitle {
 
   public static String withoutCoverCredit(String title, List<String> names) {
     if (names.isEmpty()) return title;
-    String credit = memberCredit(names);
+    String credit = MemberCredit.pattern(names);
     return title
         .replaceFirst(
             "(?iu)\\s*(?:/\\s*"
@@ -45,17 +45,6 @@ public final class CollectedSongTitle {
                 + ")\\s*$",
             "")
         .strip();
-  }
-
-  private static String memberCredit(List<String> memberNames) {
-    String names =
-        memberNames.stream()
-            .map(OriginalCredits::text)
-            .filter(name -> !name.isEmpty())
-            .map(Pattern::quote)
-            .reduce((a, b) -> a + "|" + b)
-            .orElseThrow();
-    return "(?:" + names + ")(?:\\s*\\((?:" + names + ")\\))?";
   }
 
   public static Optional<Credit> originalCredit(String title) {

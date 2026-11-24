@@ -8,7 +8,7 @@ export function MemberChip({ member }: { member: MemberCard }) {
   const graduated = member.activityStatus === 'GRADUATED'
   return (
     <Link
-      to={`/members/${member.id}`}
+      to={`/members/${member.slug ?? member.id}`}
       className="flex min-h-14 min-w-0 items-center gap-2.5 rounded-xl border bg-surface p-3 text-sm font-medium"
       style={{ borderColor: memberAccent(member.name) }}
     >

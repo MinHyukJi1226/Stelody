@@ -1,3 +1,4 @@
+import { songPath } from '@/features/songs/song-path'
 import { Link } from 'react-router'
 import { useMemberDirectory } from '@/features/members/use-member-directory'
 import type { Song } from '@/features/songs/api'
@@ -17,7 +18,7 @@ export function HomeSongGrid({ songs }: { songs: readonly Song[] }) {
       {songs.map((song) => (
         <article key={song.id} className="min-w-0">
           <Link
-            to={`/songs/${song.id}`}
+            to={songPath(song)}
             aria-label={`${song.title} 상세 보기`}
             className="grid gap-2 rounded-lg"
           >

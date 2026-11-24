@@ -1,3 +1,4 @@
+import { playlistPath } from '@/features/playlists/playlist-path'
 import { Link } from 'react-router'
 import {
   useInfiniteQuery,
@@ -123,7 +124,7 @@ export function PlaylistsPage() {
                 className="flex min-w-0 items-center justify-between gap-3 md:gap-4"
               >
                 <Link
-                  to={`/library/playlists/${playlist.id}`}
+                  to={playlistPath(playlist)}
                   aria-label={`${playlist.name} 목록 열기`}
                   className="flex min-w-0 flex-1 items-center gap-3 rounded-xl md:gap-5"
                 >
@@ -148,7 +149,7 @@ export function PlaylistsPage() {
                     className="size-9 rounded-xl border-0 bg-[#00e600] text-white"
                   >
                     <Link
-                      to={`/library/playlists/${playlist.id}/edit?from=library`}
+                      to={`${playlistPath(playlist)}/edit?from=library`}
                       aria-label={`${playlist.name} 이름 수정`}
                     >
                       <svg
