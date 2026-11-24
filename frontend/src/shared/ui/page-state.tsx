@@ -9,18 +9,23 @@ export function PageState({
   detail,
   onRetry,
   action,
+  heading = 'h2',
+  showHome = true,
 }: {
   title: string
-  description: string
+  description?: string
   kind: 'empty' | 'error' | 'unavailable'
   detail?: string
   onRetry?: () => void
   action: { to: string; label: string; onClick?: () => void }
+  heading?: 'h1' | 'h2'
+  showHome?: boolean
 }) {
+  const Heading = heading
   return (
     <section
       role="status"
-      className="mx-auto flex w-full max-w-[640px] flex-col items-start gap-5 rounded-2xl bg-surface p-6 md:p-10"
+      className="mx-auto flex w-full min-w-0 max-w-[640px] flex-col items-start gap-5 rounded-2xl bg-surface p-6 md:p-10"
     >
       <span
         aria-hidden="true"
@@ -35,14 +40,20 @@ export function PageState({
       >
         {kind === 'empty' ? '✦' : kind === 'error' ? '!' : '—'}
       </span>
-      <h2 className="break-words text-2xl font-bold leading-[1.5]">{title}</h2>
-      <p className="text-base leading-[1.5] text-muted">{description}</p>
+      <Heading className="w-full break-keep text-2xl font-bold leading-[1.5] [overflow-wrap:anywhere]">
+        {title}
+      </Heading>
+      {description && (
+        <p className="w-full break-keep text-base leading-[1.5] text-muted [overflow-wrap:anywhere]">
+          {description}
+        </p>
+      )}
       {detail && (
-        <p className="w-full break-words rounded-lg bg-bg p-4 text-sm text-muted">
+        <p className="w-full break-keep rounded-lg bg-bg p-4 text-sm leading-[1.5] text-muted [overflow-wrap:anywhere]">
           {detail}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex w-full min-w-0 flex-wrap gap-2 [&>*]:max-w-full [&>*]:whitespace-normal">
         {onRetry ? (
           <Button variant="primary" onClick={onRetry}>
             다시 시도
@@ -54,9 +65,11 @@ export function PageState({
             </Link>
           </Button>
         )}
-        <Button asChild>
-          <Link to="/">홈으로</Link>
-        </Button>
+        {showHome && (!!onRetry || action.to !== '/') && (
+          <Button asChild>
+            <Link to="/">홈으로</Link>
+          </Button>
+        )}
       </div>
     </section>
   )

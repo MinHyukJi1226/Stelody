@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, Navigate, useLocation, useParams } from 'react-router'
+import { Navigate, useLocation, useParams } from 'react-router'
 import { z } from 'zod'
 import {
   songDetailOptions,
@@ -8,8 +8,8 @@ import {
 import { useMemberDirectory } from '@/features/members/use-member-directory'
 import { CompactSongGrid } from '@/features/songs/compact-song-grid'
 import { ApiError } from '@/shared/api/errors'
-import { Button } from '@/shared/ui/button'
 import { StatePanel } from '@/shared/ui/state-panel'
+import { PageState } from '@/shared/ui/page-state'
 import { SongHeading } from './components/song-heading'
 import { SongParticipants } from './components/song-participants'
 import { formatDate } from './format'
@@ -45,15 +45,22 @@ export function SongDetailPage() {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       {unavailable || !query.data ? (
-        <div className="flex flex-col gap-6 px-5 py-8 md:px-8">
+        <div
+          className={
+            query.isPending && !unavailable
+              ? 'flex flex-col gap-6 px-5 py-8 md:px-8'
+              : 'flex min-w-0 flex-1 items-center px-5 py-8 md:px-8'
+          }
+        >
           {unavailable ? (
-            <>
-              <h1 className="text-2xl font-bold">노래를 찾을 수 없습니다</h1>
-              <StatePanel title="존재하지 않거나 공개되지 않은 노래입니다" />
-              <Button asChild>
-                <Link to="/songs">전체곡 보기</Link>
-              </Button>
-            </>
+            <PageState
+              heading="h1"
+              kind="unavailable"
+              title="노래를 찾을 수 없습니다"
+              description="존재하지 않거나 공개되지 않은 노래입니다"
+              action={{ to: '/songs', label: '전체곡 보기' }}
+              showHome={false}
+            />
           ) : query.isPending ? (
             <div
               role="status"
@@ -67,10 +74,14 @@ export function SongDetailPage() {
               <div className="aspect-video rounded-2xl bg-line" />
             </div>
           ) : (
-            <StatePanel
+            <PageState
+              heading="h1"
+              kind="error"
               title="노래 정보를 불러오지 못했습니다"
               description="잠시 후 다시 시도해 주세요."
               onRetry={() => void query.refetch()}
+              action={{ to: '/songs', label: '전체곡 보기' }}
+              showHome={false}
             />
           )}
         </div>

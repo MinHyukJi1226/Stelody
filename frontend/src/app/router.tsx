@@ -1,16 +1,21 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, type RouteObject } from 'react-router'
 import { HomePage } from '@/pages/home/home-page'
 import { NotFoundPage } from '@/pages/not-found/not-found-page'
 import { SongCatalogPage } from '@/pages/song-catalog/song-catalog-page'
 import { StatePanel } from '@/shared/ui/state-panel'
 import { SiteLayout } from './layout/site-layout'
 import { AuthGate } from '@/features/auth/auth-gate'
+import { RouteErrorPage } from '@/pages/error/route-error-page'
+
+function withErrorScreens(routes: RouteObject[]): RouteObject[] {
+  return routes.map((route) => ({ ...route, errorElement: <RouteErrorPage /> }))
+}
 
 export const router = createBrowserRouter([
   {
     element: <SiteLayout />,
     HydrateFallback: () => <StatePanel title="화면 불러오는 중…" />,
-    children: [
+    children: withErrorScreens([
       { path: '/', element: <HomePage /> },
       {
         path: '/admin',
@@ -310,7 +315,7 @@ export const router = createBrowserRouter([
           return { Component: LoginPage }
         },
       },
-      { path: '*', element: <NotFoundPage /> },
-    ],
+      { id: 'not-found', path: '*', element: <NotFoundPage /> },
+    ]),
   },
 ])

@@ -1,5 +1,11 @@
 import { PageActionProvider } from '@/shared/ui/page-action-provider'
-import { matchPath, Outlet, ScrollRestoration, useLocation } from 'react-router'
+import {
+  matchPath,
+  Outlet,
+  ScrollRestoration,
+  useLocation,
+  useMatches,
+} from 'react-router'
 import { HomeHeader } from '@/pages/home/components/home-header'
 import { SiteHeader } from './site-header'
 import { useTheme } from '../use-theme'
@@ -8,6 +14,7 @@ import { FavoriteResume } from '@/features/favorites/favorite-resume'
 export function SiteLayout() {
   const { theme, toggleTheme } = useTheme()
   const pathname = useLocation().pathname
+  const notFound = useMatches().some((match) => match.id === 'not-found')
   const home = pathname === '/'
   const search = pathname === '/search'
   const login = pathname === '/login'
@@ -29,7 +36,8 @@ export function SiteLayout() {
     songDetail ||
     members ||
     library ||
-    playlistPage
+    playlistPage ||
+    notFound
   return (
     <PageActionProvider>
       <div
@@ -46,7 +54,11 @@ export function SiteLayout() {
           본문으로 건너뛰기
         </a>
         {compact ? (
-          <HomeHeader theme={theme} toggleTheme={toggleTheme} />
+          <HomeHeader
+            theme={theme}
+            toggleTheme={toggleTheme}
+            pageLayout={notFound}
+          />
         ) : (
           <SiteHeader theme={theme} toggleTheme={toggleTheme} />
         )}
@@ -63,7 +75,8 @@ export function SiteLayout() {
                   songDetail ||
                   members ||
                   library ||
-                  playlistPage
+                  playlistPage ||
+                  notFound
                 ? 'flex w-full flex-1 flex-col'
                 : 'page-content'
           }

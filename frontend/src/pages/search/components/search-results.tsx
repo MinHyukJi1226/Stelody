@@ -91,6 +91,7 @@ export function SearchResults({ criteria }: { criteria: SearchCriteria }) {
       ) : !query.data && query.isError ? (
         <div className="flex min-h-[480px] items-center md:min-h-[600px]">
           <PageState
+            heading="h1"
             kind={denied ? 'unavailable' : 'error'}
             title={
               denied
