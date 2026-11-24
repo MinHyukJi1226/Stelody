@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Link,
   useNavigate,
   useNavigation,
   useParams,
@@ -14,7 +13,6 @@ import {
   PlaylistAddress,
   PlaylistCanonicalAddress,
 } from '@/features/playlists/playlist-address'
-import { playlistPath } from '@/features/playlists/playlist-path'
 import { youtubeConnectionOptions } from '@/features/youtube/queries'
 import {
   exportPath,
@@ -28,10 +26,9 @@ import {
   useExportActions,
 } from '@/features/youtube-export/queries'
 import { ApiError } from '@/shared/api/errors'
-import { Button } from '@/shared/ui/button'
 import { PageState } from '@/shared/ui/page-state'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { ExportPanel } from './components/export-panel'
+import { ExportSongs } from './components/export-songs'
 import { jobView, type ExportView } from './export-view'
 
 function readContext(params: URLSearchParams) {
@@ -410,10 +407,10 @@ function ExportScreen({
     )
   return (
     <PlaylistCanonicalAddress playlist={denied ? undefined : playlist}>
-      <div className="favorites-page flex min-w-0 flex-col gap-12">
-        <section className="flex min-w-0 flex-1 flex-col items-center gap-6">
-          <h1 className="w-full text-[32px] font-bold leading-[1.5]">
-            YouTube로 내보내기
+      <div className="flex min-w-0 flex-1 flex-col px-5 md:px-8">
+        <section className="flex min-w-0 flex-1 flex-col items-start gap-6 py-8 md:gap-8 md:py-10">
+          <h1 className="w-full break-words text-2xl font-bold leading-[1.5] md:text-[32px]">
+            YouTube 내보내기
           </h1>
           {denied ? (
             <PageState
@@ -428,7 +425,16 @@ function ExportScreen({
                 view={view}
                 name={playlist?.name}
                 total={playlist?.totalCount}
-                available={playlist?.availableCount}
+                preview={
+                  playlist && (
+                    <ExportSongs
+                      user={user}
+                      playlist={playlist}
+                      busy={busy}
+                      onReload={() => void reload()}
+                    />
+                  )
+                }
                 job={job}
                 busy={busy}
                 connectionPath={`/library/youtube?${new URLSearchParams({
@@ -441,10 +447,7 @@ function ExportScreen({
                 needsConnection={needsConnection}
                 notice={
                   error ? (
-                    <p
-                      role="alert"
-                      className="rounded-lg bg-rose p-3 text-error"
-                    >
+                    <p role="alert" className="text-error">
                       {error}
                     </p>
                   ) : undefined
@@ -464,21 +467,13 @@ function ExportScreen({
                   }
                 }}
               />
-              <Button asChild>
-                <Link
-                  to={
-                    playlist
-                      ? playlistPath(playlist)
-                      : `/library/playlists/${playlistAddress}`
-                  }
-                >
-                  플레이리스트로 돌아가기
-                </Link>
-              </Button>
             </>
           )}
         </section>
-        <SiteFooter />
+        <footer className="grid gap-1 px-2 pt-5 pb-6 text-xs leading-[1.5] text-muted">
+          <p>Stelody · 팬이 만드는 노래 아카이브</p>
+          <p>화면 검수용 예시 데이터 · 공식 서비스가 아닙니다</p>
+        </footer>
       </div>
     </PlaylistCanonicalAddress>
   )

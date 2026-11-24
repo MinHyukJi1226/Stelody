@@ -51,6 +51,9 @@ async function setup(page: Page) {
     activeFailure: 0,
     activeGate: Promise.resolve(),
     sourceReads: [] as string[],
+    itemReads: [] as string[],
+    itemVersion: undefined as number | undefined,
+    itemFailure: 0,
     created: [] as ExportRequest[],
     changed: [] as string[],
     authorizations: [] as { returnTo: string }[],
@@ -132,23 +135,39 @@ async function setup(page: Page) {
         json: { code: 'UNAVAILABLE' },
       })
     state.sourceReads.push(url.pathname)
-    if (url.pathname.endsWith('/items'))
+    if (url.pathname.endsWith('/items')) {
+      state.itemReads.push(url.search)
+      if (state.itemFailure)
+        return r.fulfill({
+          status: state.itemFailure,
+          json: { code: 'UNAVAILABLE' },
+        })
       return r.fulfill({
         json: {
           ...state.source,
           ...emptyPage,
-          totalCount: 3,
-          items: [1, 2, 3].map((n, position) => ({
-            id: makeSong(950 + n).id,
-            songId: makeSong(n).id,
-            song: n === 3 ? null : makeSong(n),
-            available: n !== 3,
-            unavailableMessage: n === 3 ? '이용 불가' : null,
-            position,
-            addedAt: initial.createdAt,
-          })),
+          totalCount: state.source.totalCount,
+          version: state.itemVersion ?? state.source.version,
+          hasNext: state.source.totalCount > 20,
+          nextCursor: state.source.totalCount > 20 ? 'next-items' : null,
+          items: Array.from(
+            { length: Math.min(state.source.totalCount, 20) },
+            (_, position) => {
+              const n = position + 1
+              return {
+                id: makeSong(950 + n).id,
+                songId: makeSong(n).id,
+                song: n === 3 ? null : makeSong(n),
+                available: n !== 3,
+                unavailableMessage: n === 3 ? '이용 불가' : null,
+                position,
+                addedAt: initial.createdAt,
+              }
+            },
+          ),
         },
       })
+    }
     const requestedId = url.pathname.split('/')[5]
     return r.fulfill({
       json:
@@ -207,7 +226,7 @@ async function setup(page: Page) {
 const panel = (page: Page) =>
   page.getByRole('region', { name: 'YouTube 내보내기 상태', exact: true })
 const start = (page: Page) =>
-  page.getByRole('button', { name: '내보내기 시작', exact: true })
+  page.getByRole('button', { name: '내보내기', exact: true })
 const retry = (page: Page) =>
   page.getByRole('button', { name: '같은 작업 재시도', exact: true })
 async function open(page: Page, url = path) {
@@ -270,7 +289,7 @@ for (const status of ['QUEUED', 'RUNNING', 'FAILED', 'UNCERTAIN'] as const)
     s.source.version = 9
     await open(page)
     await expect(page).toHaveURL(new RegExp(`jobId=${jobId}$`))
-    await expect(panel(page).locator('dd').first()).toHaveText('3곡')
+    await expect(panel(page)).toContainText('총 3곡')
     expect(s.activeReads).toBeGreaterThan(0)
     expect(s.created).toHaveLength(0)
     expect(s.changed).toHaveLength(0)
@@ -316,7 +335,9 @@ test('명시적으로 연 완료 작업을 다른 활성 작업으로 바꾸지 
   s.active = { ...s.job, id: makeSong(911).id, playlistId: makeSong(910).id }
   s.job = { ...s.job, status: 'SUCCEEDED', copiedCount: 3, remainingCount: 0 }
   await open(page, jobPath)
-  await expect(page.getByText('완료', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('YouTube 내보내기가 완료됐어요', { exact: true }),
+  ).toBeVisible()
   await expect(page).toHaveURL(new RegExp(`jobId=${jobId}$`))
   expect(s.activeReads).toBe(0)
   expect(s.created).toHaveLength(0)
@@ -328,7 +349,9 @@ test('활성 작업 조회 오류는 작업 없음으로 취급하지 않고 읽
   const s = await setup(page)
   s.activeFailure = 503
   await open(page)
-  await expect(page.getByText('상태 조회 오류', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('최신 작업 상태를 불러오지 못했어요', { exact: true }),
+  ).toBeVisible()
   await expect(start(page)).toHaveCount(0)
   await expect(panel(page).getByText('0곡', { exact: true })).toHaveCount(0)
   expect(s.created).toHaveLength(0)
@@ -366,7 +389,9 @@ test('409 후 기존 작업 조회에 실패하면 새 요청을 보내지 않�
   s.createFailure = { status: 409, code: 'EXPORT_ALREADY_ACTIVE' }
   s.activeFailure = 503
   await start(page).click()
-  await expect(page.getByText('상태 조회 오류', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('최신 작업 상태를 불러오지 못했어요', { exact: true }),
+  ).toBeVisible()
   await expect(page).toHaveURL(/requestId=/)
   expect(s.created).toHaveLength(1)
   s.activeFailure = 0
@@ -408,7 +433,6 @@ test('접수 응답 유실은 활성 작업 조회로 복구하며 POST를 반�
 
 test('활성 작업 조회가 늦게 도착해도 떠나는 화면을 되돌리지 않는다', async ({
   page,
-  isMobile,
 }) => {
   const s = await setup(page)
   let release!: () => void
@@ -416,12 +440,12 @@ test('활성 작업 조회가 늦게 도착해도 떠나는 화면을 되돌리�
   s.active = structuredClone(s.job)
   await open(page)
   await expect.poll(() => s.activeReads).toBe(1)
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
-  await page.getByRole('link', { name: '검색', exact: true }).first().click()
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page.getByRole('link', { name: '전체곡', exact: true }).click()
   release()
-  await expect(page).toHaveURL(/\/search$/)
+  await expect(page).toHaveURL(/\/songs$/)
   await expect(
-    page.getByRole('heading', { name: '검색어를 입력해 주세요' }),
+    page.getByRole('heading', { name: '전체곡', exact: true }),
   ).toBeVisible()
   expect(s.created).toHaveLength(0)
 })
@@ -455,18 +479,89 @@ test('상세의 내보내기 진입과 순서 편집 잠금을 유지한다', as
   await expect(page).toHaveURL(new RegExp(`${path}$`))
   await expect(start(page)).toBeEnabled()
 })
-test('접수 전 실제 대상 수를 표시하고 명시적 시작 전에는 접수하지 않는다', async ({
+test('접수 전 이름·전체 곡 수와 포함된 곡을 확인하고 명시적 시작 전에는 접수하지 않는다', async ({
   page,
 }) => {
   const s = await setup(page)
   await open(page)
-  await expect(page.getByText('복사 대상 2곡', { exact: true })).toBeVisible()
-  await expect(page.getByText('건너뛸 예정 1곡', { exact: true })).toBeVisible()
+  await expect(panel(page)).toContainText('총 3곡')
+  await expect(
+    page.getByText('비공개 YouTube 플레이리스트로 내보냅니다'),
+  ).toBeVisible()
+  const toggle = page.getByRole('button', { name: '포함된 곡 보기' })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(s.itemReads).toHaveLength(0)
+  await toggle.click()
+  const songs = page.getByRole('list', { name: '포함된 곡', exact: true })
+  await expect(songs.getByRole('listitem')).toHaveCount(3)
+  await expect(songs).toContainText('테스트 노래 1 · 테스트 멤버')
+  await expect(songs).toContainText('이용 불가')
+  await expect(page.getByText('최상위 20곡만 표기했어요')).toHaveCount(0)
+  await toggle.click()
+  await expect(songs).toBeHidden()
   await expect(
     page.getByRole('link', { name: 'YouTube 목록 열기' }),
   ).toHaveCount(0)
   expect(s.created).toHaveLength(0)
 })
+for (const count of [19, 20, 25])
+  test(`${count}곡의 미리보기는 앞의 20곡까지만 표시하고 내보내기 대상은 제한하지 않는다`, async ({
+    page,
+  }) => {
+    const s = await setup(page)
+    s.source.totalCount = count
+    s.source.availableCount = count - 1
+    s.source.version = 7
+    s.job.totalCount = count
+    s.job.remainingCount = count
+    await open(page)
+    await expect(start(page)).toBeEnabled()
+    await page.getByRole('button', { name: '포함된 곡 보기' }).click()
+    const songs = page.getByRole('list', { name: '포함된 곡', exact: true })
+    await expect(songs.getByRole('listitem')).toHaveCount(Math.min(count, 20))
+    await expect(songs.getByRole('listitem').first()).toContainText(
+      '테스트 노래 1',
+    )
+    await expect(songs.getByRole('listitem').last()).toContainText(
+      `테스트 노래 ${Math.min(count, 20)}`,
+    )
+    await expect(page.getByText('최상위 20곡만 표기했어요')).toHaveCount(
+      count >= 20 ? 1 : 0,
+    )
+    expect(s.itemReads).toEqual(['?size=20'])
+    await start(page).click()
+    await expect(page).toHaveURL(jobPath)
+    expect(s.created).toEqual([{ requestId: expect.any(String), version: 7 }])
+    await expect(panel(page)).toContainText(`총 ${count}곡`)
+  })
+
+test('곡 미리보기 조회 실패는 재시도하고 버전이 바뀌면 최신 목록을 다시 확인한다', async ({
+  page,
+}) => {
+  const s = await setup(page)
+  s.itemVersion = 1
+  await open(page)
+  await page.getByRole('button', { name: '포함된 곡 보기' }).click()
+  await expect(
+    page.getByText('목록이 변경됐어요. 최신 목록을 다시 확인해 주세요.'),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('list', { name: '포함된 곡', exact: true }),
+  ).toHaveCount(0)
+  s.source.version = 1
+  s.itemFailure = 503
+  await page.getByRole('button', { name: '최신 목록 확인' }).click()
+  await expect(page.getByText('포함된 곡을 불러오지 못했어요.')).toBeVisible()
+  s.itemFailure = 0
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(
+    page
+      .getByRole('list', { name: '포함된 곡', exact: true })
+      .getByRole('listitem'),
+  ).toHaveCount(3)
+  expect(s.created).toHaveLength(0)
+})
+
 for (const [status, title, link] of [
   ['DISCONNECTED', 'YouTube 계정 연결이 필요해요', true],
   ['RECONNECT_REQUIRED', 'YouTube에 다시 연결해 주세요', true],
@@ -477,7 +572,9 @@ for (const [status, title, link] of [
     const s = await setup(page)
     s.connection = status
     await open(page)
-    await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    await expect(
+      panel(page).getByRole('status').filter({ hasText: title }),
+    ).toBeVisible()
     if (link)
       await expect(
         page.getByRole('link', { name: 'YouTube 연결 관리' }),
@@ -491,7 +588,9 @@ test('이용 가능한 곡이 없으면 시작하지 않는다', async ({ page }
   await open(page)
   await expect(start(page)).toBeDisabled()
   await expect(
-    page.getByRole('heading', { name: '내보낼 수 있는 곡이 없어요' }),
+    panel(page)
+      .getByRole('status')
+      .filter({ hasText: '내보낼 수 있는 곡이 없어요' }),
   ).toBeVisible()
   expect(s.created).toHaveLength(0)
 })
@@ -512,7 +611,9 @@ test('접수 중 중복을 막고 202 이후에도 완료로 표시하지 않는
   })
   release()
   await expect(page).toHaveURL(new RegExp(`jobId=${jobId}$`))
-  await expect(page.getByText('대기 중', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('내보내기 차례를 기다리고 있어요', { exact: true }),
+  ).toBeVisible()
   await expect(page.getByText('YouTube 내보내기가 완료됐어요')).toHaveCount(0)
   await expect(
     page.getByRole('button', { name: '취소', exact: true }),
@@ -533,7 +634,9 @@ test('조회만으로 진행과 실제 부분 완료를 갱신하며 새로고�
     youtubeUrl: 'https://www.youtube.com/playlist?list=PL-test',
   }
   await expect(
-    page.getByRole('heading', { name: 'YouTube에 곡을 복사하고 있어요' }),
+    panel(page)
+      .getByRole('status')
+      .filter({ hasText: 'YouTube에 곡을 복사하고 있어요' }),
   ).toBeVisible({ timeout: 8000 })
   s.job = {
     ...s.job,
@@ -543,43 +646,48 @@ test('조회만으로 진행과 실제 부분 완료를 갱신하며 새로고�
     remainingCount: 0,
   }
   await expect(
-    page.getByRole('heading', { name: '이용 불가 곡을 건너뛰고 완료했어요' }),
+    panel(page)
+      .getByRole('status')
+      .filter({ hasText: '이용 불가 곡을 건너뛰고 완료했어요' }),
   ).toBeVisible({ timeout: 8000 })
-  await expect(
-    page.getByText(
-      '복사 완료 2곡 · 건너뜀 1곡. 건너뛴 곡은 YouTube 목록에 포함되지 않습니다.',
-    ),
-  ).toBeVisible()
+  await expect(panel(page).getByRole('status')).toHaveCount(1)
+  await expect(panel(page).locator('dl')).toHaveCount(0)
   await expect(
     page.getByRole('link', { name: 'YouTube 목록 열기' }),
   ).toHaveAttribute('href', s.job.youtubeUrl!)
   await page.reload()
   await expect(
-    page.getByRole('heading', { name: '이용 불가 곡을 건너뛰고 완료했어요' }),
+    panel(page)
+      .getByRole('status')
+      .filter({ hasText: '이용 불가 곡을 건너뛰고 완료했어요' }),
   ).toBeVisible()
   expect(s.created).toHaveLength(0)
   expect(s.changed).toHaveLength(0)
 })
-test('조회 실패는 작업 실패와 구분하고 마지막 수치로 다시 조회한다', async ({
+test('조회 실패는 작업 실패와 구분해 한 문장으로 안내하고 다시 조회한다', async ({
   page,
 }) => {
   const s = await setup(page)
   s.job = { ...s.job, status: 'RUNNING', copiedCount: 1, remainingCount: 2 }
   await open(page, jobPath)
-  await expect(page.getByText('진행 중', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('YouTube에 곡을 복사하고 있어요', { exact: true }),
+  ).toBeVisible()
   s.readFailure = 503
-  await expect(page.getByText('상태 조회 오류', { exact: true })).toBeVisible({
+  await expect(
+    page.getByText('최신 작업 상태를 불러오지 못했어요', { exact: true }),
+  ).toBeVisible({
     timeout: 10000,
   })
-  await expect(
-    page.getByText(/아래 수치는 마지막으로 확인한 정보/),
-  ).toBeVisible()
-  await expect(panel(page).locator('dd').nth(1)).toHaveText('1곡')
+  await expect(panel(page).getByRole('status')).toHaveCount(1)
+  await expect(panel(page).locator('dl')).toHaveCount(0)
   await expect(retry(page)).toHaveCount(0)
   s.readFailure = 0
   s.job.status = 'CANCELLED'
   await page.getByRole('button', { name: '상태 다시 조회' }).click()
-  await expect(page.getByText('취소 완료', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('내보내기 작업을 취소했어요', { exact: true }),
+  ).toBeVisible()
   expect(s.created).toHaveLength(0)
   expect(s.changed).toHaveLength(0)
 })
@@ -589,7 +697,9 @@ for (const failure of [403, 404])
   }) => {
     const s = await setup(page)
     await open(page, jobPath)
-    await expect(page.getByText('대기 중', { exact: true })).toBeVisible()
+    await expect(
+      page.getByText('내보내기 차례를 기다리고 있어요', { exact: true }),
+    ).toBeVisible()
     s.readFailure = failure
     await expect(
       page.getByRole('heading', { name: '내보내기 정보를 확인할 수 없습니다' }),
@@ -605,11 +715,15 @@ test('접수 응답 유실과 새로고침 후에도 같은 요청 ID로만 확�
   s.loseResponse = true
   await open(page)
   await start(page).click()
-  await expect(page.getByText('상태 조회 오류', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('최신 작업 상태를 불러오지 못했어요', { exact: true }),
+  ).toBeVisible()
   expect(s.created).toHaveLength(1)
   const original = s.created[0]
   await page.reload()
-  await expect(page.getByText('상태 조회 오류', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('최신 작업 상태를 불러오지 못했어요', { exact: true }),
+  ).toBeVisible()
   expect(s.created).toHaveLength(1)
   s.loseResponse = false
   await page.getByRole('button', { name: '상태 다시 조회' }).click()
@@ -624,7 +738,9 @@ test('접수 전 원본 변경은 최신 목록 확인 뒤 새 버전으로 명�
   await open(page)
   await start(page).click()
   await expect(
-    page.getByRole('heading', { name: '원본 플레이리스트가 변경됐어요' }),
+    panel(page)
+      .getByRole('status')
+      .filter({ hasText: '원본 플레이리스트가 변경됐어요' }),
   ).toBeVisible()
   expect(s.created).toHaveLength(1)
   s.source.version = 7
@@ -645,11 +761,15 @@ for (const status of ['FAILED', 'UNCERTAIN'] as const)
     s.job = { ...s.job, status, copiedCount: 1, remainingCount: 2 }
     await open(page, jobPath)
     await retry(page).click()
-    await expect(page.getByText('대기 중', { exact: true })).toBeVisible()
+    await expect(
+      page.getByText('내보내기 차례를 기다리고 있어요', { exact: true }),
+    ).toBeVisible()
     expect(s.changed).toEqual(['retry'])
     expect(s.created).toHaveLength(0)
     await page.getByRole('button', { name: '취소', exact: true }).click()
-    await expect(page.getByText('취소 완료', { exact: true })).toBeVisible()
+    await expect(
+      page.getByText('내보내기 작업을 취소했어요', { exact: true }),
+    ).toBeVisible()
     expect(s.changed).toEqual(['retry', 'cancel'])
     await expect(retry(page)).toHaveCount(0)
   })
@@ -666,7 +786,9 @@ for (const [code, title] of [
     if (code === 'YOUTUBE_RECONNECT_REQUIRED')
       s.connection = 'RECONNECT_REQUIRED'
     await open(page, jobPath)
-    await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    await expect(
+      panel(page).getByRole('status').filter({ hasText: title }),
+    ).toBeVisible()
     if (s.connection === 'RECONNECT_REQUIRED')
       await expect(retry(page)).toBeDisabled()
     else await expect(retry(page)).toBeEnabled()
@@ -684,7 +806,9 @@ test('미확정은 미복사로 단정하지 않고 실제 결과 URL만 제공�
   }
   await open(page, jobPath)
   await expect(
-    page.getByText('결과 미확정', { exact: true }).first(),
+    page
+      .getByText('일부 곡의 반영 결과를 확인하지 못했어요', { exact: true })
+      .first(),
   ).toBeVisible()
   await expect(page.getByRole('link', { name: '결과 확인' })).toHaveCount(0)
   s.job.youtubeUrl = 'https://www.youtube.com/playlist?list=PL-test'
@@ -705,8 +829,12 @@ test('취소와 완료가 경합하면 실제 응답의 완료 상태를 표시�
   await expect(page.getByRole('button', { name: '취소 중…' })).toBeDisabled()
   s.job = { ...s.job, status: 'SUCCEEDED', copiedCount: 3, remainingCount: 0 }
   release()
-  await expect(page.getByText('완료', { exact: true })).toBeVisible()
-  await expect(page.getByText('취소 완료', { exact: true })).toHaveCount(0)
+  await expect(
+    page.getByText('YouTube 내보내기가 완료됐어요', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('내보내기 작업을 취소했어요', { exact: true }),
+  ).toHaveCount(0)
 })
 test('연결 후 원래 작업으로 복귀하며 자동 재시도하지 않는다', async ({
   page,
@@ -824,8 +952,8 @@ test('미확정 작업의 재연결 동선은 결과 미확정 안내와 실제 
     page.getByRole('link', { name: 'YouTube 연결 관리' }),
   ).toBeVisible()
   await expect(
-    page.getByRole('heading', {
-      name: '일부 곡의 반영 결과를 확인하지 못했어요',
+    panel(page).getByRole('status').filter({
+      hasText: '일부 곡의 반영 결과를 확인하지 못했어요',
     }),
   ).toBeVisible()
   await expect(page.getByRole('link', { name: '결과 확인' })).toHaveAttribute(
@@ -857,7 +985,6 @@ test('연결이 유효한 일시 오류에는 재연결을 요구하지 않는�
 })
 test('늦게 도착한 접수 응답이 떠난 화면을 다시 열지 않는다', async ({
   page,
-  isMobile,
 }) => {
   const s = await setup(page)
   let release!: () => void
@@ -865,19 +992,18 @@ test('늦게 도착한 접수 응답이 떠난 화면을 다시 열지 않는다
   await open(page)
   await start(page).click()
   await expect.poll(() => s.created.length).toBe(1)
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
-  await page.getByRole('link', { name: '검색', exact: true }).first().click()
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page.getByRole('link', { name: '전체곡', exact: true }).click()
   release()
-  await expect(page).toHaveURL(/\/search$/)
+  await expect(page).toHaveURL(/\/songs$/)
   await expect(
-    page.getByRole('heading', { name: '검색어를 입력해 주세요' }),
+    page.getByRole('heading', { name: '전체곡', exact: true }),
   ).toBeVisible()
   expect(s.created).toHaveLength(1)
 })
 for (const code of ['PLAYLIST_CHANGED', 'YOUTUBE_CONNECTION_REQUIRED'])
   test(`다른 화면으로 이동 중 도착한 ${code} 오류가 이동을 되돌리지 않는다`, async ({
     page,
-    isMobile,
   }) => {
     const s = await setup(page)
     let release!: () => void
@@ -886,12 +1012,12 @@ for (const code of ['PLAYLIST_CHANGED', 'YOUTUBE_CONNECTION_REQUIRED'])
     await open(page)
     await start(page).click()
     await expect.poll(() => s.created.length).toBe(1)
-    if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
-    await page.getByRole('link', { name: '검색', exact: true }).first().click()
+    await page.getByRole('button', { name: '메뉴 열기' }).click()
+    await page.getByRole('link', { name: '전체곡', exact: true }).click()
     release()
-    await expect(page).toHaveURL(/\/search$/)
+    await expect(page).toHaveURL(/\/songs$/)
     await expect(
-      page.getByRole('heading', { name: '검색어를 입력해 주세요' }),
+      page.getByRole('heading', { name: '전체곡', exact: true }),
     ).toBeVisible()
     expect(s.created).toHaveLength(1)
   })
@@ -937,25 +1063,49 @@ for (const theme of ['light', 'dark'] as const)
       theme,
     )
     const visualDir = process.env.EXPORT_VISUAL_DIR
-    for (const state of ['prepare', 'running', 'uncertain'] as const) {
-      s.job.status = state === 'uncertain' ? 'UNCERTAIN' : 'RUNNING'
+    for (const state of [
+      'prepare',
+      'running',
+      'uncertain',
+      'completed',
+    ] as const) {
+      s.job.status =
+        state === 'uncertain'
+          ? 'UNCERTAIN'
+          : state === 'completed'
+            ? 'SUCCEEDED'
+            : 'RUNNING'
       if (state !== 'prepare') {
-        s.job.copiedCount = 1
-        s.job.remainingCount = 2
+        s.job.copiedCount = state === 'completed' ? 3 : 1
+        s.job.remainingCount = state === 'completed' ? 0 : 2
         s.job.youtubePlaylistId = 'PL-test'
         s.job.youtubeUrl = 'https://www.youtube.com/playlist?list=PL-test'
       }
       await page.goto(state === 'prepare' ? path : jobPath)
-      await expect(panel(page).getByRole('heading', { level: 3 })).toHaveText(
-        state === 'prepare'
-          ? 'YouTube로 내보낼 준비가 되었어요'
-          : state === 'running'
+      if (state === 'prepare') {
+        await expect(start(page)).toBeEnabled()
+        await expect(
+          page.getByRole('button', { name: '포함된 곡 보기' }),
+        ).toBeVisible()
+      } else {
+        await expect(panel(page).getByRole('status')).toHaveText(
+          state === 'running'
             ? 'YouTube에 곡을 복사하고 있어요'
-            : '일부 곡의 반영 결과를 확인하지 못했어요',
-      )
+            : state === 'uncertain'
+              ? '일부 곡의 반영 결과를 확인하지 못했어요'
+              : 'YouTube 내보내기가 완료됐어요',
+        )
+        await expect(panel(page).getByRole('status')).toHaveCount(1)
+        await expect(panel(page).locator('dl')).toHaveCount(0)
+      }
       await page.evaluate(() => document.fonts.ready)
       const box = await panel(page).boundingBox()
-      expect(box?.width).toBe(isMobile ? 350 : 760)
+      expect(box?.width).toBe(isMobile ? 350 : 1376)
+      expect(box?.x).toBe(isMobile ? 20 : 32)
+      await expect(page.getByRole('search')).toBeVisible()
+      await expect(page.locator('footer')).toContainText(
+        '팬이 만드는 노래 아카이브',
+      )
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
       ).toBe(isMobile ? 390 : 1440)
@@ -964,5 +1114,18 @@ for (const theme of ['light', 'dark'] as const)
           path: `${visualDir}/export-${isMobile ? 'mobile' : 'desktop'}-${theme}-${state}.png`,
           fullPage: true,
         })
+      if (state === 'prepare') {
+        await page.getByRole('button', { name: '포함된 곡 보기' }).click()
+        await expect(
+          page
+            .getByRole('list', { name: '포함된 곡', exact: true })
+            .getByRole('listitem'),
+        ).toHaveCount(3)
+        if (visualDir)
+          await page.screenshot({
+            path: `${visualDir}/export-${isMobile ? 'mobile' : 'desktop'}-${theme}-expanded.png`,
+            fullPage: true,
+          })
+      }
     }
   })

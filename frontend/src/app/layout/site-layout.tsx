@@ -18,7 +18,8 @@ export function SiteLayout() {
   const library = pathname === '/library' || pathname === '/library/playlists'
   const playlistPage =
     !!matchPath('/library/playlists/:playlistId', pathname) ||
-    !!matchPath('/library/playlists/:playlistId/edit', pathname)
+    !!matchPath('/library/playlists/:playlistId/edit', pathname) ||
+    !!matchPath('/library/playlists/:playlistId/youtube-export', pathname)
   const compact =
     home ||
     login ||

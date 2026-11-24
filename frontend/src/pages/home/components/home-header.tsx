@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Form, Link, useLocation } from 'react-router'
+import { Form, Link, matchPath, useLocation } from 'react-router'
 import { MenuIcon } from '@/app/layout/menu-icon'
 import { accountPath, withdrawalPath } from '@/features/account/api'
 import { AdminLink } from '@/features/admin/admin-link'
@@ -31,7 +31,11 @@ export function HomeHeader({
     location.pathname.startsWith('/members/')
   const library =
     location.pathname === '/library' ||
-    location.pathname === '/library/playlists'
+    location.pathname === '/library/playlists' ||
+    !!matchPath(
+      '/library/playlists/:playlistId/youtube-export',
+      location.pathname,
+    )
   const query = search
     ? (new URLSearchParams(location.search).get('q') ?? '')
     : ''
