@@ -130,16 +130,18 @@ test('조회수 기간 변경·결측·0회·독립 오류와 재시도를 처�
   expect(periods).toEqual([7, 30, 30])
 })
 
-test('사용자가 재생할 때만 대표 영상 임베드를 로드한다', async ({ page }) => {
+test('대표 영상을 자동 재생 없이 YouTube 기본 플레이어로 표시한다', async ({
+  page,
+}) => {
   await page.goto(`/songs/${song.id}`)
-  const play = page.getByRole('button', { name: '테스트 커버 영상 재생' })
-  await expect(play).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: '테스트 커버 영상 재생' }),
+  ).toHaveCount(0)
   const player = page.locator(`iframe[title="${song.title} YouTube 영상"]`)
-  await expect(player).toHaveCount(0)
-  await play.click()
+  await expect(player).toBeVisible()
   await expect(player).toHaveAttribute(
     'src',
-    `https://www.youtube-nocookie.com/embed/${detail.representativeVideo.youtubeId}?autoplay=1`,
+    `https://www.youtube-nocookie.com/embed/${detail.representativeVideo.youtubeId}`,
   )
   await expect(
     page.getByRole('link', { name: 'YouTube 원본 보기 ↗' }),
