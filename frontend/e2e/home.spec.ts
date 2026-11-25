@@ -1,5 +1,122 @@
 import { test, expect, makeSong, emptyPage } from './fixtures'
 
+for (const rosterFails of [false, true])
+  test(`조회수 임박·달성은 멤버 명단 ${rosterFails ? '실패 시 기존 축약' : '전체 조회 후 유닛명'}을 표시한다`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const participants = ['히나', '마시로', '리제', '타비'].map(
+      (name, index) => ({
+        id: `news-member-${index}`,
+        name,
+        kind: 'MEMBER' as const,
+        activityStatus: 'ACTIVE' as const,
+      }),
+    )
+    const songs = [
+      makeSong(3001, { title: '유닛 소식곡', participants }),
+      makeSong(3002, {
+        title: '개인 소식곡',
+        participants: participants.slice(0, 1),
+      }),
+      makeSong(3003, {
+        title: '일부 참여 소식곡',
+        participants: participants.slice(0, 2),
+      }),
+    ]
+    await page.route('**/api/v1/songs/milestones', (route) =>
+      route.fulfill({
+        json: {
+          status: 'READY',
+          checkedAt: '2026-11-25T00:00:00Z',
+          approaching: songs.map((song) => ({
+            song,
+            target: 200000,
+            viewCount: 199500,
+            observedAt: '2026-11-25T00:00:00Z',
+          })),
+          achievements: songs.map((song) => ({
+            song: { ...song, type: 'ORIGINAL' },
+            target: 100000,
+            detectedAt: '2026-11-25T00:00:00Z',
+          })),
+        },
+      }),
+    )
+    const cursors: (string | null)[] = []
+    await page.route('**/api/v1/members?*', (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get('cursor')
+      cursors.push(cursor)
+      if (rosterFails)
+        return route.fulfill({ status: 503, json: { code: 'UNAVAILABLE' } })
+      const members = participants.map((p) => ({
+        ...p,
+        generation: 2,
+        unitName: 'Universe',
+        profileImageUrl: null,
+        chzzkUrl: null,
+        xUrl: null,
+        songCounts: {
+          total: 0,
+          originals: 0,
+          covers: 0,
+          collaborations: 0,
+          multipleParticipants: 0,
+        },
+      }))
+      return route.fulfill({
+        json: cursor
+          ? {
+              items: [
+                ...members.slice(2),
+                {
+                  ...members[0]!,
+                  id: 'other-news-member',
+                  name: '시부키',
+                  generation: 3,
+                  unitName: 'Cliché',
+                },
+              ],
+              hasNext: false,
+              nextCursor: null,
+            }
+          : {
+              items: members.slice(0, 2),
+              hasNext: true,
+              nextCursor: 'news-members-next',
+            },
+      })
+    })
+    // Other home sections contain no songs, so only milestone news needs the roster.
+    await page.goto('/')
+    for (const label of ['조회수 임박', '조회수 달성']) {
+      const ticker = page.getByRole('group', { name: label, exact: true })
+      const unit = rosterFails
+        ? label === '조회수 임박'
+          ? '히나 외 3명'
+          : '스텔라이브'
+        : 'Universe'
+      for (const [title, artist] of [
+        ['유닛 소식곡', unit],
+        ['개인 소식곡', '히나'],
+        ['일부 참여 소식곡', '히나 · 마시로'],
+      ]) {
+        const link = ticker.getByRole('link', {
+          name: new RegExp(`${title} ${artist}`),
+        })
+        await expect(link).toHaveCount(1)
+        await expect(link).toHaveAttribute('href', /\/songs\//)
+      }
+      await expect(ticker).toContainText(
+        label === '조회수 임박'
+          ? '200,000회까지 500회 남았어요!'
+          : '100,000회를 달성했어요! 축하합니다!',
+      )
+    }
+    if (rosterFails) expect(cursors.length).toBeGreaterThan(0)
+    else expect(cursors).toEqual([null, 'news-members-next'])
+  })
+
 for (const kind of ['playlists', 'favorites'] as const)
   for (const navigation of ['화살표', '스크롤'] as const)
     test(`홈 ${kind === 'playlists' ? '플레이리스트' : '좋아하는 곡'}는 ${navigation}로 추가 조회 실패 후에도 받은 마지막 항목을 열 수 있다`, async ({

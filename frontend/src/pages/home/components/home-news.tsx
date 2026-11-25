@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { useMemberDirectory } from '@/features/members/use-member-directory'
 import { participantLabel } from '@/features/songs/participant-label'
 import type { ApiSchemas } from '@/shared/api/types'
 import { Artwork } from '@/shared/ui/artwork'
@@ -40,6 +41,11 @@ export function HomeNews() {
   const milestones = useQuery(milestonesOptions)
   const upcoming = useQuery(upcomingOptions)
   const feed = milestones.data?.status === 'READY' ? milestones.data : undefined
+  const members = useMemberDirectory(
+    [...(feed?.approaching ?? []), ...(feed?.achievements ?? [])].some(
+      ({ song }) => song.participants.length >= 2,
+    ),
+  )
 
   const approaching =
     feed?.approaching.map(({ song, target, viewCount }) => (
@@ -47,7 +53,7 @@ export function HomeNews() {
         key={song.id}
         href={songPath(song)}
         title={song.title}
-        artist={song.participants.length ? participantLabel(song) : ''}
+        artist={song.participants.length ? participantLabel(song, members) : ''}
         metric={`${number.format(target)}회까지 ${number.format(target - viewCount)}회 남았어요!`}
       />
     )) ?? []
@@ -58,7 +64,7 @@ export function HomeNews() {
         key={`${song.id}:${target}`}
         href={songPath(song)}
         title={song.title}
-        artist={song.participants.length ? participantLabel(song) : ''}
+        artist={song.participants.length ? participantLabel(song, members) : ''}
         metric={`${number.format(target)}회를 달성했어요! 축하합니다!`}
       />
     )) ?? []
