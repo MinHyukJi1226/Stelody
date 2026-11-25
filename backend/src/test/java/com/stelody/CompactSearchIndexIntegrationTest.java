@@ -37,6 +37,7 @@ class CompactSearchIndexIntegrationTest {
             + database;
     var cfg =
         Flyway.configure()
+            .locations(com.stelody.LegacyMigrations.location())
             .dataSource(url, "stelody_migrator", "test-migrator")
             .schemas("app", "session")
             .defaultSchema("app")

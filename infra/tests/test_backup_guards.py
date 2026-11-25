@@ -66,8 +66,28 @@ class BackupGuardsTest(unittest.TestCase):
     def test_latest_repository_migration_requires_backup_validation(self):
         migrations = Path(__file__).resolve().parents[2] / 'backend/src/main/resources/db/migration'
         latest = max(int(path.name.split('__')[0][1:]) for path in migrations.glob('V*__*.sql'))
-        self.assertIn(latest, backup.SUPPORTED_SCHEMA_VERSIONS,
-                      'Validate backup/restore and update supported schemas with every migration')
+        self.assertEqual(latest, backup.SQUASHED_SCHEMA_VERSION,
+                         'Validate squashed-generation backup/restore before accepting a later migration')
+
+    def test_squashed_v1_retains_all_v35_exclusions_and_requires_explicit_generation(self):
+        self.metadata.update(schemaVersion=1, schemaGeneration=backup.SQUASHED_SCHEMA_GENERATION,
+                             excludedData=list(backup.excluded_data(35)))
+        self.save_manifest()
+        backup.validate_archive(self.bundle)
+        self.assertEqual(35, backup.policy_version(1, backup.SQUASHED_SCHEMA_GENERATION))
+        for version, generation in ((1, None), (1, 'unknown'), (19, backup.SQUASHED_SCHEMA_GENERATION),
+                                    (2, backup.SQUASHED_SCHEMA_GENERATION), (True, None)):
+            self.metadata.update(schemaVersion=version, schemaGeneration=generation)
+            self.save_manifest()
+            with self.assertRaisesRegex(backup.OperationError, 'Unsupported backup format/schema'):
+                backup.validate_archive(self.bundle)
+
+    def test_former_v1_session_only_database_is_not_accepted_as_squashed(self):
+        with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner'}), \
+             patch.object(backup, 'sql', side_effect=['1', '0']), patch.object(backup, 'run') as command:
+            with self.assertRaisesRegex(backup.OperationError, 'schema generation'):
+                backup.backup(self.root)
+            command.assert_not_called()
 
     def test_persistent_login_exclusion_matches_the_archive_schema(self):
         for version in (19, 24):

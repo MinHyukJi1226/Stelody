@@ -26,7 +26,9 @@ class BackupSchemaIntegrationTest {
           .withInitScript("db/create-test-roles.sql")
           .withCopyFileToContainer(
               MountableFile.forHostPath(Path.of("../infra/backup").toAbsolutePath().normalize()),
-              "/opt/stelody-backup");
+              "/opt/stelody-backup")
+          .withCopyFileToContainer(
+              MountableFile.forHostPath(Path.of("tools").toAbsolutePath()), "/opt/rebaseline");
 
   @BeforeAll
   static void installPython() throws Exception {
@@ -48,16 +50,19 @@ class BackupSchemaIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(ints = {19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35})
-  void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int version)
+  @ValueSource(ints = {0, 1, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35})
+  void realBackupAndIsolatedRestorePreserveProfilesAndPrivateListsAndReplayWithdrawals(int schema)
       throws Exception {
-    String source = "backup_source_v" + version, target = "backup_restore_v" + version;
+    int version = schema < 19 ? 35 : schema;
+    boolean squashed = schema < 19;
+    String source = "backup_source_v" + schema, target = "backup_restore_v" + schema;
     var admin = jdbc(postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword());
     admin.execute("CREATE DATABASE " + source + " OWNER stelody_migrator");
     admin.execute("CREATE DATABASE " + target + " OWNER stelody_migrator");
     var owner = jdbc(source, "stelody_migrator", "test-migrator");
     var cfg =
         Flyway.configure()
+            .locations(com.stelody.LegacyMigrations.location())
             .dataSource(
                 "jdbc:postgresql://"
                     + postgres.getHost()
@@ -70,10 +75,29 @@ class BackupSchemaIntegrationTest {
             .schemas("app", "session")
             .defaultSchema("app")
             .placeholders(Map.of("runtimeRole", "stelody_app"));
-    cfg.target("19").load().migrate();
+    if (schema == 1) cfg.locations("classpath:db/migration").load().migrate();
+    else cfg.target("19").load().migrate();
     owner.execute(
         "INSERT INTO app.member(id,name,search_name,generation,activity_status,profile_image_url,birthday_month,birthday_day) VALUES('87a9538a-dade-571b-b249-ce12099fd04b','시라유키 히나','시라유키 히나',2,'ACTIVE','https://example.invalid/hina.png',1,5)");
-    if (version > 19) cfg.target(String.valueOf(version)).load().migrate();
+    if (version > 19 && schema != 1) cfg.target(String.valueOf(version)).load().migrate();
+    if (schema == 0) {
+      var transitioned =
+          postgres.execInContainer(
+              "env",
+              "PGHOST=127.0.0.1",
+              "PGDATABASE=" + source,
+              "PGUSER=stelody_migrator",
+              "PGPASSWORD=test-migrator",
+              "python3",
+              "/opt/rebaseline/rebaseline.py",
+              "--database=" + source,
+              "--runtime-role=stelody_app",
+              "--apply",
+              "--services-stopped",
+              "--backup-reference=isolated-backup",
+              "--history-backup=/tmp/" + source + "-history.json");
+      assertThat(transitioned.getExitCode()).as(transitioned.getStderr()).isZero();
+    }
     owner.execute(
         "INSERT INTO app.app_user(id,google_subject,email) VALUES('00000000-0000-0000-0000-000000000001','keep','keep@example.invalid'),('00000000-0000-0000-0000-000000000002','withdraw','withdraw@example.invalid')");
     owner.execute(
@@ -149,7 +173,7 @@ class BackupSchemaIntegrationTest {
             ? owner.queryForObject(
                 "SELECT public_id FROM app.playlist WHERE name='keep list'", String.class)
             : null;
-    String directory = "/tmp/backups-v" + version;
+    String directory = "/tmp/backups-v" + schema;
     var backup =
         postgres.execInContainer(
             "env",
@@ -172,13 +196,15 @@ class BackupSchemaIntegrationTest {
     String bundle = backupResult.path("backup").asText();
     var manifest = postgres.execInContainer("cat", bundle + "/manifest.json");
     assertThat(mapper.readTree(manifest.getStdout()).path("schemaVersion").asInt())
-        .isEqualTo(version);
+        .isEqualTo(squashed ? 1 : version);
+    assertThat(mapper.readTree(manifest.getStdout()).path("schemaGeneration").asText())
+        .isEqualTo(squashed ? "squashed-v1" : "");
     var metadata = mapper.readTree(manifest.getStdout());
     var created = java.time.Instant.parse(metadata.path("createdAt").asText());
     var expires = java.time.Instant.parse(metadata.path("expiresAt").asText());
     assertThat(java.time.Duration.between(created, expires))
         .isEqualTo(java.time.Duration.ofDays(7));
-    String ledger = "/tmp/withdrawals-v" + version + ".json";
+    String ledger = "/tmp/withdrawals-v" + schema + ".json";
     var reconcile =
         postgres.execInContainer(
             "python3",
@@ -209,6 +235,25 @@ class BackupSchemaIntegrationTest {
     var result = mapper.readTree(restored.getStdout());
     assertThat(result.path("withdrawalsReconciled").asInt()).isEqualTo(1);
     assertThat(result.path("readyForPublicTraffic").asBoolean()).isFalse();
+    if (squashed) {
+      var restoredFlyway =
+          Flyway.configure()
+              .dataSource(
+                  "jdbc:postgresql://"
+                      + postgres.getHost()
+                      + ":"
+                      + postgres.getMappedPort(5432)
+                      + "/"
+                      + target,
+                  "stelody_migrator",
+                  "test-migrator")
+              .schemas("app", "session")
+              .defaultSchema("app")
+              .placeholders(Map.of("runtimeRole", "stelody_app"))
+              .load();
+      restoredFlyway.validate();
+      assertThat(restoredFlyway.migrate().migrationsExecuted).isZero();
+    }
     var runtime = jdbc(target, "stelody_app", "test-runtime");
     if (version >= 35) {
       assertThat(

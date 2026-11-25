@@ -1,0 +1,247 @@
+[
+  {
+    "version": "1",
+    "script": "V1__create_session_tables.sql",
+    "checksum": -90922922,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "2",
+    "script": "V2__grant_runtime_session_access.sql",
+    "checksum": -1149188219,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "3",
+    "script": "V3__create_google_users.sql",
+    "checksum": -1383624453,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "4",
+    "script": "V4__create_public_catalog.sql",
+    "checksum": -1720554105,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "5",
+    "script": "V5__index_catalog_search.sql",
+    "checksum": -2054992782,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "6",
+    "script": "V6__create_favorites.sql",
+    "checksum": -1192516308,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "7",
+    "script": "V7__create_playlists.sql",
+    "checksum": -1313275400,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "8",
+    "script": "V8__create_video_collection.sql",
+    "checksum": -60010467,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "9",
+    "script": "V9__create_video_discovery.sql",
+    "checksum": -1225836888,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "10",
+    "script": "V10__add_review_actions_and_audit.sql",
+    "checksum": 1339159407,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "11",
+    "script": "V11__add_admin_role_operations.sql",
+    "checksum": -590398645,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "12",
+    "script": "V12__add_catalog_management.sql",
+    "checksum": 1934018791,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "13",
+    "script": "V13__add_view_statistics.sql",
+    "checksum": 646246510,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "14",
+    "script": "V14__create_youtube_exports.sql",
+    "checksum": -352067879,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "15",
+    "script": "V15__add_collection_operations.sql",
+    "checksum": 1855700654,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "16",
+    "script": "V16__collection_rules.sql",
+    "checksum": 1078922769,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "17",
+    "script": "V17__special_event_reviews.sql",
+    "checksum": -1374387916,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "18",
+    "script": "V18__account_withdrawal.sql",
+    "checksum": 1750917473,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "19",
+    "script": "V19__cover_auto_publication.sql",
+    "checksum": 1491450349,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "20",
+    "script": "V20__extend_member_profiles.sql",
+    "checksum": -708049822,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "21",
+    "script": "V21__add_abyss_member_profiles.sql",
+    "checksum": -2092207993,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "22",
+    "script": "V22__set_member_display_order.sql",
+    "checksum": 489873365,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "23",
+    "script": "V23__index_compact_catalog_search.sql",
+    "checksum": -2116528886,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "24",
+    "script": "V24__youtube_authorization_return.sql",
+    "checksum": 1438739029,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "25",
+    "script": "V25__persistent_login.sql",
+    "checksum": 1400964174,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "26",
+    "script": "V26__withdrawal_result.sql",
+    "checksum": 877707663,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "27",
+    "script": "V27__review_completion_cleanup.sql",
+    "checksum": -376806818,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "28",
+    "script": "V28__add_artist_registration_results.sql",
+    "checksum": 275953101,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "29",
+    "script": "V29__view_milestones.sql",
+    "checksum": 1635961010,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "30",
+    "script": "V30__youtube_public_schedule.sql",
+    "checksum": -695850687,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "31",
+    "script": "V31__youtube_public_schedule_thumbnail.sql",
+    "checksum": -1638426578,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "32",
+    "script": "V32__premiere_registration.sql",
+    "checksum": 1216412715,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "33",
+    "script": "V33__automatic_song_metadata.sql",
+    "checksum": 736866930,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "34",
+    "script": "V34__member_public_slugs.sql",
+    "checksum": -946211790,
+    "type": "SQL",
+    "success": true
+  },
+  {
+    "version": "35",
+    "script": "V35__playlist_public_ids.sql",
+    "checksum": -1011607949,
+    "type": "SQL",
+    "success": true
+  }
+]

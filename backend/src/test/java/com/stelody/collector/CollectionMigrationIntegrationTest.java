@@ -25,6 +25,7 @@ class CollectionMigrationIntegrationTest {
   void upgradesV7WithoutCollectorLoginAndPreservesPrivateDataAndManualMetadata() {
     var config =
         Flyway.configure()
+            .locations(com.stelody.LegacyMigrations.location())
             .dataSource(postgres.getJdbcUrl(), "stelody_migrator", "test-migrator")
             .schemas("app", "session")
             .defaultSchema("app")

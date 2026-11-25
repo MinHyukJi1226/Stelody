@@ -92,6 +92,7 @@ class AbyssMemberMigrationIntegrationTest {
   void addsOfficialChannelsAndDatesWithoutChangingExistingProfileOrRelationships() {
     var cfg =
         Flyway.configure()
+            .locations(com.stelody.LegacyMigrations.location())
             .dataSource(postgres.getJdbcUrl(), "stelody_migrator", "test-migrator")
             .schemas("app", "session")
             .defaultSchema("app")
@@ -287,6 +288,7 @@ class AbyssMemberMigrationIntegrationTest {
             + database;
     var cfg =
         Flyway.configure()
+            .locations(com.stelody.LegacyMigrations.location())
             .dataSource(url, "stelody_migrator", "test-migrator")
             .schemas("app", "session")
             .defaultSchema("app")
