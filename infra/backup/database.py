@@ -17,6 +17,8 @@ import uuid
 
 MAX_AGE = timedelta(days=7)
 SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35)
+SQUASHED_SCHEMA_GENERATION = 'squashed-v1'
+SQUASHED_SCHEMA_VERSION = 1
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
@@ -32,7 +34,16 @@ class OperationError(Exception):
     pass
 
 
-def excluded_data(version):
+def policy_version(version, generation=None):
+    if generation == SQUASHED_SCHEMA_GENERATION and type(version) is int and version == SQUASHED_SCHEMA_VERSION:
+        return 35
+    if generation is None and type(version) is int and version in SUPPORTED_SCHEMA_VERSIONS:
+        return version
+    raise OperationError('Unsupported backup format/schema generation')
+
+
+def excluded_data(version, generation=None):
+    version = policy_version(int(version), generation)
     return (EXCLUDED_DATA + (('app.persistent_login',) if int(version) >= 25 else ())
             + (('app.withdrawal_result',) if int(version) >= 26 else ())
             + (('app.view_milestone_state', 'app.view_milestone_event',
@@ -125,7 +136,17 @@ def create_backup(root, descriptor):
     if info['owners'] != [info['user']]:
         raise OperationError('Connect as the app/session schema owner')
     version = sql("SELECT max(version::int) FROM app.flyway_schema_history WHERE success;")
-    if version not in tuple(str(value) for value in SUPPORTED_SCHEMA_VERSIONS):
+    generation = None
+    if version == str(SQUASHED_SCHEMA_VERSION):
+        # Version 1 alone is ambiguous: the former V1 contained only session tables.
+        # Accept only the known initial SQL or the explicit, verified history transition.
+        if sql("""SELECT count(*) FROM app.flyway_schema_history WHERE success AND version='1'
+            AND ((type='SQL' AND script='V1__initial_schema.sql') OR
+                 (type='BASELINE' AND description='Stelody squashed V1 (legacy V35)'))
+            AND (SELECT count(*) FROM app.flyway_schema_history WHERE version IS NOT NULL)=1;""") != '1':
+            raise OperationError('Unsupported database schema generation')
+        generation = SQUASHED_SCHEMA_GENERATION
+    elif version not in tuple(str(value) for value in SUPPORTED_SCHEMA_VERSIONS):
         raise OperationError('Unsupported database schema; validated versions: ' +
                              ', '.join(f'V{value}' for value in SUPPORTED_SCHEMA_VERSIONS))
     # Remove only redundant source copies, never exclude retained source data
@@ -164,13 +185,15 @@ def create_backup(root, descriptor):
         dump = staging / 'database.dump'
         command = ['pg_dump', '--no-password', '--format=custom', '--schema=app', '--schema=session',
                    '--extension=pg_trgm', '--no-owner', '--file=' + str(dump)]
-        command += ['--exclude-table-data=' + table for table in excluded_data(version)]
+        command += ['--exclude-table-data=' + table for table in excluded_data(version, generation)]
         run(command, log=staging / 'dump.log', pass_fds=(descriptor,))
         dump.chmod(0o600)
         run(['pg_restore', '--list', str(dump)], log=staging / 'archive-check.log', pass_fds=(descriptor,))
         manifest = {'format': 1, 'createdAt': created.isoformat(), 'expiresAt': expires.isoformat(), 'schemaVersion': int(version),
                     'schemaOwner': info['user'], 'sourceDatabase': info['database'],
-                    'sha256': digest(dump), 'excludedData': list(excluded_data(version))}
+                    'sha256': digest(dump), 'excludedData': list(excluded_data(version, generation))}
+        if generation is not None:
+            manifest['schemaGeneration'] = generation
         (staging / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         (staging / 'manifest.json').chmod(0o600)
         staging.rename(destination)
@@ -193,9 +216,10 @@ def validate_archive(directory):
         if path.stat().st_mode & 0o077:
             raise OperationError('Backup files must be private (600)')
     metadata = json.loads((directory / 'manifest.json').read_text())
-    if metadata.get('format') != 1 or metadata.get('schemaVersion') not in SUPPORTED_SCHEMA_VERSIONS:
+    if metadata.get('format') != 1:
         raise OperationError('Unsupported backup format/schema')
-    if metadata.get('excludedData') != list(excluded_data(metadata['schemaVersion'])):
+    policy_version(metadata.get('schemaVersion'), metadata.get('schemaGeneration'))
+    if metadata.get('excludedData') != list(excluded_data(metadata['schemaVersion'], metadata.get('schemaGeneration'))):
         raise OperationError('Backup exclusion policy does not match')
     age = now() - instant(metadata['createdAt'])
     expiry = instant(metadata['expiresAt'])
@@ -244,7 +268,7 @@ def restore(directory, target, reconciliations):
         run(['pg_restore', '--no-password', '--exit-on-error', '--single-transaction',
              '--no-owner', '--dbname=' + target, str(directory / 'database.dump')], log=log)
         sanitation = (BASE / 'restore-sanitize.sql').read_text()
-        if metadata['schemaVersion'] >= 28:
+        if policy_version(metadata['schemaVersion'], metadata.get('schemaGeneration')) >= 28:
             # These receipts are durable deduplication records, not ephemeral sessions.
             # A snapshot cannot contain an artist without its completed receipt transaction.
             sanitation = sanitation.replace('COMMIT;', """
@@ -260,7 +284,7 @@ COMMIT;""")
         # One transaction covers sanitation and deletion replay. Keep all services stopped.
         sanitation = sanitation.replace('COMMIT;', deletions + '\nCOMMIT;')
         sql(sanitation, log)
-        for table in excluded_data(metadata['schemaVersion']):
+        for table in excluded_data(metadata['schemaVersion'], metadata.get('schemaGeneration')):
             if sql('SELECT count(*) FROM ' + table + ';') != '0':
                 raise OperationError('Ephemeral data unexpectedly restored')
         if withdrawn:

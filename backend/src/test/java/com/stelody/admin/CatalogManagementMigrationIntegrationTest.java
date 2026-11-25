@@ -21,6 +21,7 @@ class CatalogManagementMigrationIntegrationTest {
   void upgradesV10WithoutOperatorLoginAndPreservesCatalogAndReview() {
     var cfg =
         Flyway.configure()
+            .locations(com.stelody.LegacyMigrations.location())
             .dataSource(postgres.getJdbcUrl(), "stelody_migrator", "test-migrator")
             .schemas("app", "session")
             .defaultSchema("app")
