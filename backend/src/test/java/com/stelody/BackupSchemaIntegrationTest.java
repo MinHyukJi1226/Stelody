@@ -165,6 +165,23 @@ class BackupSchemaIntegrationTest {
           """))
           .isEqualTo(1);
     }
+    owner.execute(
+        "INSERT INTO app.channel(id,youtube_id,name,channel_type,collection_enabled) VALUES('00000000-0000-0000-0000-000000000098','UCabcdefghijklmnopqrstuv','backup fixture','EXTERNAL',false)");
+    owner.execute(
+        """
+        INSERT INTO app.review_item(id,youtube_id,channel_id,source_title,source_published_at,
+            source_thumbnail_url,source_duration_seconds,source_observed_at,availability,disposition,
+            suggested_type,rule_version,decision_reason,review_status,review_note,first_seen_at,version)
+        SELECT '00000000-0000-0000-0000-000000000099','OLDREVIEW99',id,
+            'REVIEW_CACHE_SECRET',now()-interval '45 days','https://example.invalid/REVIEW_CACHE_SECRET',
+            101,now()-interval '40 days','PUBLIC','EXCLUDED','UNKNOWN','fixture','NOT_A_SONG',
+            'IGNORED','keep note with tab' || chr(9) || 'and newline' || chr(10) || 'and backslash' || chr(92),now()-interval '40 days',5
+        FROM app.channel ORDER BY id LIMIT 1
+        """);
+    owner.execute(
+        "INSERT INTO app.admin_audit(id,review_id,before_status,after_status,after_note,changed_at) VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000000099','PENDING','IGNORED','durable decision',now())");
+    var reviewBefore =
+        owner.queryForMap("SELECT * FROM app.review_item WHERE youtube_id='OLDREVIEW99'");
     var videos = owner.queryForList("SELECT * FROM app.video ORDER BY id");
     var profiles = owner.queryForList("SELECT * FROM app.member ORDER BY id");
     var channels = owner.queryForList("SELECT * FROM app.channel ORDER BY id");
@@ -190,9 +207,10 @@ class BackupSchemaIntegrationTest {
     assertThat(backup.getExitCode()).as(backup.getStdout() + backup.getStderr()).isZero();
     var mapper = new ObjectMapper();
     var backupResult = mapper.readTree(backup.getStdout());
-    assertThat(backupResult.path("registeredReviewSourcesCleared").asInt())
-        .isEqualTo(version >= 27 ? 1 : 0);
+    assertThat(backupResult.path("registeredReviewSourcesCleared").asInt()).isEqualTo(0);
     assertThat(owner.queryForList("SELECT * FROM app.video ORDER BY id")).isEqualTo(videos);
+    assertThat(owner.queryForMap("SELECT * FROM app.review_item WHERE youtube_id='OLDREVIEW99'"))
+        .isEqualTo(reviewBefore);
     String bundle = backupResult.path("backup").asText();
     var manifest = postgres.execInContainer("cat", bundle + "/manifest.json");
     assertThat(mapper.readTree(manifest.getStdout()).path("schemaVersion").asInt())
@@ -253,6 +271,73 @@ class BackupSchemaIntegrationTest {
               .load();
       restoredFlyway.validate();
       assertThat(restoredFlyway.migrate().migrationsExecuted).isZero();
+    }
+    var restoredReview =
+        jdbc(target, "stelody_migrator", "test-migrator")
+            .queryForMap("SELECT * FROM app.review_item WHERE youtube_id='OLDREVIEW99'");
+    for (String cache :
+        new String[] {
+          "source_title", "source_published_at", "source_thumbnail_url", "source_duration_seconds"
+        }) {
+      assertThat(restoredReview.remove(cache)).isNull();
+      reviewBefore.remove(cache);
+    }
+    assertThat(restoredReview).isEqualTo(reviewBefore);
+    var dumpText =
+        postgres.execInContainer("grep", "-c", "REVIEW_CACHE_SECRET", bundle + "/database.dump");
+    assertThat(dumpText.getExitCode()).isEqualTo(1);
+    assertThat(
+            jdbc(target, "stelody_migrator", "test-migrator")
+                .queryForObject(
+                    "SELECT count(*) FROM app.admin_audit WHERE review_id='00000000-0000-0000-0000-000000000099' AND after_note='durable decision'",
+                    Integer.class))
+        .isEqualTo(1);
+    if (schema == 1) {
+      admin.execute("CREATE DATABASE backup_legacy_roundtrip OWNER stelody_migrator");
+      admin.execute("CREATE DATABASE backup_failed_restore OWNER stelody_migrator");
+      var compatibility =
+          postgres.execInContainer(
+              "env",
+              "PGHOST=127.0.0.1",
+              "PGPORT=5432",
+              "PGDATABASE=" + target,
+              "PGUSER=stelody_migrator",
+              "PGPASSWORD=test-migrator",
+              "python3",
+              "-c",
+              """
+          import os,sys,json,subprocess,shutil
+          from pathlib import Path
+          from datetime import timedelta
+          sys.path.insert(0,'/opt/stelody-backup')
+          import database
+          os.umask(0o077)
+          root=Path('/tmp/legacy-compatible');root.mkdir(mode=0o700)
+          dump=root/'database.dump'
+          subprocess.run(['pg_dump','--format=custom','--no-owner','--schema=app','--schema=session','--extension=pg_trgm','--file='+str(dump)]+['--exclude-table-data='+t for t in database.excluded_data(1,'squashed-v1')],check=True,capture_output=True)
+          created=database.now()
+          manifest={'format':1,'schemaVersion':1,'schemaGeneration':'squashed-v1','schemaOwner':'stelody_migrator','sourceDatabase':os.environ['PGDATABASE'],'createdAt':created.isoformat(),'expiresAt':(created+timedelta(days=6)).isoformat(),'sha256':database.digest(dump),'excludedData':list(database.excluded_data(1,'squashed-v1'))}
+          (root/'manifest.json').write_text(json.dumps(manifest))
+          ledger=Path('/tmp/legacy-reconciliation.json');stamp=database.now().isoformat()
+          ledger.write_text(json.dumps({'complete':True,'servicesStoppedAt':stamp,'verifiedThrough':stamp,'withdrawnUserIds':[]}))
+          os.environ['PGDATABASE']='backup_legacy_roundtrip'
+          database.restore(root,'backup_legacy_roundtrip',ledger)
+          assert database.sql("SELECT count(*) FROM app.admin_audit WHERE after_note='durable decision'")=='1'
+          broken=Path('/tmp/broken-sql-bundle');shutil.copytree(sys.argv[1],broken)
+          with (broken/'database.dump').open('a') as f:f.write('SELECT 1/0;')
+          metadata=json.loads((broken/'manifest.json').read_text());metadata['sha256']=database.digest(broken/'database.dump');(broken/'manifest.json').write_text(json.dumps(metadata))
+          os.environ['PGDATABASE']='backup_failed_restore'
+          try:
+              database.restore(broken,'backup_failed_restore',ledger)
+          except database.OperationError:
+              assert database.sql("SELECT count(*) FROM pg_namespace WHERE nspname IN ('app','session')")=='0'
+          else:
+              raise AssertionError('Invalid SQL restore unexpectedly committed')
+          """,
+              bundle);
+      assertThat(compatibility.getExitCode())
+          .as(compatibility.getStdout() + compatibility.getStderr())
+          .isZero();
     }
     var runtime = jdbc(target, "stelody_app", "test-runtime");
     if (version >= 35) {
@@ -401,7 +486,7 @@ class BackupSchemaIntegrationTest {
           .isEqualTo("c".repeat(64));
       assertThat(
               runtime.queryForObject(
-                  "SELECT count(*) FROM app.review_item WHERE id='00000000-0000-0000-0000-000000000008' AND source_title IS NULL AND source_published_at IS NULL AND source_thumbnail_url IS NULL AND source_duration_seconds IS NULL AND review_status='REGISTERED' AND registered_video_id='00000000-0000-0000-0000-000000000007' AND review_note='keep registration' AND version=4",
+                  "SELECT count(*) FROM app.review_item WHERE id='00000000-0000-0000-0000-000000000008' AND source_title IS NULL AND source_published_at IS NULL AND source_thumbnail_url IS NULL AND source_duration_seconds IS NULL AND review_status='REGISTERED' AND registered_video_id='00000000-0000-0000-0000-000000000007' AND review_note='keep registration' AND version=3",
                   Integer.class))
           .isEqualTo(1);
       assertThat(

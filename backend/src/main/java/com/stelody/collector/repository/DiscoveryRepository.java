@@ -475,6 +475,8 @@ public final class DiscoveryRepository {
             source_duration_seconds=NULL,availability='UNAVAILABLE',disposition='DEFERRED',suggested_type='UNKNOWN',
             decision_reason='SOURCE_EXPIRED',version=version+1
           WHERE source_observed_at<:cutoff AND decision_reason<>'SOURCE_EXPIRED'
+            AND (source_title IS NOT NULL OR source_published_at IS NOT NULL
+              OR source_thumbnail_url IS NOT NULL OR source_duration_seconds IS NOT NULL)
           """)
               .param("cutoff", ts(now.minusSeconds(2592000)))
               .update();
