@@ -618,16 +618,39 @@ class VideoCollectorIntegrationTest {
   }
 
   @Test
-  void onlyEnabledOfficialChannelsAreTargetsAndEmptyRunDoesNotEraseOldViews() {
-    seed(1);
+  void registeredVideosCollectViewsWithoutChannelEligibilityOrConnection() {
+    seed(3);
     oldPublication();
-    writer.execute("UPDATE app.channel SET collection_enabled = false");
+    writer.execute("UPDATE app.channel SET collection_enabled=false,channel_type='EXTERNAL'");
+    writer.update("UPDATE app.video SET channel_id=NULL WHERE id=?", video(2));
+    success(List.of(1, 2, 3), 12345);
     assertThat(collector(NOW).collect().status()).isEqualTo("SUCCEEDED");
-    assertThat(count("collection_target")).isZero();
+    assertThat(count("collection_target")).isEqualTo(3);
+    assertThat(count("view_snapshot")).isEqualTo(3);
+    assertThat(count("daily_video_view")).isEqualTo(3);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.published_video_view WHERE publication_id=?",
+                Long.class,
+                publication()))
+        .isEqualTo(3);
+    assertThat(
+            writer.queryForObject(
+                "SELECT channel_id FROM app.video WHERE id=?", UUID.class, video(2)))
+        .isNull();
+    assertThat(writer.queryForObject("SELECT count(*) FROM app.channel", Long.class)).isEqualTo(1);
+    server.verify(1, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
+  void emptyRegisteredCatalogDoesNotErasePreviousPublication() {
+    writer.update(
+        "INSERT INTO app.view_publication(id,published_at) VALUES (?,?)",
+        new UUID(3, 1),
+        java.sql.Timestamp.from(NOW.minusSeconds(3600)));
+    writer.update("UPDATE app.catalog_state SET view_publication_id=?", new UUID(3, 1));
+    assertThat(collector(NOW).collect().status()).isEqualTo("SUCCEEDED");
     assertThat(publication()).isEqualTo(new UUID(3, 1));
-    writer.execute("UPDATE app.channel SET collection_enabled = true, channel_type = 'EXTERNAL'");
-    assertThat(collector(NOW.plusSeconds(3600)).collect().status()).isEqualTo("SUCCEEDED");
-    assertThat(count("collection_target")).isZero();
     server.verify(0, getRequestedFor(urlPathEqualTo("/videos")));
   }
 
@@ -667,13 +690,13 @@ class VideoCollectorIntegrationTest {
   }
 
   @Test
-  void disabledChannelDuringRunIsSkippedAndNewerObservationIsNotOverwritten() {
+  void changedChannelConnectionDuringRunIsSkipped() {
     seed(1);
     var repo = new CollectionRepository(source);
     UUID token = UUID.randomUUID();
     var run = repo.begin(token, NOW.truncatedTo(java.time.temporal.ChronoUnit.HOURS), NOW);
     var batch = repo.pending(run.id());
-    writer.execute("UPDATE app.channel SET collection_enabled = false");
+    writer.execute("UPDATE app.video SET channel_id = NULL");
     repo.save(token, run, batch, Map.of(youtube(1), VideoObservation.unavailable(youtube(1))), NOW);
     assertThat(runtime.queryForObject("SELECT availability FROM app.video", String.class))
         .isEqualTo("PUBLIC");

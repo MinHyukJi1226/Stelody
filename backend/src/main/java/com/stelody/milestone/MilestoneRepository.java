@@ -38,7 +38,7 @@ public final class MilestoneRepository {
       SELECT v.id,v.youtube_id,c.youtube_id AS channel_id,p.view_count,p.observed_at,
         b.view_count AS previous_views,b.observed_at AS previous_at
       FROM public_songs s JOIN app.video v ON v.id=s.representative_video_id
-      JOIN app.channel c ON c.id=v.channel_id AND c.collection_enabled AND c.channel_type IN('MEMBER','GROUP')
+      LEFT JOIN app.channel c ON c.id=v.channel_id
       JOIN app.catalog_state cs ON cs.singleton
       JOIN app.published_video_view p ON p.publication_id=cs.view_publication_id AND p.video_id=v.id
       LEFT JOIN app.view_milestone_state m ON m.video_id=v.id
@@ -73,8 +73,8 @@ public final class MilestoneRepository {
                       PublicCatalogSql.SONGS
                           + """
             SELECT EXISTS(SELECT 1 FROM public_songs s JOIN app.video v ON v.id=s.representative_video_id
-              JOIN app.channel c ON c.id=v.channel_id AND c.collection_enabled AND c.channel_type IN('MEMBER','GROUP')
-              WHERE v.id=:id AND v.youtube_id=:youtube AND c.youtube_id=:channel)
+              LEFT JOIN app.channel c ON c.id=v.channel_id
+              WHERE v.id=:id AND v.youtube_id=:youtube AND c.youtube_id IS NOT DISTINCT FROM CAST(:channel AS text))
             """)
                   .param("id", o.videoId())
                   .param("youtube", o.youtubeId())
@@ -154,7 +154,7 @@ public final class MilestoneRepository {
                 + """
       SELECT v.id,v.youtube_id,c.youtube_id AS channel_id FROM public_songs s
       JOIN app.video v ON v.id=s.representative_video_id
-      JOIN app.channel c ON c.id=v.channel_id AND c.collection_enabled AND c.channel_type IN('MEMBER','GROUP')
+      LEFT JOIN app.channel c ON c.id=v.channel_id
       JOIN app.view_milestone_state m ON m.video_id=v.id
       WHERE m.available AND m.next_check_at<=:now AND m.observed_at>=:oldest AND m.observed_at<=:now
         AND m.view_count%100000>=95000 AND (m.view_count/100000)*100000>=m.highest_target

@@ -208,7 +208,7 @@ class MilestoneIntegrationTest {
     assertThat(service.feed().approaching()).isEmpty();
     writer.update("UPDATE app.song_entry SET visibility='PUBLISHED' WHERE id=?", song(1));
     writer.update("UPDATE app.channel SET collection_enabled=false WHERE id=?", CHANNEL);
-    assertThat(service.feed().approaching()).isEmpty();
+    assertThat(service.feed().approaching()).hasSize(1);
     writer.update("UPDATE app.channel SET collection_enabled=true WHERE id=?", CHANNEL);
     repo.unavailable(
         new MilestoneRepository.Target(video(1), youtube(1), YT_CHANNEL), NOW.plusSeconds(1));
@@ -358,6 +358,34 @@ class MilestoneIntegrationTest {
         .isEqualTo(PUB);
     worker().tick();
     server.verify(1, getRequestedFor(urlPathEqualTo("/youtube/v3/videos")));
+  }
+
+  @Test
+  void unlinkedAndExternalVideosParticipateInImportPollingAndNews() {
+    seed(1);
+    seed(2);
+    writer.update(
+        "UPDATE app.channel SET collection_enabled=false,channel_type='EXTERNAL' WHERE id=?",
+        CHANNEL);
+    writer.update("UPDATE app.video SET channel_id=NULL WHERE id=?", video(1));
+    latest(1, 99_900, NOW.minusSeconds(3600));
+    latest(2, 99_900, NOW.minusSeconds(3600));
+    var observations = repo.published(NOW);
+    assertThat(observations).hasSize(2);
+    observations.forEach(repo::observe);
+    assertThat(service.feed().approaching()).hasSize(2);
+    assertThat(repo.due(NOW)).hasSize(2);
+    server.stubFor(
+        com.github.tomakehurst.wiremock.client.WireMock.get(anyUrl())
+            .willReturn(okJson(response(100_001, YT_CHANNEL))));
+    worker().tick();
+    assertThat(service.feed().achievements())
+        .extracting(e -> e.song().id())
+        .containsExactly(song(1));
+    assertThat(
+            writer.queryForObject(
+                "SELECT channel_id FROM app.video WHERE id=?", UUID.class, video(1)))
+        .isNull();
   }
 
   @Test

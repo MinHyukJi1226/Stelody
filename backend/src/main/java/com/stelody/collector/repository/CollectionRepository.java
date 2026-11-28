@@ -131,9 +131,8 @@ public final class CollectionRepository {
           jdbc.sql(
                   """
           INSERT INTO app.collection_target(run_id, video_id, youtube_id, channel_youtube_id)
-          SELECT :id, v.id, v.youtube_id, c.youtube_id
-          FROM app.video v JOIN app.channel c ON c.id = v.channel_id
-          WHERE c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER')
+          SELECT :id, v.id, v.youtube_id, COALESCE(c.youtube_id, '')
+          FROM app.video v LEFT JOIN app.channel c ON c.id = v.channel_id
           """)
               .param("id", id)
               .update();
@@ -165,7 +164,9 @@ public final class CollectionRepository {
           for (Target target : batch) {
             var value = observations.get(target.youtubeId());
             if (value == null
-                || (value.channelId() != null && !target.channelId().equals(value.channelId())))
+                || (!target.channelId().isEmpty()
+                    && value.channelId() != null
+                    && !target.channelId().equals(value.channelId())))
               throw new CollectionFailure("INVALID_RESPONSE", false);
           }
           var parameters = new ArrayList<MapSqlParameterSource>();
