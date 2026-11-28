@@ -14,6 +14,48 @@ import {
 import { usePlaylistWrite } from './use-playlist-write'
 import type { Playlist } from './api'
 
+function PlaylistOption({
+  playlist,
+  disabled,
+  onAdd,
+}: {
+  playlist: Playlist
+  disabled: boolean
+  onAdd: (playlist: Playlist) => Promise<void>
+}) {
+  const [saving, setSaving] = useState(false)
+  async function add() {
+    if (disabled || saving) return
+    setSaving(true)
+    try {
+      await onAdd(playlist)
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="flex w-full shrink-0 items-center justify-between gap-3 py-2">
+      <h3 className="min-w-0 leading-6 wrap-anywhere">{playlist.name}</h3>
+      <Button
+        className="min-h-9 px-3 py-1.5"
+        variant={playlist.containsSong === false ? 'primary' : 'secondary'}
+        disabled={disabled || saving || playlist.containsSong !== false}
+        aria-label={`${playlist.name} ${playlist.containsSong ? '추가됨' : playlist.containsSong === null ? '확인 필요' : '추가하기'}`}
+        aria-busy={saving}
+        onClick={() => void add()}
+      >
+        {playlist.containsSong
+          ? '추가됨 ✓'
+          : playlist.containsSong === null
+            ? '확인 필요'
+            : saving
+              ? '저장 중…'
+              : '추가하기'}
+      </Button>
+    </div>
+  )
+}
+
 export function PlaylistPicker({
   userId,
   songId,
@@ -148,37 +190,12 @@ export function PlaylistPicker({
                     </p>
                   )}
                   {items.map((playlist) => (
-                    <div
+                    <PlaylistOption
                       key={playlist.id}
-                      className="flex w-full shrink-0 items-center justify-between gap-3 py-2"
-                    >
-                      <h3 className="min-w-0 leading-6 wrap-anywhere">
-                        {playlist.name}
-                      </h3>
-                      <Button
-                        className="min-h-9 px-3 py-1.5"
-                        variant={
-                          playlist.containsSong === false
-                            ? 'primary'
-                            : 'secondary'
-                        }
-                        disabled={
-                          busy ||
-                          query.isFetching ||
-                          playlist.containsSong !== false
-                        }
-                        aria-label={`${playlist.name} ${playlist.containsSong ? '추가됨' : playlist.containsSong === null ? '확인 필요' : '추가하기'}`}
-                        onClick={() => void add(playlist)}
-                      >
-                        {playlist.containsSong
-                          ? '추가됨 ✓'
-                          : playlist.containsSong === null
-                            ? '확인 필요'
-                            : busy
-                              ? '저장 중…'
-                              : '추가하기'}
-                      </Button>
-                    </div>
+                      playlist={playlist}
+                      disabled={busy || query.isFetching}
+                      onAdd={add}
+                    />
                   ))}
                   {query.isError && items.length > 0 && (
                     <StatePanel
