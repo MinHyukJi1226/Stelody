@@ -1,3 +1,5 @@
+import { useLayoutEffect } from 'react'
+import { pageTitle } from '../page-title'
 import { PageActionProvider } from '@/shared/ui/page-action-provider'
 import {
   matchPath,
@@ -6,8 +8,8 @@ import {
   useLocation,
   useMatches,
 } from 'react-router'
-import { HomeHeader } from '@/pages/home/components/home-header'
 import { SiteHeader } from './site-header'
+import { SiteFooter } from '@/shared/ui/site-footer'
 import { useTheme } from '../use-theme'
 import { FavoriteResume } from '@/features/favorites/favorite-resume'
 
@@ -15,9 +17,14 @@ export function SiteLayout() {
   const { theme, toggleTheme } = useTheme()
   const pathname = useLocation().pathname
   const notFound = useMatches().some((match) => match.id === 'not-found')
+  useLayoutEffect(() => {
+    const title = pageTitle(pathname, notFound)
+    if (title) document.title = title
+  }, [pathname, notFound])
   const home = pathname === '/'
   const search = pathname === '/search'
   const login = pathname === '/login'
+  const legal = pathname === '/privacy' || pathname === '/terms'
   const account = pathname === '/account' || pathname === '/account/withdrawal'
   const catalog = pathname === '/songs'
   const songDetail = !!matchPath('/songs/:songId', pathname)
@@ -30,6 +37,7 @@ export function SiteLayout() {
   const compact =
     home ||
     login ||
+    legal ||
     account ||
     search ||
     catalog ||
@@ -53,15 +61,7 @@ export function SiteLayout() {
         >
           본문으로 건너뛰기
         </a>
-        {compact ? (
-          <HomeHeader
-            theme={theme}
-            toggleTheme={toggleTheme}
-            pageLayout={notFound}
-          />
-        ) : (
-          <SiteHeader theme={theme} toggleTheme={toggleTheme} />
-        )}
+        <SiteHeader theme={theme} toggleTheme={toggleTheme} />
         <main
           id="main-content"
           tabIndex={-1}
@@ -69,6 +69,7 @@ export function SiteLayout() {
             home
               ? 'w-full flex-1 px-5 pt-3 md:px-10'
               : login ||
+                  legal ||
                   account ||
                   search ||
                   catalog ||
@@ -83,6 +84,7 @@ export function SiteLayout() {
         >
           <Outlet />
         </main>
+        <SiteFooter theme={theme} />
         <ScrollRestoration />
         <FavoriteResume />
       </div>

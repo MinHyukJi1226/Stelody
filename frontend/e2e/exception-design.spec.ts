@@ -37,7 +37,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByText('Unexpected Application Error!')).toHaveCount(
         0,
       )
-      await expect(page.locator('main footer')).toHaveCount(1)
+      await expect(page.getByRole('contentinfo')).toHaveCount(1)
       await capture(page, info, `route-error-${scheme}`)
       invalid = false
       await page.getByRole('button', { name: '다시 시도', exact: true }).click()
@@ -68,7 +68,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         '페이지를 찾을 수 없습니다',
       )
-      await expect(page.locator('main footer')).toHaveCount(1)
+      await expect(page.getByRole('contentinfo')).toHaveCount(1)
       const home = page
         .getByRole('main')
         .getByRole('link', { name: '홈으로 돌아가기' })
@@ -93,7 +93,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         '로그인 상태를 확인하지 못했습니다',
       )
-      await expect(page.locator('main footer')).toHaveCount(1)
+      await expect(page.getByRole('contentinfo')).toHaveCount(1)
       await expect(page.getByRole('main').getByRole('link')).toHaveCount(0)
       await capture(page, info, `session-error-${scheme}`)
       failed = false
@@ -121,7 +121,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         '이 목록에 접근할 수 없습니다',
       )
-      await expect(page.locator('main footer')).toHaveCount(1)
+      await expect(page.getByRole('contentinfo')).toHaveCount(1)
       await expect(
         page
           .getByRole('main')

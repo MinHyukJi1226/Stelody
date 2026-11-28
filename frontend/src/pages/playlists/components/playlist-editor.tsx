@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/shared/lib/use-page-title'
 import { playlistPath } from '@/features/playlists/playlist-path'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -42,6 +43,7 @@ export function PlaylistEditor({
   const notify = useToast()
   const base = draft?.base ?? snapshot
   const playlist = base.playlist
+  usePageTitle(playlist.name)
   const items = draft?.items ?? snapshot.items
   const dirty = !!draft
   const action = usePlaylistManagement(userId, playlistPath(playlist))

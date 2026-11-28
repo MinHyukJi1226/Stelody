@@ -5,7 +5,6 @@ import { sessionOptions } from '@/features/auth/session'
 import { playlistEditorOptions } from '@/features/playlists/queries'
 import { ApiError } from '@/shared/api/errors'
 import { PageState } from '@/shared/ui/page-state'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { PlaylistLoading } from './components/playlist-loading'
 import { PlaylistEditor } from './components/playlist-editor'
 import {
@@ -89,7 +88,6 @@ function PlaylistDetailScreen({ playlistId }: { playlistId: string }) {
             )
           )}
         </section>
-        <SiteFooter className="mx-0 mb-0 bg-transparent px-0 md:mx-0 md:px-0" />
       </div>
     </PlaylistCanonicalAddress>
   )

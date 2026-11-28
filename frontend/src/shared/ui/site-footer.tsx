@@ -1,26 +1,22 @@
-import { Link } from 'react-router'
-import { cn } from '@/shared/lib/utils'
+import { LegalLinks } from '@/shared/ui/legal-links'
+import type { Theme } from '@/shared/lib/theme'
 
-export function SiteFooter({ className }: { className?: string }) {
+export function SiteFooter({ theme }: { theme: Theme }) {
   return (
     <footer
-      className={cn(
-        '-mx-5 -mb-12 bg-surface p-5 text-xs text-muted md:mx-[calc(clamp(24px,8.333333vw,120px)*-1)] md:p-10',
-        className,
-      )}
+      className={`grid shrink-0 gap-1 px-5 pt-5 pb-6 text-xs text-muted md:px-10 ${theme === 'dark' ? 'bg-bg' : 'bg-surface'}`}
     >
-      <p>Stelody · 팬이 만드는 노래 아카이브</p>
-      <nav aria-label="하단 메뉴" className="mt-2 flex gap-4 md:hidden">
-        <Link className="inline-flex min-h-11 items-center" to="/">
-          홈
-        </Link>
-        <Link className="inline-flex min-h-11 items-center" to="/search">
-          검색
-        </Link>
-        <Link className="inline-flex min-h-11 items-center" to="/library">
-          보관함
-        </Link>
-      </nav>
+      <p className="text-sm font-bold">Stelody · 스텔라이브 노래를 한 곳에서</p>
+      <p>
+        Stelody는 공식 서비스가 아닌 팬이 제작한 비영리·비공식 서비스입니다.
+      </p>
+      <p>
+        문의 :{' '}
+        <a href="mailto:nohalapan@gmail.com" className="hover:underline">
+          nohalapan@gmail.com
+        </a>
+      </p>
+      <LegalLinks />
     </footer>
   )
 }

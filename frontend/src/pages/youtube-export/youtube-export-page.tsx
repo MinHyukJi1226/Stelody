@@ -470,10 +470,6 @@ function ExportScreen({
             </>
           )}
         </section>
-        <footer className="grid gap-1 px-2 pt-5 pb-6 text-xs leading-[1.5] text-muted">
-          <p>Stelody · 팬이 만드는 노래 아카이브</p>
-          <p>화면 검수용 예시 데이터 · 공식 서비스가 아닙니다</p>
-        </footer>
       </div>
     </PlaylistCanonicalAddress>
   )

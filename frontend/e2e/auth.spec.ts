@@ -44,7 +44,7 @@ test('로그인 화면·원본 Google 아이콘·내부 복귀 경로를 제공�
   ).toBeVisible()
   await expect(page.getByRole('search', { name: '노래 검색' })).toBeVisible()
   await expect(page.locator('footer')).toContainText(
-    '화면 검수용 예시 데이터 · 공식 서비스가 아닙니다',
+    'Stelody는 공식 서비스가 아닌 팬이 제작한 비영리·비공식 서비스입니다.',
   )
   const button = page.getByRole('link', {
     name: 'Google로 로그인',
