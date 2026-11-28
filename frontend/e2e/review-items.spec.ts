@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect, makeSong } from './fixtures'
 import { mockAdmin } from './admin-fixtures'
 import { makeAdminSong, sid } from '../src/test/admin-song'
@@ -262,10 +263,7 @@ test('PC·모바일 라이트·다크 후보 상세가 화면 너비를 넘지 �
   await page.goto(path)
   for (const theme of ['light', 'dark']) {
     await page.goto(path)
-    if (theme === 'dark')
-      await page
-        .getByRole('button', { name: '다크 모드로 변경', exact: true })
-        .click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     await expect(page.getByLabel('변경 사유*', { exact: true })).toBeVisible()
     expect(
       await page.evaluate(

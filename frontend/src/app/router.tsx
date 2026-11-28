@@ -18,6 +18,20 @@ export const router = createBrowserRouter([
     children: withErrorScreens([
       { path: '/', element: <HomePage /> },
       {
+        path: '/privacy',
+        lazy: async () => ({
+          Component: (await import('@/pages/legal/legal-page'))
+            .PrivacyPolicyPage,
+        }),
+      },
+      {
+        path: '/terms',
+        lazy: async () => ({
+          Component: (await import('@/pages/legal/legal-page'))
+            .TermsOfServicePage,
+        }),
+      },
+      {
         path: '/admin',
         lazy: async () => {
           const { AdminGate } = await import('@/pages/admin/admin-shared')

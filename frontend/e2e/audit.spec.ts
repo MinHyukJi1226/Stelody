@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { fixture as artistFixture } from './original-artist-fixtures'
 import { test, expect, makeSong } from './fixtures'
 import { mockSongEditor, editPath, sid } from './admin-song-fixtures'
@@ -315,10 +316,7 @@ test('PC·모바일 양쪽 테마에서 대상 선택·이력·비교가 화면�
   await setup(page)
   await page.goto(editPath)
   for (const theme of ['light', 'dark']) {
-    if (theme === 'dark')
-      await page
-        .getByRole('button', { name: '다크 모드로 변경', exact: true })
-        .click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     await page.getByRole('button', { name: '변경 이력', exact: true }).click()
     const overlay = page.getByRole('dialog').last()
     await expect(

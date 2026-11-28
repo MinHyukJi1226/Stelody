@@ -23,10 +23,6 @@ export function HomePage() {
         <LatestSongs />
         <Recommendations />
       </div>
-      <footer className="grid gap-1 pt-5 pb-6 text-xs text-muted">
-        <p>Stelody · 팬이 만드는 노래 아카이브</p>
-        <p>공식 서비스가 아닙니다.</p>
-      </footer>
     </>
   )
 }

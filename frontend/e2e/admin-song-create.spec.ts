@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
 import { mockSongEditor } from './admin-song-fixtures'
@@ -324,12 +325,10 @@ test('PC·모바일과 양쪽 테마에서 등록 화면이 가로로 넘치지 
   await fill(page)
   for (const theme of ['light', 'dark']) {
     if ((await page.locator('html').getAttribute('data-theme')) !== theme)
-      await page
-        .getByRole('button', {
-          name: theme === 'dark' ? '다크 모드로 변경' : '라이트 모드로 변경',
-          exact: true,
-        })
-        .click()
+      await changeTheme(
+        page,
+        theme === 'dark' ? '다크 모드로 변경' : '라이트 모드로 변경',
+      )
     await page.evaluate(() => window.scrollTo(0, 0))
     expect(
       await page.evaluate(

@@ -1,3 +1,4 @@
+import { usePageTitle } from '@/shared/lib/use-page-title'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, useLocation, useParams } from 'react-router'
 import { z } from 'zod'
@@ -16,6 +17,7 @@ export function MemberDetailPage() {
     z.uuid().safeParse(memberId).success ||
     /^[a-z][a-z0-9-]{0,39}$/.test(memberId)
   const query = useQuery({ ...memberDetailOptions(memberId), enabled: valid })
+  usePageTitle(valid ? query.data?.member.name : undefined)
   const unavailable =
     !valid ||
     (query.error instanceof ApiError && [403, 404].includes(query.error.status))
@@ -72,10 +74,6 @@ export function MemberDetailPage() {
           </>
         )}
       </div>
-      <footer className="grid gap-1 px-5 pt-5 pb-6 text-xs text-muted md:px-10">
-        <p>Stelody · 팬이 만드는 노래 아카이브</p>
-        <p>공식 서비스가 아닙니다.</p>
-      </footer>
     </div>
   )
 }

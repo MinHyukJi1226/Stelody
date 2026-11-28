@@ -8,7 +8,6 @@ import { ApiError } from '@/shared/api/errors'
 import { formatAdminTime, isAdminAccessError } from '@/features/admin/format'
 import { useAdminUser } from '@/features/admin/admin-context'
 import { Button } from '@/shared/ui/button'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { AdminManagementMenu } from './admin-management-menu'
 
 export function AdminGate() {
@@ -51,12 +50,7 @@ export function AdminGate() {
   else if (!isActiveAdmin(session.data))
     content = <AdminAccess state="forbidden" />
   else content = <Outlet key={session.data.id} context={session.data.id} />
-  return (
-    <div className="admin-page">
-      {content}
-      <SiteFooter />
-    </div>
-  )
+  return <div className="admin-page">{content}</div>
 }
 
 export function AdminAccess({

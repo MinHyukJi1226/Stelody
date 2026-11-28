@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect } from './fixtures'
 import { mockAdmin, inbox } from './admin-fixtures'
 
@@ -210,13 +211,14 @@ test('목록 로딩·빈 목록과 실제 집계 0을 구분한다', async ({ pa
 
 test('같은 계정의 역할 변경 후 이전 관리자 정보를 다시 표시하지 않는다', async ({
   page,
-  isMobile,
 }) => {
   const state = await mockAdmin(page)
   await page.goto('/admin/reviews')
   await expect(page.getByText('신규 후보 1', { exact: true })).toBeVisible()
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
-  await page.getByRole('link', { name: '계정 관리', exact: true }).click()
+  await page
+    .getByRole('banner')
+    .getByRole('link', { name: '내 계정', exact: true })
+    .click()
   await expect(page).toHaveURL('/account')
   await expect(
     page.getByRole('heading', { name: '계정 관리', exact: true }),
@@ -255,11 +257,10 @@ test('관리자 정상 화면은 양쪽 테마에서 가로 넘침이 없다', a
     await expect(page.getByText('불러오는 중…', { exact: true })).toHaveCount(0)
     for (const theme of ['light', 'dark']) {
       if ((await page.locator('html').getAttribute('data-theme')) !== theme) {
-        await page
-          .getByRole('button', {
-            name: theme === 'dark' ? '다크 모드로 변경' : '라이트 모드로 변경',
-          })
-          .click()
+        await changeTheme(
+          page,
+          theme === 'dark' ? '다크 모드로 변경' : '라이트 모드로 변경',
+        )
       }
       expect(
         await page.evaluate(

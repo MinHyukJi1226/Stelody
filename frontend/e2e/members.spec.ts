@@ -64,8 +64,8 @@ test('멤버 목록은 유닛별 프로필과 졸업 섹션을 표시하고 공�
       .getByRole('region', { name: 'GRADUATE', exact: true })
       .getByRole('link'),
   ).toHaveAttribute('href', `/members/${graduate.id}`)
-  await expect(page.locator('main footer')).toContainText(
-    '공식 서비스가 아닙니다.',
+  await expect(page.getByRole('contentinfo')).toContainText(
+    'Stelody는 공식 서비스가 아닌 팬이 제작한 비영리·비공식 서비스입니다.',
   )
   await page.getByRole('searchbox').fill('유니')
   await page.getByRole('searchbox').press('Enter')

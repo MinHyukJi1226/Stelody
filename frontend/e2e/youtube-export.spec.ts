@@ -1104,7 +1104,7 @@ for (const theme of ['light', 'dark'] as const)
       expect(box?.x).toBe(isMobile ? 20 : 32)
       await expect(page.getByRole('search')).toBeVisible()
       await expect(page.locator('footer')).toContainText(
-        '팬이 만드는 노래 아카이브',
+        '스텔라이브 노래를 한 곳에서',
       )
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),

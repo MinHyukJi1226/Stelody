@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect, makeSong } from './fixtures'
 import { mockAdmin } from './admin-fixtures'
 import type { Page } from '@playwright/test'
@@ -144,7 +145,10 @@ test('관리 메뉴·검색·페이지 이동과 저장 후 목록 복귀', asyn
   await page.getByRole('button', { name: '관리 기능', exact: true }).click()
   await page.getByRole('link', { name: '공식 채널 관리', exact: true }).click()
   await page.getByLabel('검색', { exact: true }).fill('official')
-  await page.getByRole('button', { name: '검색', exact: true }).click()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: '검색', exact: true })
+    .click()
   await page.getByRole('button', { name: '다음', exact: true }).click()
   await page.getByRole('link', { name: '채널 수정', exact: true }).click()
   await fill(page)
@@ -415,10 +419,7 @@ test('PC·모바일 라이트·다크 목록·편집·선택창의 가로 넘침
   await setup(page)
   for (const theme of ['light', 'dark']) {
     await page.goto(path)
-    if (theme === 'dark')
-      await page
-        .getByRole('button', { name: '다크 모드로 변경', exact: true })
-        .click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     await expect(page.getByLabel('채널명*', { exact: true })).toBeEnabled()
     expect(
       await page.evaluate(
@@ -475,7 +476,10 @@ test('신규 멤버 채널에서 멤버 선택·수집 사용을 확인한 뒤 �
     .getByRole('button', { name: '연결 멤버 선택', exact: true })
     .click()
   await page.getByLabel('이름·별칭 검색', { exact: true }).fill('테스트')
-  await page.getByRole('button', { name: '검색', exact: true }).click()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: '검색', exact: true })
+    .click()
   await page.getByRole('radio', { name: '테스트 멤버', exact: true }).check()
   await page.getByRole('button', { name: '선택 적용', exact: true }).click()
   await expect(page.getByText('테스트 멤버', { exact: true })).toBeVisible()

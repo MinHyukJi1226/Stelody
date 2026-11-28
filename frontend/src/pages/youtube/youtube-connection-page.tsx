@@ -5,7 +5,6 @@ import { safeReturnPath } from '@/features/auth/return-path'
 import { accountPath, withdrawalPath } from '@/features/account/api'
 import { useYouTubeConnection } from '@/features/youtube/use-youtube-connection'
 import { Button } from '@/shared/ui/button'
-import { SiteFooter } from '@/shared/ui/site-footer'
 import { ConnectionPanel } from './components/connection-panel'
 import { DisconnectDialog } from './components/disconnect-dialog'
 
@@ -35,7 +34,7 @@ function ConnectionScreen({ user }: { user: string }) {
   const connection = useYouTubeConnection(user, authorizationReturn)
   const { query, state, notice, failed, busy } = connection
   return (
-    <div className="favorites-page flex min-w-0 flex-col gap-12">
+    <div className="flex min-w-0 flex-col gap-12">
       <section className="flex min-w-0 flex-1 flex-col items-center gap-6">
         <h1 className="w-full break-words text-[32px] font-bold leading-[1.5]">
           YouTube 연결 관리
@@ -73,7 +72,6 @@ function ConnectionScreen({ user }: { user: string }) {
           </Link>
         </Button>
       </section>
-      <SiteFooter />
       {connection.deleting && (
         <DisconnectDialog
           user={user}

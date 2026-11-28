@@ -17,6 +17,12 @@ export function PlaylistCover({
     ...playlistItemsOptions(userId, playlist.id),
     enabled: !!userId && playlist.availableCount > 0,
   })
+  const collage = playlist.totalCount >= 4
+  const firstItem = query.data?.pages[0]?.items[0]
+  const firstThumbnail =
+    playlist.totalCount > 0 && firstItem?.available
+      ? (firstItem.song?.thumbnailUrl ?? null)
+      : null
   const thumbnails =
     query.data?.pages[0]?.items
       .flatMap((item) =>
@@ -29,16 +35,17 @@ export function PlaylistCover({
   return (
     <div
       className={cn(
-        'grid aspect-square grid-cols-2 grid-rows-2 overflow-hidden rounded-lg bg-line',
+        'grid aspect-square overflow-hidden rounded-lg bg-line',
+        collage ? 'grid-cols-2 grid-rows-2' : 'grid-cols-1 grid-rows-1',
         className,
       )}
     >
-      {Array.from({ length: 4 }, (_, index) => (
+      {Array.from({ length: collage ? 4 : 1 }, (_, index) => (
         <Artwork
           key={index}
-          src={thumbnails[index] ?? null}
+          src={collage ? (thumbnails[index] ?? null) : firstThumbnail}
           className="size-full min-h-0 min-w-0"
-          fallbackText=""
+          fallbackText={collage ? '' : '♪'}
         />
       ))}
     </div>

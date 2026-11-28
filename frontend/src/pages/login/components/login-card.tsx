@@ -47,6 +47,19 @@ export function LoginCard({
         <img src={googleMark} alt="" width={20} height={20} />
         <span>Google로 로그인</span>
       </a>
+      <p className="mt-4 text-xs leading-[1.7] text-muted">
+        로그인 전{' '}
+        <Link to="/terms" className="underline underline-offset-2">
+          이용약관
+        </Link>
+        과{' '}
+        <Link to="/privacy" className="underline underline-offset-2">
+          개인정보처리방침
+        </Link>
+        을 확인해 주세요.
+        <br />
+        계정 생성·로그인과 내 보관함 제공에 필요한 개인정보를 처리합니다.
+      </p>
       {notice && (
         <div
           className={`mt-4 rounded-lg p-3 text-sm leading-[1.5] ${cancelled ? 'bg-tint text-muted' : 'bg-rose text-error'}`}

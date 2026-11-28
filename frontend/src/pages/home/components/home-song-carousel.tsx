@@ -119,7 +119,7 @@ export function HomeCarousel({
         ref={viewport}
         className={
           scrollable
-            ? 'overflow-x-auto overscroll-x-contain snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+            ? 'overflow-x-auto overflow-y-hidden overscroll-x-contain snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
             : 'overflow-hidden'
         }
         tabIndex={scrollable ? 0 : undefined}

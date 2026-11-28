@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
 import { mockAdmin } from './admin-fixtures'
@@ -432,10 +433,7 @@ test('라이트·다크 규칙 편집·샘플 입력·결과는 가로 넘침이
   await setup(page)
   for (const theme of ['light', 'dark']) {
     await page.goto('/admin/collection-rules')
-    if (theme === 'dark')
-      await page
-        .getByRole('button', { name: '다크 모드로 변경', exact: true })
-        .click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     await expect(
       page.getByLabel('커버 규칙 1 단어·문구*', { exact: true }),
     ).toBeEnabled()

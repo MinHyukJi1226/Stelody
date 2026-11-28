@@ -222,9 +222,11 @@ test('계정 관리 진입·이메일·탈퇴 안내를 표시하고 메뉴 포�
   await page.goto('/account')
   await expect(panel(page).getByText(user.email, { exact: true })).toBeVisible()
   await expect(page.locator('footer')).toContainText(
-    'Stelody · 팬이 만드는 노래 아카이브',
+    'Stelody · 스텔라이브 노래를 한 곳에서',
   )
-  await expect(page.locator('footer')).toContainText('공식 서비스가 아닙니다')
+  await expect(page.locator('footer')).toContainText(
+    '비영리·비공식 서비스입니다.',
+  )
   await expect(page.getByRole('search', { name: '노래 검색' })).toBeVisible()
   await expect(
     page
@@ -249,7 +251,9 @@ test('계정 관리 진입·이메일·탈퇴 안내를 표시하고 메뉴 포�
   await expect(
     panel(page).getByRole('region', { name: '회원 탈퇴', exact: true }),
   ).toHaveCount(0)
-  await expect(page.locator('footer')).toContainText('공식 서비스가 아닙니다')
+  await expect(page.locator('footer')).toContainText(
+    '비영리·비공식 서비스입니다.',
+  )
   expect(state.authorizations).toHaveLength(0)
   expect(state.deletes).toBe(0)
 })

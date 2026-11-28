@@ -1,22 +1,17 @@
-import { lazy, Suspense } from 'react'
-import { Link, NavLink } from 'react-router'
-import logo from '@/shared/assets/logo.svg'
-import sun from '@/shared/assets/sun.svg'
-import moon from '@/shared/assets/moon.svg'
-import type { Theme } from '@/shared/lib/theme'
-import { useMediaQuery } from '@/shared/lib/use-media-query'
-import { Button } from '@/shared/ui/button'
-import { MenuIcon } from './menu-icon'
-import { AccountControl } from '@/features/auth/account-control'
-import { AccountLink } from '@/features/account/account-link'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Form, Link, useLocation } from 'react-router'
+import { MenuIcon } from '@/app/layout/menu-icon'
+import { accountPath } from '@/features/account/api'
 import { AdminLink } from '@/features/admin/admin-link'
-
-const navigation = [
-  { to: '/search', label: '검색' },
-  { to: '/members', label: '멤버' },
-  { to: '/library', label: '내 보관함' },
-]
-const MobileMenu = lazy(() => import('./mobile-menu'))
+import { AccountControl } from '@/features/auth/account-control'
+import { rememberLoginReturn } from '@/features/auth/return-path'
+import { sessionOptions } from '@/features/auth/session'
+import logo from '@/shared/assets/logo.svg'
+import type { Theme } from '@/shared/lib/theme'
+import { Button } from '@/shared/ui/button'
+import { Dialog } from '@/shared/ui/dialog'
+import { Input } from '@/shared/ui/input'
 
 export function SiteHeader({
   theme,
@@ -25,58 +20,128 @@ export function SiteHeader({
   theme: Theme
   toggleTheme: () => void
 }) {
-  const mobile = useMediaQuery('(width < 768px)')
+  const location = useLocation()
+  const search = location.pathname === '/search'
+  const query = search
+    ? (new URLSearchParams(location.search).get('q') ?? '')
+    : ''
+  const session = useQuery(sessionOptions)
+  const [open, setOpen] = useState(false)
+  const close = () => setOpen(false)
+  const themeLabel =
+    theme === 'dark' ? '라이트 모드로 변경' : '다크 모드로 변경'
+
   return (
-    <header className="site-header">
+    <header className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 bg-surface px-5 py-4 md:grid-cols-[140px_minmax(0,1fr)_auto_auto] md:gap-4 md:px-10">
       <Link
         to="/"
-        className="site-brand flex items-center gap-2.5 rounded-lg"
         aria-label="Stelody 홈"
-      >
-        <span className="size-8 shrink-0 rounded-lg bg-brand-fill">
-          <img src={logo} alt="" width={32} height={32} />
-        </span>
-        <span className="text-xl font-bold leading-[1.5]">Stelody</span>
-      </Link>
-      <nav className="site-nav desktop-nav" aria-label="주 메뉴">
-        {navigation.map(({ to, label }) => (
-          <Button key={to} asChild>
-            <NavLink to={to}>{label}</NavLink>
-          </Button>
-        ))}
-        <AccountLink />
-        <AdminLink />
-        <AccountControl />
-      </nav>
-      <Button
-        size="icon"
-        onClick={toggleTheme}
-        aria-label={
-          theme === 'dark' ? '라이트 모드로 변경' : '다크 모드로 변경'
-        }
+        className="flex items-center gap-3 text-lg font-bold"
       >
         <img
-          src={theme === 'dark' ? sun : moon}
+          src={logo}
           alt=""
-          width={24}
-          height={24}
+          width={32}
+          height={32}
+          className="rounded-lg bg-brand-fill"
         />
-      </Button>
-      {mobile && (
-        <Suspense
-          fallback={
-            <Button
-              size="icon"
-              className="mobile-menu-trigger border-0 bg-transparent"
-              disabled
-              aria-label="메뉴 불러오는 중"
-            >
-              <MenuIcon />
-            </Button>
-          }
+        Stelody
+      </Link>
+      <Form
+        key={location.pathname + location.search}
+        action="/search"
+        role="search"
+        aria-label="노래 검색"
+        className="col-span-full row-start-2 flex min-w-0 gap-2 md:col-span-1 md:row-start-1 md:col-start-2"
+      >
+        <label htmlFor="home-search" className="sr-only">
+          곡명, 원곡, 멤버 검색
+        </label>
+        <Input
+          id="home-search"
+          name="q"
+          defaultValue={query}
+          type="search"
+          maxLength={200}
+          placeholder="곡명, 원곡, 멤버 검색"
+          className="h-11 min-h-11 min-w-0 flex-1 rounded-lg px-3 py-0 text-sm"
+          required
+          pattern={'.*\\S.*'}
+        />
+        <Button
+          variant="primary"
+          type="submit"
+          className={`h-11 min-h-11 w-16 py-0 ${theme === 'dark' ? 'bg-brand text-night' : ''}`}
         >
-          <MobileMenu navigation={navigation} />
-        </Suspense>
+          검색
+        </Button>
+      </Form>
+      {session.isPending ? (
+        <Button disabled className="h-11 min-h-11 px-3 py-0">
+          확인 중…
+        </Button>
+      ) : (
+        <Button asChild className="h-11 min-h-11 px-3 py-0">
+          <Link
+            to={session.data ? accountPath : '/login'}
+            onClick={() => {
+              if (!session.data)
+                rememberLoginReturn(
+                  location.pathname + location.search + location.hash,
+                )
+            }}
+          >
+            {session.data ? '내 계정' : '로그인'}
+          </Link>
+        </Button>
+      )}
+      <Button
+        size="icon"
+        className="border-0 bg-transparent"
+        aria-label="메뉴 열기"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        <MenuIcon />
+      </Button>
+      {open && (
+        <Dialog
+          labelledBy="home-menu-title"
+          onDismiss={close}
+          dismissOnBackdrop
+          className="fixed inset-y-0 right-0 left-auto m-0 flex h-dvh max-h-none w-[min(320px,100vw)] flex-col gap-4 rounded-none border-0 p-6"
+        >
+          <div className="flex items-center justify-between">
+            <h2 id="home-menu-title" className="text-lg font-bold">
+              메뉴
+            </h2>
+            <Button onClick={close}>닫기</Button>
+          </div>
+          <nav aria-label="주 메뉴" className="grid gap-2">
+            <Button asChild>
+              <Link to="/songs" onClick={close}>
+                전체곡
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/members" onClick={close}>
+                멤버
+              </Link>
+            </Button>
+            {session.data && (
+              <>
+                <Button asChild>
+                  <Link to="/library" onClick={close}>
+                    내 보관함
+                  </Link>
+                </Button>
+                <AdminLink onNavigate={close} />
+              </>
+            )}
+            <Button onClick={toggleTheme}>{themeLabel}</Button>
+          </nav>
+          {session.data && <AccountControl onNavigate={close} />}
+        </Dialog>
       )}
     </header>
   )

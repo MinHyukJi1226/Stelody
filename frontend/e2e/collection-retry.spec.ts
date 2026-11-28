@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect, makeSong } from './fixtures'
 import { mockAdmin, run as baseRun } from './admin-fixtures'
 import type { Page } from '@playwright/test'
@@ -261,10 +262,7 @@ test('PC·모바일 양쪽 테마의 상세·확인창이 화면을 넘지 않�
   await setup(page)
   await page.goto(path)
   for (const theme of ['light', 'dark']) {
-    if (theme === 'dark')
-      await page
-        .getByRole('button', { name: '다크 모드로 변경', exact: true })
-        .click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     await expect(
       page.getByLabel('재시도 사유 *', { exact: true }),
     ).toBeVisible()

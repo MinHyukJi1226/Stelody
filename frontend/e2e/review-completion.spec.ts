@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect, makeSong } from './fixtures'
 import { mockAdmin } from './admin-fixtures'
 import type { Page } from '@playwright/test'
@@ -423,11 +424,10 @@ test('선택·확인창은 양쪽 테마에서 가로로 넘치지 않는다', a
   await selectCandidate(page)
   for (const theme of ['light', 'dark']) {
     if ((await page.locator('html').getAttribute('data-theme')) !== theme)
-      await page
-        .getByRole('button', {
-          name: theme === 'dark' ? '다크 모드로 변경' : '라이트 모드로 변경',
-        })
-        .click()
+      await changeTheme(
+        page,
+        theme === 'dark' ? '다크 모드로 변경' : '라이트 모드로 변경',
+      )
     await page.evaluate(() => (document.activeElement as HTMLElement)?.blur())
     await page.screenshot({
       path: info.outputPath(`selection-${theme}.png`),
