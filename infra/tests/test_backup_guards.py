@@ -1,4 +1,5 @@
 import importlib.util
+import io
 from datetime import timedelta
 import json
 import os
@@ -35,6 +36,25 @@ class BackupGuardsTest(unittest.TestCase):
         path = self.bundle / 'manifest.json'
         path.write_text(json.dumps(self.metadata))
         path.chmod(0o600)
+
+    def test_copy_filter_preserves_decisions_escapes_and_omits_only_cache(self):
+        text = ("COPY app.review_item (id, source_title, source_published_at, source_thumbnail_url, source_duration_seconds, review_status, review_note, version) FROM stdin;\n"
+                "id\tsecret title\t2020-01-01\tsecret thumbnail\t123\tIGNORED\tnote\\tquote\\nline\t7\n"
+                "\\.\nCOPY app.song_entry (title) FROM stdin;\nsong title\n\\.\n")
+        out = io.StringIO()
+        backup.filter_review_cache(io.StringIO(text), out)
+        self.assertNotIn('secret', out.getvalue())
+        self.assertIn('id\t\\N\t\\N\t\\N\t\\N\tIGNORED\tnote\\tquote\\nline\t7', out.getvalue())
+        self.assertIn('song title', out.getvalue())
+        for invalid in ('', text.split('\\.')[0], text.replace('source_title, ', '')):
+            with self.assertRaises(backup.OperationError):
+                backup.filter_review_cache(io.StringIO(invalid), io.StringIO())
+
+    def test_unknown_dump_format_is_rejected_before_restore(self):
+        self.metadata['dumpFormat'] = 'unknown'
+        self.save_manifest()
+        with self.assertRaisesRegex(backup.OperationError, 'dump format'):
+            backup.validate_archive(self.bundle)
 
     def test_validated_archives_remain_valid_but_unknown_schema_is_rejected(self):
         for version in (19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35):
@@ -298,9 +318,10 @@ class BackupGuardsTest(unittest.TestCase):
     def test_retention_written_before_dump_with_child_lock_and_shorter_expiry(self):
         expiry = (backup.now() + timedelta(hours=1)).isoformat()
 
-        def dump(command, **kwargs):
+        def dump(command, path, descriptor):
+            kwargs = {'pass_fds': (descriptor,)}
             if command[0] == 'pg_dump':
-                path = Path(next(arg[7:] for arg in command if arg.startswith('--file=')))
+                path = Path(path)
                 retention = path.parent / 'retention.json'
                 self.assertEqual(expiry, json.loads(retention.read_text())['expiresAt'])
                 self.assertEqual(0, retention.stat().st_mode & 0o077)
@@ -311,8 +332,8 @@ class BackupGuardsTest(unittest.TestCase):
             return ''
 
         with patch.object(backup, 'database_info', return_value={'owners': ['owner'], 'user': 'owner', 'database': 'test'}), \
-             patch.object(backup, 'sql', side_effect=['20', '0', expiry]), \
-             patch.object(backup, 'run', side_effect=dump), patch('builtins.print'):
+             patch.object(backup, 'sql', side_effect=['20', expiry]), \
+             patch.object(backup, 'write_dump', side_effect=dump), patch('builtins.print'):
             backup.backup(self.root)
         completed = [path for path in self.root.glob('stelody-*') if path != self.bundle]
         self.assertEqual(1, len(completed))
@@ -333,7 +354,8 @@ class BackupGuardsTest(unittest.TestCase):
         # and mocked DB preflight; PostgreSQL/user data are never accessed.
         ready = self.root / 'ready'
         release = self.root / 'release'
-        worker = '''import importlib.util, sys
+        worker = '''import importlib.util
+import io, sys
 from pathlib import Path
 from datetime import timedelta
 spec = importlib.util.spec_from_file_location('backup', sys.argv[1])
@@ -349,10 +371,9 @@ Path(sys.argv[1]).write_bytes(b'synthetic archive')
 Path(sys.argv[2]).write_text('ready')
 while not Path(sys.argv[3]).exists(): time.sleep(0.01)
 """
-def dump(command, **kwargs):
-    path = next(arg[7:] for arg in command if arg.startswith('--file='))
-    return original_run([sys.executable, '-B', '-c', child, path, sys.argv[3], sys.argv[4]], **kwargs)
-b.run = dump
+def dump(command, path, descriptor):
+    return original_run([sys.executable, '-B', '-c', child, str(path), sys.argv[3], sys.argv[4]], pass_fds=(descriptor,))
+b.write_dump = dump
 b.backup(Path(sys.argv[2]))
 '''
         process = subprocess.Popen([sys.executable, '-B', '-c', worker, str(Path(spec.origin)),

@@ -303,7 +303,7 @@ class OffsiteBackupTest(unittest.TestCase):
         dump = bundle / 'database.dump'
         dump.write_bytes(b'private fixture: neither ciphertext nor logs should contain this')
         dump.chmod(0o600)
-        metadata = {'format': 1, 'schemaVersion': 19, 'schemaOwner': 'owner', 'sourceDatabase': 'source',
+        metadata = {'format': 1, 'dumpFormat': database.REVIEW_CACHE_DUMP, 'schemaVersion': 19, 'schemaOwner': 'owner', 'sourceDatabase': 'source',
                     'createdAt': self.value['createdAt'], 'expiresAt': self.value['expiresAt'],
                     'sha256': database.digest(dump), 'excludedData': list(database.EXCLUDED_DATA)}
         manifest = bundle / 'manifest.json'
@@ -314,6 +314,7 @@ class OffsiteBackupTest(unittest.TestCase):
             self.assertNotIn(dump.read_bytes(), encrypted.read_bytes())
             restored = offsite.unseal(encrypted, self.root / 'restored')
             self.assertEqual((restored / 'database.dump').read_bytes(), dump.read_bytes())
+            self.assertEqual(database.validate_archive(restored)['dumpFormat'], database.REVIEW_CACHE_DUMP)
             content = bytearray(encrypted.read_bytes())
             content[-1] ^= 1
             encrypted.write_bytes(content)

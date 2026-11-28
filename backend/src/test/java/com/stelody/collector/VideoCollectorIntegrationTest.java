@@ -124,6 +124,75 @@ class VideoCollectorIntegrationTest {
   }
 
   @Test
+  void restoredReviewCacheRehydratesWithoutClassificationOrChangingAdminDecisions()
+      throws Exception {
+    new ResourceDatabasePopulator(new ClassPathResource("discovery-grants.sql"))
+        .execute(
+            new DriverManagerDataSource(
+                postgres.getJdbcUrl(), "stelody_migrator", "test-migrator"));
+    seed(3);
+    for (int n = 1; n <= 3; n++) {
+      writer.update(
+          """
+          INSERT INTO app.review_item(id,youtube_id,channel_id,source_observed_at,availability,
+              disposition,suggested_type,rule_version,decision_reason,review_status,review_note,
+              registered_video_id,first_seen_at,version)
+          VALUES(?,?,?,?,'PUBLIC','EXCLUDED','UNKNOWN','kept-rule','NOT_A_SONG',?,'kept note',?,?,4)
+          """,
+          new UUID(8, n),
+          youtube(n),
+          CHANNEL_ID,
+          java.sql.Timestamp.from(NOW.minusSeconds(40L * 86400)),
+          n == 1 ? "PENDING" : n == 2 ? "IGNORED" : "REGISTERED",
+          n == 3 ? video(3) : null,
+          java.sql.Timestamp.from(NOW.minusSeconds(40L * 86400)));
+    }
+    var before =
+        writer.queryForList(
+            "SELECT id,disposition,suggested_type,rule_version,decision_reason,review_status,review_note,first_seen_at,registered_video_id FROM app.review_item ORDER BY id");
+    var recovery =
+        new com.stelody.collector.service.ReviewMetadataRecovery(
+            source, settings(Duration.ofSeconds(10), 1), Clock.fixed(NOW, ZoneOffset.UTC), d -> {});
+    server.stubFor(get(urlPathEqualTo("/videos")).willReturn(aResponse().withStatus(500)));
+    assertThatThrownBy(recovery::refresh).isInstanceOf(CollectionFailure.class);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE source_title IS NOT NULL",
+                Integer.class))
+        .isZero();
+    server.stubFor(
+        get(urlPathEqualTo("/videos"))
+            .willReturn(
+                okJson(response(List.of(1, 2), 100).replace(CHANNEL, "UC" + "b".repeat(22)))));
+    assertThatThrownBy(recovery::refresh).isInstanceOf(CollectionFailure.class);
+    success(List.of(1, 2), 100);
+    recovery.refresh();
+    assertThat(
+            writer.queryForList(
+                "SELECT source_title FROM app.review_item WHERE review_status<>'REGISTERED' ORDER BY id",
+                String.class))
+        .containsExactly("source 1", "source 2");
+    assertThat(
+            writer.queryForObject(
+                "SELECT source_title FROM app.review_item WHERE review_status='REGISTERED'",
+                String.class))
+        .isNull();
+    assertThat(
+            writer.queryForList(
+                "SELECT id,disposition,suggested_type,rule_version,decision_reason,review_status,review_note,first_seen_at,registered_video_id FROM app.review_item ORDER BY id"))
+        .isEqualTo(before);
+    assertThat(
+            writer.queryForObject(
+                "SELECT count(*) FROM app.review_item WHERE source_observed_at=?",
+                Integer.class,
+                java.sql.Timestamp.from(NOW)))
+        .isEqualTo(2);
+    server.resetRequests();
+    recovery.refresh();
+    server.verify(0, getRequestedFor(urlPathEqualTo("/videos")));
+  }
+
+  @Test
   void registeredExternalMetadataRefreshPreservesCatalogAndNeverCollectsViews() throws Exception {
     seed(2);
     writer.update(

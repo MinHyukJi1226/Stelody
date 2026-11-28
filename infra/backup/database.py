@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import stat
@@ -19,6 +20,8 @@ MAX_AGE = timedelta(days=7)
 SUPPORTED_SCHEMA_VERSIONS = (19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35)
 SQUASHED_SCHEMA_GENERATION = 'squashed-v1'
 SQUASHED_SCHEMA_VERSION = 1
+REVIEW_CACHE_DUMP = 'sql-review-cache-omitted-v1'
+REVIEW_CACHE_COLUMNS = {'source_title', 'source_published_at', 'source_thumbnail_url', 'source_duration_seconds'}
 EXCLUDED_DATA = (
     'session.spring_session', 'session.spring_session_attributes',
     'app.youtube_connection', 'app.youtube_authorization',
@@ -131,6 +134,53 @@ def backup(root):
         create_backup(root, descriptor)
 
 
+def filter_review_cache(lines, output):
+    """Filter PostgreSQL COPY text before writing it; never touch production rows."""
+    positions = None
+    seen = False
+    for line in lines:
+        if positions is None and line.startswith('COPY app.review_item '):
+            match = re.fullmatch(r'COPY app\.review_item \(([^\n]+)\) FROM stdin;\n', line)
+            if not match or seen:
+                raise OperationError('Unexpected review COPY layout')
+            columns = match[1].split(', ')
+            if not REVIEW_CACHE_COLUMNS.issubset(columns):
+                raise OperationError('Missing review cache columns')
+            positions = (len(columns), [columns.index(column) for column in REVIEW_CACHE_COLUMNS])
+            seen = True
+        elif positions is not None:
+            if line == '\\.\n':
+                positions = None
+            else:
+                fields = line.removesuffix('\n').split('\t')
+                if len(fields) != positions[0]:
+                    raise OperationError('Unexpected review COPY row')
+                for index in positions[1]:
+                    fields[index] = '\\N'
+                line = '\t'.join(fields) + '\n'
+        output.write(line)
+    if positions is not None or not seen:
+        raise OperationError('Incomplete review COPY data')
+
+
+def write_dump(command, path, descriptor):
+    log = path.parent / 'dump.log'
+    with log.open('w') as errors, path.open('w', encoding='utf-8', newline='') as output:
+        log.chmod(0o600)
+        path.chmod(0o600)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors,
+                                   text=True, encoding='utf-8', pass_fds=(descriptor,))
+        try:
+            filter_review_cache(process.stdout, output)
+            if process.wait() != 0:
+                raise OperationError('pg_dump failed; inspect private dump log')
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            process.stdout.close()
+
+
 def create_backup(root, descriptor):
     info = database_info()
     if info['owners'] != [info['user']]:
@@ -149,17 +199,13 @@ def create_backup(root, descriptor):
     elif version not in tuple(str(value) for value in SUPPORTED_SCHEMA_VERSIONS):
         raise OperationError('Unsupported database schema; validated versions: ' +
                              ', '.join(f'V{value}' for value in SUPPORTED_SCHEMA_VERSIONS))
-    # Remove only redundant source copies, never exclude retained source data
-    # from the expiry calculation or advance its original observation timestamp.
-    cleared = int(sql((BASE / 'prepare-backup.sql').read_text()))
+    # Review cache is filtered from the dump stream, not changed in production.
     created = now()
     expires = created + MAX_AGE
     source_expiry = sql("""SELECT min(expires_at)::text FROM (
         SELECT source_observed_at+INTERVAL '30 days' AS expires_at FROM app.video
             WHERE source_observed_at IS NOT NULL AND
                 (source_title<>'' OR source_published_at IS NOT NULL OR source_thumbnail_url IS NOT NULL OR source_duration_seconds IS NOT NULL)
-        UNION ALL SELECT source_observed_at+INTERVAL '30 days' FROM app.review_item
-            WHERE source_title IS NOT NULL OR source_published_at IS NOT NULL OR source_thumbnail_url IS NOT NULL OR source_duration_seconds IS NOT NULL
         UNION ALL SELECT source_expires_at FROM app.special_event_review WHERE evidence<>'[]'::jsonb
     ) sources;""")
     if source_expiry:
@@ -183,15 +229,15 @@ def create_backup(root, descriptor):
         finally:
             os.close(directory_descriptor)
         dump = staging / 'database.dump'
-        command = ['pg_dump', '--no-password', '--format=custom', '--schema=app', '--schema=session',
-                   '--extension=pg_trgm', '--no-owner', '--file=' + str(dump)]
+        command = ['pg_dump', '--no-password', '--format=plain', '--schema=app', '--schema=session',
+                   '--extension=pg_trgm', '--no-owner']
         command += ['--exclude-table-data=' + table for table in excluded_data(version, generation)]
-        run(command, log=staging / 'dump.log', pass_fds=(descriptor,))
+        write_dump(command, dump, descriptor)
         dump.chmod(0o600)
-        run(['pg_restore', '--list', str(dump)], log=staging / 'archive-check.log', pass_fds=(descriptor,))
         manifest = {'format': 1, 'createdAt': created.isoformat(), 'expiresAt': expires.isoformat(), 'schemaVersion': int(version),
                     'schemaOwner': info['user'], 'sourceDatabase': info['database'],
-                    'sha256': digest(dump), 'excludedData': list(excluded_data(version, generation))}
+                    'sha256': digest(dump), 'excludedData': list(excluded_data(version, generation)),
+                    'dumpFormat': REVIEW_CACHE_DUMP}
         if generation is not None:
             manifest['schemaGeneration'] = generation
         (staging / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
@@ -201,7 +247,7 @@ def create_backup(root, descriptor):
         shutil.rmtree(staging)
         raise
     print(json.dumps({'backup': str(destination), 'expiresAt': expires.isoformat(),
-                      'registeredReviewSourcesCleared': cleared}))
+                      'registeredReviewSourcesCleared': 0, 'reviewSourceCacheOmitted': True}))
 
 
 def validate_archive(directory):
@@ -218,6 +264,8 @@ def validate_archive(directory):
     metadata = json.loads((directory / 'manifest.json').read_text())
     if metadata.get('format') != 1:
         raise OperationError('Unsupported backup format/schema')
+    if metadata.get('dumpFormat') not in (None, REVIEW_CACHE_DUMP):
+        raise OperationError('Unsupported database dump format')
     policy_version(metadata.get('schemaVersion'), metadata.get('schemaGeneration'))
     if metadata.get('excludedData') != list(excluded_data(metadata['schemaVersion'], metadata.get('schemaGeneration'))):
         raise OperationError('Backup exclusion policy does not match')
@@ -265,9 +313,18 @@ def restore(directory, target, reconciliations):
     temporary = Path(tempfile.mkdtemp(prefix='stelody-restore-'))
     try:
         log = temporary / 'restore.log'
-        run(['pg_restore', '--no-password', '--exit-on-error', '--single-transaction',
-             '--no-owner', '--dbname=' + target, str(directory / 'database.dump')], log=log)
+        if metadata.get('dumpFormat') == REVIEW_CACHE_DUMP:
+            run(['psql', '-X', '--no-password', '-v', 'ON_ERROR_STOP=1', '--single-transaction',
+                 '--dbname=' + target, '--file=' + str(directory / 'database.dump')], log=log)
+        else:
+            run(['pg_restore', '--no-password', '--exit-on-error', '--single-transaction',
+                 '--no-owner', '--dbname=' + target, str(directory / 'database.dump')], log=log)
         sanitation = (BASE / 'restore-sanitize.sql').read_text()
+        if metadata.get('dumpFormat') == REVIEW_CACHE_DUMP:
+            start = sanitation.index('UPDATE app.review_item')
+            end = sanitation.index('UPDATE app.special_event_review', start)
+            # Missing cache must not erase the restored administrator decision.
+            sanitation = sanitation[:start] + sanitation[end:]
         if policy_version(metadata['schemaVersion'], metadata.get('schemaGeneration')) >= 28:
             # These receipts are durable deduplication records, not ephemeral sessions.
             # A snapshot cannot contain an artist without its completed receipt transaction.
