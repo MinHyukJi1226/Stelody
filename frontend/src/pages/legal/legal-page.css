@@ -1,0 +1,86 @@
+.legal-document {
+  font-size: 14px;
+  line-height: 1.9;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.legal-document h1 {
+  margin-bottom: 24px;
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.legal-document h2 {
+  margin-top: 36px;
+  margin-bottom: 16px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.legal-document h3 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.legal-document p,
+.legal-document ul,
+.legal-document ol {
+  margin-block: 12px;
+}
+
+.legal-document ul,
+.legal-document ol {
+  padding-left: 24px;
+}
+
+.legal-document ul {
+  list-style: disc;
+}
+
+.legal-document ol {
+  list-style: decimal;
+}
+
+.legal-document li + li {
+  margin-top: 8px;
+}
+
+.legal-document a {
+  color: var(--brand-fill);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-block: 20px;
+}
+
+.legal-document table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.legal-document th,
+.legal-document td {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.legal-document th {
+  background: var(--tint);
+  font-weight: 700;
+}
+
+.legal-document th,
+.legal-document td:first-child {
+  white-space: nowrap;
+}
