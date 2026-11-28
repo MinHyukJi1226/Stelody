@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect } from './fixtures'
 import { mockSongEditor, editPath } from './admin-song-fixtures'
 import { sid, mid, wid, vid } from '../src/test/admin-song'
@@ -77,7 +78,7 @@ test('세 탭·테마 전환 후 초안과 전체 입력 보존 및 확정 응�
   await page.getByRole('tab', { name: '공개·검색' }).click()
   await page.getByRole('checkbox', { name: '특별 목적 곡' }).check()
   await page.getByLabel('특별 목적 표시 문구*').fill('생일 기념')
-  await page.getByRole('button', { name: /모드로 변경/ }).click()
+  await changeTheme(page, /모드로 변경/)
   await page.getByRole('tab', { name: '링크·노래방' }).click()
   await expect(page.getByLabel('TJ 번호*')).toHaveValue('12345')
   await page.getByRole('tab', { name: '기본 정보', exact: true }).click()
@@ -310,7 +311,6 @@ for (const status of [401, 403, 404, 503])
 
 test('미저장 로그아웃도 공통 확인 후 실행하고 저장 중에는 잠근다', async ({
   page,
-  isMobile,
 }) => {
   await mockSongEditor(page)
   let logouts = 0
@@ -320,7 +320,7 @@ test('미저장 로그아웃도 공통 확인 후 실행하고 저장 중에는 
   })
   await openEditor(page)
   await fillSave(page)
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page.getByRole('button', { name: '로그아웃', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: '변경사항을 버리고 이동할까요?' }),
@@ -330,7 +330,7 @@ test('미저장 로그아웃도 공통 확인 후 실행하고 저장 중에는 
   await expect(page.getByLabel('곡명*', { exact: true })).toHaveValue(
     '내 수정 제목',
   )
-  if (isMobile) await page.getByRole('button', { name: '메뉴 열기' }).click()
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
   await page.getByRole('button', { name: '로그아웃', exact: true }).click()
   await page
     .getByRole('button', { name: '변경사항 버리고 이동', exact: true })
@@ -401,8 +401,7 @@ test('양쪽 테마의 편집 탭·선택창·충돌 비교 화면 가로 넘침
   const state = await mockSongEditor(page)
   await openEditor(page)
   for (const theme of ['light', 'dark']) {
-    if (theme === 'dark')
-      await page.getByRole('button', { name: '다크 모드로 변경' }).click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     for (const tab of ['기본 정보', '공개·검색', '링크·노래방']) {
       await page.getByRole('tab', { name: tab, exact: true }).click()
       expect(
@@ -455,7 +454,10 @@ test('검색 기록 뒤로 이동 시 입력창과 URL 검색어 일치', async 
     page.getByLabel('곡 제목·검색 별칭', { exact: true }),
   ).toHaveValue('첫검색')
   await page.getByLabel('곡 제목·검색 별칭', { exact: true }).fill('다음검색')
-  await page.getByRole('button', { name: '검색', exact: true }).click()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: '검색', exact: true })
+    .click()
   await expect(page).toHaveURL('/admin/songs?q=다음검색&page=0&size=10')
   await page.goBack()
   await expect(

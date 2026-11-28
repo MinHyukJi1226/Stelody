@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect, makeSong } from './fixtures'
 import type { Page } from '@playwright/test'
 import { mockAdmin } from './admin-fixtures'
@@ -146,7 +147,10 @@ test('관리 메뉴 진입·검색·페이지 이동과 원래 문맥 복귀', a
     page.getByRole('heading', { name: '멤버 관리', exact: true }),
   ).toBeVisible()
   await page.getByLabel('검색', { exact: true }).fill('별명')
-  await page.getByRole('button', { name: '검색', exact: true }).click()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: '검색', exact: true })
+    .click()
   await page.getByRole('button', { name: '다음', exact: true }).click()
   await expect(page).toHaveURL(
     '/admin/members?q=%EB%B3%84%EB%AA%85&page=1&size=20',
@@ -636,10 +640,7 @@ test('라이트·다크 목록·등록·수정과 상태 선택창은 화면 너
   await setup(page)
   for (const theme of ['light', 'dark']) {
     await page.goto('/admin/members')
-    if (theme === 'dark')
-      await page
-        .getByRole('button', { name: '다크 모드로 변경', exact: true })
-        .click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     for (const [screen, url] of [
       ['list', '/admin/members'],
       ['create', fresh],

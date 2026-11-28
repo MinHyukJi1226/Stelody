@@ -1,3 +1,4 @@
+import { changeTheme } from './header-actions'
 import { test, expect, makeSong } from './fixtures'
 import type { Page } from '@playwright/test'
 import { fixture } from './original-artist-fixtures'
@@ -165,7 +166,10 @@ test('관리 메뉴에서 원곡 목록에 진입하고 영상 정보 수정 메
     page.getByRole('heading', { name: '원곡 관리', exact: true }),
   ).toBeVisible()
   await page.getByLabel('검색', { exact: true }).fill('원곡')
-  await page.getByRole('button', { name: '검색', exact: true }).click()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: '검색', exact: true })
+    .click()
   await page.getByRole('button', { name: '다음', exact: true }).click()
   await expect(page).toHaveURL(
     '/admin/works?q=%EC%9B%90%EA%B3%A1&page=1&size=20',
@@ -527,7 +531,6 @@ for (const editor of ['edit', 'create'] as const) {
   for (const action of ['home', 'account', 'back', 'logout'] as const) {
     test(`${editor} 저장 403 후 ${action} 이동 확인을 취소하거나 완료할 수 있다`, async ({
       page,
-      isMobile,
     }) => {
       const state = await setup(page)
       let logouts = 0
@@ -564,10 +567,9 @@ for (const editor of ['edit', 'create'] as const) {
       const attempt = async () => {
         if (action === 'back') await page.evaluate(() => window.history.back())
         else if (action === 'logout') {
-          if (isMobile)
-            await page
-              .getByRole('button', { name: '메뉴 열기', exact: true })
-              .click()
+          await page
+            .getByRole('button', { name: '메뉴 열기', exact: true })
+            .click()
           await page
             .getByRole('button', { name: '로그아웃', exact: true })
             .click()
@@ -676,10 +678,7 @@ test('라이트·다크 원곡 편집과 관리 메뉴는 화면 너비를 넘�
   await page.goto(path)
   await expect(page.getByLabel('원곡 제목*', { exact: true })).toBeVisible()
   for (const theme of ['light', 'dark']) {
-    if (theme === 'dark')
-      await page
-        .getByRole('button', { name: '다크 모드로 변경', exact: true })
-        .click()
+    if (theme === 'dark') await changeTheme(page, '다크 모드로 변경')
     await expect(page.locator('html')).not.toHaveCSS('overflow-x', 'scroll')
     expect(
       await page.evaluate(

@@ -24,9 +24,7 @@ async function accountMenu(page: Page) {
     }
     return
   }
-  if ((page.viewportSize()?.width ?? 0) < 768) {
-    await page.getByRole('button', { name: '메뉴 열기' }).click()
-  }
+  await page.getByRole('button', { name: '메뉴 열기' }).click()
 }
 
 test('로그인 화면·원본 Google 아이콘·내부 복귀 경로를 제공한다', async ({
