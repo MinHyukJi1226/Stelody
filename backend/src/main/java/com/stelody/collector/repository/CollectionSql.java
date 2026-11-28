@@ -13,12 +13,13 @@ final class CollectionSql {
         source_observed_at = CASE WHEN CAST(:title AS text) IS NULL THEN source_observed_at ELSE :observedAt END
       WHERE v.id = :videoId AND v.youtube_id = :youtubeId
         AND (v.status_observed_at IS NULL OR v.status_observed_at <= :observedAt)
-        AND EXISTS (SELECT 1 FROM app.channel c WHERE c.id = v.channel_id AND c.youtube_id = :channelId
-          AND c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER'))
+        AND COALESCE((SELECT c.youtube_id FROM app.channel c WHERE c.id=v.channel_id),'')=:channelId
       """;
 
   static final String UPDATE_REGISTERED_METADATA =
-      UPDATE_VIDEO.replace(
-          "c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER')",
-          "NOT (c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER'))");
+      UPDATE_VIDEO
+          + """
+        AND EXISTS (SELECT 1 FROM app.channel c WHERE c.id=v.channel_id
+          AND NOT (c.collection_enabled AND c.channel_type IN ('GROUP', 'MEMBER')))
+        """;
 }

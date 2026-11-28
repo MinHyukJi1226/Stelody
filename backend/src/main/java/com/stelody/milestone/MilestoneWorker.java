@@ -51,7 +51,10 @@ public final class MilestoneWorker implements AutoCloseable {
               new CollectionBudget(Duration.ofSeconds(20)));
       for (var t : targets) {
         var o = observations.get(t.youtubeId());
-        if (o == null || (o.channelId() != null && !o.channelId().equals(t.channelId())))
+        if (o == null
+            || (t.channelId() != null
+                && o.channelId() != null
+                && !o.channelId().equals(t.channelId())))
           throw new CollectionFailure("INVALID_RESPONSE", false);
       }
       for (var t : targets) {

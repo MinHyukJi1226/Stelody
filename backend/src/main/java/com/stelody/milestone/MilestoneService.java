@@ -44,7 +44,7 @@ public class MilestoneService {
             + """
       SELECT s.id,m.video_id,m.view_count,m.observed_at,m.highest_target FROM public_songs s
       JOIN app.video v ON v.id=s.representative_video_id
-      JOIN app.channel c ON c.id=v.channel_id AND c.collection_enabled AND c.channel_type IN('MEMBER','GROUP')
+      LEFT JOIN app.channel c ON c.id=v.channel_id
       JOIN app.view_milestone_state m ON m.video_id=v.id
       WHERE m.available AND m.observed_at>=:oldest AND m.observed_at<=:now
       ORDER BY s.id
