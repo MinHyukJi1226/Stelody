@@ -18,6 +18,12 @@ npm run dev
 
 로그인 화면은 `/login`으로 열고 복귀할 내부 경로만 같은 탭의 `sessionStorage`(`stelody-login-return`)에 보관합니다. 링크 렌더링은 저장소를 변경하지 않으며 실제 로그인 이동 또는 Google 인증 시작 시 저장합니다. OAuth 요청의 `returnTo`는 `/login`으로 고정하고 기존 서버의 state·세션·CSRF 검증은 유지합니다. 프론트는 실제 세션 확인 후 저장 경로를 검증해 이동하고 삭제합니다. 취소·실패에는 재시도를 위해 유지하며, 저장소가 차단되거나 값이 없거나 유효하지 않으면 `/library`로 복귀합니다. 기존 `?returnTo=...` 링크는 검증·보관 후 주소에서 제거하고 `loginResult` 안내 파라미터도 정리합니다. 인증 코드·토큰·세션 ID는 이 저장소에 보관하지 않습니다.
 
+## Vercel 배포 준비
+
+Vercel 프로젝트의 Root Directory를 `frontend`로 지정합니다. 설치·빌드·출력 경로와 API 프록시는 [`vercel.json`](vercel.json)에서 관리합니다. 도메인을 구매하기 전에는 프로젝트의 고정 `*.vercel.app` 주소로 확인하고, 구매 후 `stelody.xyz`를 연결합니다.
+
+프로젝트 생성, Render·Google 인증 설정, 배포 후 검증 및 도메인 연결 순서는 [Vercel 배포 안내](docs/vercel-deployment.md)를 따릅니다. 이 설정 추가만으로 실제 배포나 인증 설정 변경이 실행되지는 않습니다.
+
 ## 구조
 
 - `src/app`: 앱 시작, 라우터, Query 설정, 전역 스타일
